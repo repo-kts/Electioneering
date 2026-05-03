@@ -1,0 +1,112 @@
+export const initialHistory = [
+  {
+    id: 1,
+    time: '14:28',
+    file: 'tally_BN-04_round-3.xlsx',
+    source: 'Excel · Officer L2',
+    records: 412,
+    constituency: 'Bandra North',
+    status: 'validated',
+  },
+  {
+    id: 2,
+    time: '14:25',
+    file: 'manual_entry_PS-12-074',
+    source: 'Manual entry · Officer L2',
+    records: 1,
+    constituency: 'Andheri West',
+    status: 'processing',
+  },
+  {
+    id: 3,
+    time: '14:18',
+    file: 'tally_VS-08_partial.csv',
+    source: 'CSV · Officer L1',
+    records: 89,
+    constituency: 'Versova',
+    status: 'failed',
+  },
+  {
+    id: 4,
+    time: '13:51',
+    file: 'tally_GE-21_round-2.xlsx',
+    source: 'Excel · Officer L2',
+    records: 308,
+    constituency: 'Goregaon East',
+    status: 'validated',
+  },
+  {
+    id: 5,
+    time: '13:39',
+    file: 'tally_PL-17_full.xlsx',
+    source: 'Excel · Officer L3',
+    records: 521,
+    constituency: 'Powai Lake',
+    status: 'validated',
+  },
+  {
+    id: 6,
+    time: '13:14',
+    file: 'tally_unknown_v3.csv',
+    source: 'CSV · Officer L1',
+    records: 14,
+    constituency: '—',
+    status: 'failed',
+  },
+  {
+    id: 7,
+    time: '12:48',
+    file: 'tally_JG-09_round-1.xlsx',
+    source: 'Excel · Officer L2',
+    records: 196,
+    constituency: 'Jogeshwari',
+    status: 'validated',
+  },
+];
+
+export const validationChecks = [
+  {
+    id: 1,
+    status: 'ok',
+    rule: 'Required fields filled',
+    detail: 'All fields marked with * must have a value',
+  },
+  {
+    id: 2,
+    status: 'ok',
+    rule: 'Polling station format',
+    detail: 'Must follow PS-XX-XXX pattern',
+  },
+  {
+    id: 3,
+    status: 'ok',
+    rule: 'Vote count is valid',
+    detail: 'Whole number, zero or more',
+  },
+  {
+    id: 4,
+    status: 'warn',
+    rule: 'Reported time within window',
+    detail: '3 entries before 07:00 — please review',
+  },
+  {
+    id: 5,
+    status: 'ok',
+    rule: 'No duplicate entries',
+    detail: '1,284 unique records scanned',
+  },
+  {
+    id: 6,
+    status: 'fail',
+    rule: 'Constituency is registered',
+    detail: 'Row 412 has unknown code "WS-05"',
+  },
+];
+
+export const session = {
+  user: 'R. Khanna',
+  role: 'Officer L2',
+  region: 'Maharashtra · 24N',
+  permissions: 'Upload, Add, Read',
+  expires: '18:00 IST',
+};

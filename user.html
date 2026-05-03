@@ -1,0 +1,1236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Upload Data — Electioneering</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #F8F9FB;
+  --surface: #FFFFFF;
+  --surface-2: #F1F3F6;
+  --border: #E5E7EB;
+  --border-strong: #D1D5DB;
+
+  --text: #0F172A;
+  --text-2: #475569;
+  --text-3: #94A3B8;
+
+  --primary: #2563EB;
+  --primary-hover: #1D4ED8;
+  --primary-soft: #EFF6FF;
+
+  --success: #16A34A;
+  --success-soft: #DCFCE7;
+  --warning: #D97706;
+  --warning-soft: #FEF3C7;
+  --danger: #DC2626;
+  --danger-soft: #FEE2E2;
+
+  --pnf: #2563EB;
+  --cda: #F97316;
+  --gup: #16A34A;
+  --ind: #8B5CF6;
+
+  --font: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.04);
+  --shadow: 0 1px 3px rgba(15, 23, 42, 0.06), 0 1px 2px rgba(15, 23, 42, 0.04);
+  --shadow-md: 0 4px 12px rgba(15, 23, 42, 0.06), 0 2px 4px rgba(15, 23, 42, 0.04);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 15px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+.tnum { font-variant-numeric: tabular-nums; }
+
+a { color: inherit; text-decoration: none; }
+button { font-family: inherit; }
+
+/* ─── HEADER ─────────────────────────────────────── */
+.header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+.header-inner {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 14px 32px;
+  display: flex;
+  align-items: center;
+  gap: 36px;
+}
+.logo {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 17px; font-weight: 700;
+  color: var(--text);
+}
+.logo-mark {
+  width: 30px; height: 30px;
+  border-radius: 8px;
+  background: var(--primary);
+  color: #fff;
+  display: grid; place-items: center;
+  font-weight: 800; font-size: 15px;
+}
+.nav { display: flex; gap: 4px; margin-left: 8px; }
+.nav a {
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-2);
+  transition: all 0.15s;
+}
+.nav a:hover { background: var(--surface-2); color: var(--text); }
+.nav a.active { background: var(--primary-soft); color: var(--primary); font-weight: 600; }
+
+.header-spacer { flex: 1; }
+
+.user {
+  display: flex; align-items: center; gap: 10px;
+  padding: 4px 4px 4px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+.user-name { font-size: 13px; font-weight: 600; }
+.user-role { font-size: 11px; color: var(--text-3); display: block; line-height: 1.1; margin-top: 2px;}
+.user-meta { line-height: 1; }
+.avatar {
+  width: 30px; height: 30px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #6366F1, #2563EB);
+  color: #fff;
+  display: grid; place-items: center;
+  font-weight: 700; font-size: 12px;
+}
+
+/* ─── LAYOUT ─────────────────────────────────────── */
+.shell {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 36px 32px 80px;
+}
+
+.page-head {
+  display: flex; align-items: flex-end; justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 28px;
+}
+.page-head h1 {
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin-bottom: 6px;
+}
+.page-head p {
+  color: var(--text-2);
+  font-size: 15px;
+  max-width: 560px;
+}
+.page-head-stats {
+  display: flex; gap: 28px;
+  padding: 14px 22px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.page-head-stat-num {
+  font-size: 22px; font-weight: 700;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+}
+.page-head-stat-num.danger { color: var(--danger); }
+.page-head-stat-lbl {
+  font-size: 12px; color: var(--text-2);
+  font-weight: 500;
+  margin-top: 2px;
+}
+
+/* ─── TABS ─────────────────────────────────────── */
+.tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 28px;
+}
+.tab {
+  padding: 10px 18px;
+  background: transparent;
+  border: 0;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-2);
+  cursor: pointer;
+  border-radius: 8px 8px 0 0;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition: all 0.15s;
+  display: flex; align-items: center; gap: 8px;
+}
+.tab:hover { color: var(--text); background: var(--surface-2); }
+.tab.active {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+  font-weight: 600;
+}
+.tab-count {
+  font-size: 11px;
+  background: var(--surface-2);
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-weight: 600;
+}
+.tab.active .tab-count { background: var(--primary-soft); color: var(--primary); }
+
+/* ─── CARDS ─────────────────────────────────────── */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow-sm);
+}
+.card-head {
+  padding: 20px 24px 18px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+}
+.card-head h2 {
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.card-head p {
+  font-size: 13px; color: var(--text-2);
+  margin-top: 2px;
+}
+.card-body { padding: 24px; }
+
+/* ─── DROPZONE ─────────────────────────────────────── */
+.dropzone {
+  border: 2px dashed var(--border-strong);
+  border-radius: 12px;
+  padding: 48px 32px;
+  text-align: center;
+  cursor: pointer;
+  background: var(--surface);
+  transition: all 0.18s;
+}
+.dropzone:hover {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+}
+.dropzone.dragover {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+  transform: scale(1.005);
+}
+.drop-icon-wrap {
+  width: 56px; height: 56px;
+  margin: 0 auto 16px;
+  border-radius: 50%;
+  background: var(--primary-soft);
+  display: grid; place-items: center;
+  color: var(--primary);
+}
+.drop-icon-wrap svg { width: 26px; height: 26px; }
+.drop-title {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+.drop-title strong { color: var(--primary); }
+.drop-sub {
+  font-size: 14px;
+  color: var(--text-2);
+  margin-bottom: 18px;
+}
+.drop-btn {
+  background: var(--primary);
+  color: #fff;
+  border: 0;
+  border-radius: 8px;
+  padding: 10px 20px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.drop-btn:hover { background: var(--primary-hover); }
+.drop-formats {
+  display: flex; justify-content: center; flex-wrap: wrap; gap: 18px;
+  margin-top: 18px;
+  font-size: 12px;
+  color: var(--text-3);
+}
+.drop-formats span { display: inline-flex; align-items: center; gap: 6px; }
+.drop-formats span::before {
+  content: "✓"; color: var(--success); font-weight: 700;
+}
+
+.upload-progress {
+  display: none;
+  margin-top: 18px;
+  padding: 14px 18px;
+  background: var(--surface-2);
+  border-radius: 10px;
+}
+.upload-progress.show { display: block; }
+.upload-progress-row {
+  display: flex; justify-content: space-between; align-items: center;
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+.upload-progress-name { font-weight: 600; }
+.upload-progress-pct { color: var(--primary); font-weight: 600; font-variant-numeric: tabular-nums; }
+.progress-bar {
+  height: 6px;
+  background: #fff;
+  border-radius: 999px;
+  overflow: hidden;
+}
+.progress-bar-fill {
+  height: 100%;
+  background: var(--primary);
+  width: 0%;
+  transition: width 0.15s linear;
+  border-radius: 999px;
+}
+
+/* ─── FORM ─────────────────────────────────────── */
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+}
+.form-grid.three { grid-template-columns: 1fr 1fr 1fr; }
+.form-grid.full { grid-template-columns: 1fr; }
+
+.field { display: flex; flex-direction: column; }
+.field label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+.field label .req { color: var(--danger); margin-left: 2px; }
+
+.field input,
+.field select,
+.field textarea {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  font-family: inherit;
+  font-size: 14px;
+  color: var(--text);
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.field textarea { resize: vertical; min-height: 80px; }
+.field input::placeholder, .field textarea::placeholder { color: var(--text-3); }
+.field input:focus,
+.field select:focus,
+.field textarea:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+.field select {
+  appearance: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'><path d='M1 1.5L6 6.5L11 1.5' fill='none' stroke='%2364748B' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 36px;
+  cursor: pointer;
+}
+.field input[readonly] { background: var(--surface-2); color: var(--text-2); cursor: default; }
+.field.error input,
+.field.error select,
+.field.error textarea {
+  border-color: var(--danger);
+}
+.field.error input:focus,
+.field.error select:focus,
+.field.error textarea:focus { box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.12); }
+.field-error {
+  display: none;
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--danger);
+}
+.field.error .field-error { display: block; }
+.field-help {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--text-3);
+}
+
+.form-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+  gap: 12px;
+}
+.form-meta { font-size: 13px; color: var(--text-2); }
+.form-meta strong { color: var(--text); font-weight: 600; }
+.form-buttons { display: flex; gap: 8px; }
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  font-size: 14px;
+  font-weight: 600;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.btn:hover { background: var(--surface-2); border-color: var(--border-strong); }
+.btn-primary {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
+}
+.btn-primary:hover { background: var(--primary-hover); border-color: var(--primary-hover); }
+
+/* ─── ROW LAYOUT ─────────────────────────────────────── */
+.two-col {
+  display: grid;
+  grid-template-columns: 1fr 360px;
+  gap: 24px;
+  margin-top: 24px;
+}
+
+/* ─── VALIDATION ─────────────────────────────────────── */
+.validation-list {
+  display: flex; flex-direction: column;
+}
+.validation-item {
+  display: grid;
+  grid-template-columns: 24px 1fr auto;
+  gap: 12px;
+  align-items: start;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border);
+}
+.validation-item:last-child { border-bottom: 0; padding-bottom: 0; }
+.validation-item:first-child { padding-top: 0; }
+.v-icon {
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  display: grid; place-items: center;
+  font-size: 11px;
+  font-weight: 700;
+  margin-top: 1px;
+}
+.v-icon.ok { background: var(--success-soft); color: var(--success); }
+.v-icon.warn { background: var(--warning-soft); color: var(--warning); }
+.v-icon.fail { background: var(--danger-soft); color: var(--danger); }
+.v-rule {
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: 2px;
+}
+.v-detail {
+  font-size: 12px;
+  color: var(--text-2);
+}
+.v-status {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 999px;
+  letter-spacing: 0.02em;
+  align-self: center;
+}
+.v-status.ok { background: var(--success-soft); color: var(--success); }
+.v-status.warn { background: var(--warning-soft); color: var(--warning); }
+.v-status.fail { background: var(--danger-soft); color: var(--danger); }
+
+/* ─── SESSION ─────────────────────────────────────── */
+.session-list {
+  display: flex; flex-direction: column;
+}
+.session-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+.session-row:last-child { border-bottom: 0; padding-bottom: 0; }
+.session-row:first-child { padding-top: 0; }
+.session-key { font-size: 13px; color: var(--text-2); }
+.session-val { font-size: 14px; font-weight: 600; }
+.session-val .badge-tag {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--success-soft);
+  color: var(--success);
+  margin-left: 6px;
+}
+
+/* ─── HISTORY TABLE ─────────────────────────────────────── */
+.history-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.search {
+  flex: 1; max-width: 360px;
+  position: relative;
+}
+.search svg {
+  position: absolute;
+  left: 12px; top: 50%; transform: translateY(-50%);
+  width: 16px; height: 16px;
+  color: var(--text-3);
+  pointer-events: none;
+}
+.search input {
+  width: 100%;
+  padding: 9px 12px 9px 38px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  font-family: inherit;
+  font-size: 14px;
+  outline: none;
+}
+.search input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12); }
+
+.filters { display: flex; gap: 4px; }
+.filter-chip {
+  padding: 7px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  cursor: pointer;
+  color: var(--text-2);
+  transition: all 0.15s;
+}
+.filter-chip:hover { color: var(--text); background: var(--surface-2); }
+.filter-chip.active {
+  background: var(--text);
+  color: #fff;
+  border-color: var(--text);
+}
+
+table.history {
+  width: 100%;
+  border-collapse: collapse;
+}
+table.history th {
+  text-align: left;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-2);
+  padding: 12px 16px;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+}
+table.history th:first-child { border-top-left-radius: 10px; }
+table.history th:last-child { border-top-right-radius: 10px; }
+table.history th.right { text-align: right; }
+table.history td {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+  font-size: 14px;
+  vertical-align: middle;
+}
+table.history tr:last-child td { border-bottom: 0; }
+table.history tr:hover td { background: #FAFBFC; }
+table.history td.right { text-align: right; }
+.h-time { color: var(--text-2); font-size: 13px; font-variant-numeric: tabular-nums; }
+.h-file { font-weight: 600; }
+.h-source { font-size: 12px; color: var(--text-3); margin-top: 2px; }
+.h-records { font-weight: 600; font-variant-numeric: tabular-nums; }
+.status {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 999px;
+}
+.status::before { content: ""; width: 6px; height: 6px; border-radius: 50%; }
+.status.validated { background: var(--success-soft); color: var(--success); }
+.status.validated::before { background: var(--success); }
+.status.processing { background: var(--warning-soft); color: var(--warning); }
+.status.processing::before { background: var(--warning); animation: blink 1.4s ease-in-out infinite; }
+.status.failed { background: var(--danger-soft); color: var(--danger); }
+.status.failed::before { background: var(--danger); }
+@keyframes blink { 50% { opacity: 0.3; } }
+
+.icon-btn {
+  width: 30px; height: 30px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  display: inline-grid; place-items: center;
+  cursor: pointer;
+  color: var(--text-2);
+  transition: all 0.15s;
+  margin-left: 4px;
+}
+.icon-btn:hover { background: var(--surface-2); color: var(--text); border-color: var(--border-strong); }
+.icon-btn svg { width: 14px; height: 14px; }
+
+/* ─── TOAST ─────────────────────────────────────── */
+.toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  background: var(--text);
+  color: #fff;
+  padding: 12px 22px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 500;
+  display: inline-flex; align-items: center; gap: 10px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.18);
+  opacity: 0;
+  pointer-events: none;
+  transition: all 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+  z-index: 100;
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+.toast::before { content: "✓"; color: #4ADE80; font-weight: 700; }
+.toast.error::before { content: "!"; color: #FCA5A5; }
+
+/* ─── RESPONSIVE ─────────────────────────────────────── */
+@media (max-width: 980px) {
+  .two-col { grid-template-columns: 1fr; }
+  .form-grid, .form-grid.three { grid-template-columns: 1fr; }
+  .page-head { flex-direction: column; align-items: flex-start; }
+  .page-head-stats { width: 100%; }
+}
+@media (max-width: 640px) {
+  .header-inner { padding: 12px 18px; gap: 16px; }
+  .nav { display: none; }
+  .shell { padding: 24px 18px 60px; }
+  .page-head h1 { font-size: 24px; }
+  .page-head-stats { gap: 16px; padding: 12px 16px; }
+  .tabs { overflow-x: auto; flex-wrap: nowrap; white-space: nowrap; }
+  table.history th:nth-child(1), table.history td:nth-child(1) { display: none; }
+  .history-toolbar { flex-direction: column; align-items: stretch; }
+  .filters { flex-wrap: wrap; }
+  .form-actions { flex-direction: column; align-items: stretch; }
+  .form-buttons { width: 100%; }
+  .form-buttons .btn { flex: 1; justify-content: center; }
+}
+</style>
+</head>
+<body>
+
+<!-- ─── HEADER ─────────────────────────────────────── -->
+<header class="header">
+  <div class="header-inner">
+    <a href="user.html" class="logo">
+      <div class="logo-mark">E</div>
+      <span>Electioneering</span>
+    </a>
+    <nav class="nav">
+      <a href="user.html" class="active">Upload Data</a>
+      <a href="analytics.html">Analytics</a>
+    </nav>
+    <div class="header-spacer"></div>
+    <div class="user">
+      <div class="user-meta">
+        <div class="user-name">R. Khanna</div>
+        <span class="user-role">Officer · Level 2</span>
+      </div>
+      <div class="avatar">RK</div>
+    </div>
+  </div>
+</header>
+
+<main class="shell">
+
+  <!-- ─── PAGE HEAD ─────────────────────────────────────── -->
+  <div class="page-head">
+    <div>
+      <h1>Upload Data</h1>
+      <p>Add polling station entries by uploading an Excel file or filling out a quick form. Everything is checked before it's saved.</p>
+    </div>
+    <div class="page-head-stats">
+      <div>
+        <div class="page-head-stat-num tnum">1,284</div>
+        <div class="page-head-stat-lbl">Submitted today</div>
+      </div>
+      <div>
+        <div class="page-head-stat-num tnum">37</div>
+        <div class="page-head-stat-lbl">Pending</div>
+      </div>
+      <div>
+        <div class="page-head-stat-num tnum danger">2</div>
+        <div class="page-head-stat-lbl">Failed</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── TABS ─────────────────────────────────────── -->
+  <div class="tabs">
+    <button class="tab active" data-tab="upload">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      Upload File
+    </button>
+    <button class="tab" data-tab="add">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      Add Record
+    </button>
+    <button class="tab" data-tab="history">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      History
+      <span class="tab-count">7</span>
+    </button>
+  </div>
+
+  <!-- ─── UPLOAD TAB ─────────────────────────────────────── -->
+  <section class="tab-panel" data-panel="upload">
+    <div class="two-col">
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <h2>Upload Excel file</h2>
+            <p>Drop your tally sheet here, or browse to select one from your computer.</p>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="dropzone" id="dropzone">
+            <input type="file" id="fileInput" hidden accept=".xlsx,.xls,.csv">
+            <div class="drop-icon-wrap">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            </div>
+            <div class="drop-title">Drop your file here, or <strong>click to browse</strong></div>
+            <div class="drop-sub">Supports Excel (.xlsx, .xls) and CSV files up to 25 MB</div>
+            <button class="drop-btn" type="button" onclick="event.stopPropagation(); document.getElementById('fileInput').click();">Choose File</button>
+            <div class="drop-formats">
+              <span>Excel (.xlsx)</span>
+              <span>Excel (.xls)</span>
+              <span>CSV</span>
+            </div>
+          </div>
+
+          <div class="upload-progress" id="uploadProgress">
+            <div class="upload-progress-row">
+              <span class="upload-progress-name" id="upName">filename.xlsx</span>
+              <span class="upload-progress-pct" id="upPct">0%</span>
+            </div>
+            <div class="progress-bar"><div class="progress-bar-fill" id="upFill"></div></div>
+            <div style="margin-top:8px; font-size: 12px; color: var(--text-2);">Validating fields…</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <h2>Your session</h2>
+            <p>Active sign-in details</p>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="session-list">
+            <div class="session-row">
+              <div class="session-key">User</div>
+              <div class="session-val">R. Khanna</div>
+            </div>
+            <div class="session-row">
+              <div class="session-key">Role</div>
+              <div class="session-val">Officer L2 <span class="badge-tag">Active</span></div>
+            </div>
+            <div class="session-row">
+              <div class="session-key">Region</div>
+              <div class="session-val">Maharashtra · 24N</div>
+            </div>
+            <div class="session-row">
+              <div class="session-key">Permissions</div>
+              <div class="session-val">Upload, Add, Read</div>
+            </div>
+            <div class="session-row">
+              <div class="session-key">Session expires</div>
+              <div class="session-val tnum">18:00 IST</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── ADD RECORD TAB ─────────────────────────────────────── -->
+  <section class="tab-panel" data-panel="add" hidden>
+    <div class="two-col">
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <h2>Add a new record</h2>
+            <p>Use this form to add a single polling station entry manually.</p>
+          </div>
+        </div>
+        <div class="card-body">
+          <form id="recordForm" autocomplete="off" novalidate>
+            <div class="form-grid">
+              <div class="field" data-name="constituency">
+                <label>Constituency<span class="req">*</span></label>
+                <select required>
+                  <option value="">Select a constituency…</option>
+                  <option>Bandra North · BN-04</option>
+                  <option>Andheri West · AW-12</option>
+                  <option>Versova · VS-08</option>
+                  <option>Goregaon East · GE-21</option>
+                  <option>Powai Lake · PL-17</option>
+                  <option>Jogeshwari · JG-09</option>
+                  <option>Vile Parle · VP-03</option>
+                  <option>Khar Danda · KD-11</option>
+                </select>
+                <div class="field-error">Please select a constituency</div>
+              </div>
+              <div class="field" data-name="station">
+                <label>Polling station code<span class="req">*</span></label>
+                <input type="text" placeholder="e.g. PS-04-117" required pattern="^PS-[0-9]{2}-[0-9]{3}$">
+                <div class="field-help">Format: PS-XX-XXX</div>
+                <div class="field-error">Format must be PS-XX-XXX</div>
+              </div>
+            </div>
+
+            <div class="form-grid three" style="margin-top: 18px;">
+              <div class="field" data-name="candidate">
+                <label>Candidate name<span class="req">*</span></label>
+                <input type="text" placeholder="e.g. A. Mehrotra" required>
+                <div class="field-error">Required</div>
+              </div>
+              <div class="field" data-name="party">
+                <label>Party<span class="req">*</span></label>
+                <select required>
+                  <option value="">Select a party…</option>
+                  <option>People's National Front (PNF)</option>
+                  <option>Citizens' Democratic Alliance (CDA)</option>
+                  <option>Green Unity Party (GUP)</option>
+                  <option>Independent (IND)</option>
+                </select>
+                <div class="field-error">Required</div>
+              </div>
+              <div class="field" data-name="votes">
+                <label>Votes<span class="req">*</span></label>
+                <input type="number" min="0" placeholder="0" required>
+                <div class="field-error">Must be a number ≥ 0</div>
+              </div>
+            </div>
+
+            <div class="form-grid" style="margin-top: 18px;">
+              <div class="field" data-name="reported">
+                <label>Reported at<span class="req">*</span></label>
+                <input type="datetime-local" required>
+                <div class="field-error">Required</div>
+              </div>
+              <div class="field" data-name="agent">
+                <label>Reported by</label>
+                <input type="text" value="R. Khanna · Officer L2" readonly>
+              </div>
+            </div>
+
+            <div class="form-grid full" style="margin-top: 18px;">
+              <div class="field" data-name="notes">
+                <label>Notes <span style="color: var(--text-3); font-weight: 400;">(optional)</span></label>
+                <textarea placeholder="Any observations from the polling station…"></textarea>
+              </div>
+            </div>
+
+            <div class="form-actions">
+              <div class="form-meta">Auto-saved <strong>just now</strong></div>
+              <div class="form-buttons">
+                <button type="button" class="btn" onclick="document.getElementById('recordForm').reset()">Reset</button>
+                <button type="submit" class="btn btn-primary">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                  Save Record
+                </button>
+              </div>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <h2>Validation checks</h2>
+            <p>What we check before saving</p>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="validation-list">
+            <div class="validation-item">
+              <div class="v-icon ok">✓</div>
+              <div>
+                <div class="v-rule">Required fields filled</div>
+                <div class="v-detail">All fields marked with * must have a value</div>
+              </div>
+              <div class="v-status ok">Pass</div>
+            </div>
+            <div class="validation-item">
+              <div class="v-icon ok">✓</div>
+              <div>
+                <div class="v-rule">Polling station format</div>
+                <div class="v-detail">Must follow PS-XX-XXX pattern</div>
+              </div>
+              <div class="v-status ok">Pass</div>
+            </div>
+            <div class="validation-item">
+              <div class="v-icon ok">✓</div>
+              <div>
+                <div class="v-rule">Vote count is valid</div>
+                <div class="v-detail">Whole number, zero or more</div>
+              </div>
+              <div class="v-status ok">Pass</div>
+            </div>
+            <div class="validation-item">
+              <div class="v-icon warn">!</div>
+              <div>
+                <div class="v-rule">Reported time within window</div>
+                <div class="v-detail">3 entries before 07:00 — please review</div>
+              </div>
+              <div class="v-status warn">Review</div>
+            </div>
+            <div class="validation-item">
+              <div class="v-icon ok">✓</div>
+              <div>
+                <div class="v-rule">No duplicate entries</div>
+                <div class="v-detail">1,284 unique records scanned</div>
+              </div>
+              <div class="v-status ok">Pass</div>
+            </div>
+            <div class="validation-item">
+              <div class="v-icon fail">✕</div>
+              <div>
+                <div class="v-rule">Constituency is registered</div>
+                <div class="v-detail">Row 412 has unknown code "WS-05"</div>
+              </div>
+              <div class="v-status fail">Fail</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── HISTORY TAB ─────────────────────────────────────── -->
+  <section class="tab-panel" data-panel="history" hidden>
+    <div class="card">
+      <div class="card-head">
+        <div>
+          <h2>Upload history</h2>
+          <p>Recent uploads and manual entries from the last 24 hours.</p>
+        </div>
+      </div>
+      <div class="card-body" style="padding: 20px 24px 24px;">
+        <div class="history-toolbar">
+          <div class="search">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input type="text" placeholder="Search by file name or constituency…" id="historySearch">
+          </div>
+          <div class="filters">
+            <button class="filter-chip active" data-filter="all">All</button>
+            <button class="filter-chip" data-filter="validated">Validated</button>
+            <button class="filter-chip" data-filter="processing">Processing</button>
+            <button class="filter-chip" data-filter="failed">Failed</button>
+          </div>
+        </div>
+
+        <table class="history" id="historyTable">
+          <thead>
+            <tr>
+              <th style="width:120px">Time</th>
+              <th>Source</th>
+              <th class="right" style="width:90px">Records</th>
+              <th>Constituency</th>
+              <th style="width:130px">Status</th>
+              <th class="right" style="width:90px"></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr data-status="validated">
+              <td class="h-time">14:28</td>
+              <td><div class="h-file">tally_BN-04_round-3.xlsx</div><div class="h-source">Excel · Officer L2</div></td>
+              <td class="right h-records">412</td>
+              <td>Bandra North</td>
+              <td><span class="status validated">Validated</span></td>
+              <td class="right">
+                <button class="icon-btn" title="View"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
+                <button class="icon-btn" title="Download"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
+              </td>
+            </tr>
+            <tr data-status="processing">
+              <td class="h-time">14:25</td>
+              <td><div class="h-file">manual_entry_PS-12-074</div><div class="h-source">Manual entry · Officer L2</div></td>
+              <td class="right h-records">1</td>
+              <td>Andheri West</td>
+              <td><span class="status processing">Processing</span></td>
+              <td class="right">
+                <button class="icon-btn" title="View"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
+                <button class="icon-btn" title="Cancel"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+              </td>
+            </tr>
+            <tr data-status="failed">
+              <td class="h-time">14:18</td>
+              <td><div class="h-file">tally_VS-08_partial.csv</div><div class="h-source">CSV · Officer L1</div></td>
+              <td class="right h-records">89</td>
+              <td>Versova</td>
+              <td><span class="status failed">Failed</span></td>
+              <td class="right">
+                <button class="icon-btn" title="Retry"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg></button>
+                <button class="icon-btn" title="View"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
+              </td>
+            </tr>
+            <tr data-status="validated">
+              <td class="h-time">13:51</td>
+              <td><div class="h-file">tally_GE-21_round-2.xlsx</div><div class="h-source">Excel · Officer L2</div></td>
+              <td class="right h-records">308</td>
+              <td>Goregaon East</td>
+              <td><span class="status validated">Validated</span></td>
+              <td class="right">
+                <button class="icon-btn" title="View"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
+                <button class="icon-btn" title="Download"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
+              </td>
+            </tr>
+            <tr data-status="validated">
+              <td class="h-time">13:39</td>
+              <td><div class="h-file">tally_PL-17_full.xlsx</div><div class="h-source">Excel · Officer L3</div></td>
+              <td class="right h-records">521</td>
+              <td>Powai Lake</td>
+              <td><span class="status validated">Validated</span></td>
+              <td class="right">
+                <button class="icon-btn" title="View"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
+                <button class="icon-btn" title="Download"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
+              </td>
+            </tr>
+            <tr data-status="failed">
+              <td class="h-time">13:14</td>
+              <td><div class="h-file">tally_unknown_v3.csv</div><div class="h-source">CSV · Officer L1</div></td>
+              <td class="right h-records">14</td>
+              <td>—</td>
+              <td><span class="status failed">Failed</span></td>
+              <td class="right">
+                <button class="icon-btn" title="Retry"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg></button>
+                <button class="icon-btn" title="View"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
+              </td>
+            </tr>
+            <tr data-status="validated">
+              <td class="h-time">12:48</td>
+              <td><div class="h-file">tally_JG-09_round-1.xlsx</div><div class="h-source">Excel · Officer L2</div></td>
+              <td class="right h-records">196</td>
+              <td>Jogeshwari</td>
+              <td><span class="status validated">Validated</span></td>
+              <td class="right">
+                <button class="icon-btn" title="View"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
+                <button class="icon-btn" title="Download"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<div class="toast" id="toast">Record saved</div>
+
+<script>
+/* ── tabs ── */
+const tabs = document.querySelectorAll('.tab');
+const panels = document.querySelectorAll('.tab-panel');
+tabs.forEach(t => {
+  t.addEventListener('click', () => {
+    tabs.forEach(x => x.classList.remove('active'));
+    t.classList.add('active');
+    panels.forEach(p => {
+      p.hidden = p.dataset.panel !== t.dataset.tab;
+    });
+  });
+});
+
+/* ── toast ── */
+function showToast(msg, type) {
+  const el = document.getElementById('toast');
+  el.firstChild ? el.firstChild.textContent = '' : null;
+  // simply replace text after the ::before icon
+  el.textContent = msg;
+  el.classList.toggle('error', type === 'error');
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 2400);
+}
+
+/* ── dropzone ── */
+const dz = document.getElementById('dropzone');
+const fileInput = document.getElementById('fileInput');
+const upBox = document.getElementById('uploadProgress');
+const upName = document.getElementById('upName');
+const upPct = document.getElementById('upPct');
+const upFill = document.getElementById('upFill');
+
+dz.addEventListener('click', () => fileInput.click());
+dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('dragover'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('dragover'));
+dz.addEventListener('drop', e => {
+  e.preventDefault();
+  dz.classList.remove('dragover');
+  if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener('change', e => {
+  if (e.target.files.length) handleFile(e.target.files[0]);
+});
+
+function handleFile(file) {
+  upName.textContent = file.name;
+  upBox.classList.add('show');
+  let pct = 0;
+  upFill.style.width = '0%';
+  const i = setInterval(() => {
+    pct += Math.random() * 14 + 5;
+    if (pct >= 100) {
+      pct = 100;
+      clearInterval(i);
+      setTimeout(() => {
+        addHistoryRow({
+          time: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
+          file: file.name,
+          source: 'Excel · Officer L2',
+          records: Math.floor(Math.random() * 400) + 50,
+          constituency: 'Bandra North',
+          status: 'validated',
+        });
+        showToast('File uploaded successfully');
+        upBox.classList.remove('show');
+      }, 500);
+    }
+    upFill.style.width = pct + '%';
+    upPct.textContent = Math.floor(pct) + '%';
+  }, 110);
+}
+
+/* ── form ── */
+const form = document.getElementById('recordForm');
+form.addEventListener('submit', e => {
+  e.preventDefault();
+  let valid = true;
+  form.querySelectorAll('.field').forEach(f => {
+    const inp = f.querySelector('input, select, textarea');
+    if (inp && inp.required) {
+      const ok = inp.value && (!inp.pattern || new RegExp(inp.pattern).test(inp.value));
+      f.classList.toggle('error', !ok);
+      if (!ok) valid = false;
+    }
+  });
+  if (!valid) {
+    showToast('Please fix the highlighted fields', 'error');
+    return;
+  }
+  const cons = form.querySelector('[data-name=constituency] select').value.split(' · ')[0];
+  const station = form.querySelector('[data-name=station] input').value;
+  const cand = form.querySelector('[data-name=candidate] input').value;
+  const party = form.querySelector('[data-name=party] select').value;
+  const votes = form.querySelector('[data-name=votes] input').value;
+
+  addHistoryRow({
+    time: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
+    file: 'manual_entry_' + station,
+    source: cand + ' · ' + (party.match(/\(([^)]+)\)/)?.[1] || '—') + ' · ' + votes + ' votes',
+    records: 1,
+    constituency: cons,
+    status: 'processing',
+  });
+  showToast('Record saved');
+  form.reset();
+  // jump to history tab
+  document.querySelector('[data-tab="history"]').click();
+}, false);
+
+form.querySelectorAll('input, select, textarea').forEach(inp => {
+  inp.addEventListener('input', () => inp.closest('.field')?.classList.remove('error'));
+  inp.addEventListener('change', () => inp.closest('.field')?.classList.remove('error'));
+});
+
+/* ── history ── */
+const tbody = document.querySelector('#historyTable tbody');
+function addHistoryRow(d) {
+  const tr = document.createElement('tr');
+  tr.dataset.status = d.status;
+  const label = d.status.charAt(0).toUpperCase() + d.status.slice(1);
+  tr.innerHTML = `
+    <td class="h-time">${d.time}</td>
+    <td><div class="h-file">${d.file}</div><div class="h-source">${d.source}</div></td>
+    <td class="right h-records">${d.records}</td>
+    <td>${d.constituency}</td>
+    <td><span class="status ${d.status}">${label}</span></td>
+    <td class="right">
+      <button class="icon-btn" title="View"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
+      <button class="icon-btn" title="Download"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
+    </td>`;
+  tbody.insertBefore(tr, tbody.firstChild);
+  tr.style.background = '#EFF6FF';
+  setTimeout(() => { tr.style.transition = 'background 1s'; tr.style.background = ''; }, 80);
+
+  if (d.status === 'processing') {
+    setTimeout(() => {
+      tr.dataset.status = 'validated';
+      const s = tr.querySelector('.status');
+      s.className = 'status validated';
+      s.textContent = 'Validated';
+    }, 3500);
+  }
+}
+
+document.querySelectorAll('.filter-chip').forEach(c => {
+  c.addEventListener('click', () => {
+    document.querySelectorAll('.filter-chip').forEach(x => x.classList.remove('active'));
+    c.classList.add('active');
+    const f = c.dataset.filter;
+    document.querySelectorAll('#historyTable tbody tr').forEach(tr => {
+      tr.style.display = (f === 'all' || tr.dataset.status === f) ? '' : 'none';
+    });
+  });
+});
+
+document.getElementById('historySearch').addEventListener('input', e => {
+  const q = e.target.value.toLowerCase();
+  document.querySelectorAll('#historyTable tbody tr').forEach(tr => {
+    tr.style.display = tr.textContent.toLowerCase().includes(q) ? '' : 'none';
+  });
+});
+</script>
+</body>
+</html>

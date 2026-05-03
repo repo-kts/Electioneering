@@ -1,0 +1,1289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Analytics — Electioneering</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+:root {
+  --bg: #F8F9FB;
+  --surface: #FFFFFF;
+  --surface-2: #F1F3F6;
+  --border: #E5E7EB;
+  --border-strong: #D1D5DB;
+
+  --text: #0F172A;
+  --text-2: #475569;
+  --text-3: #94A3B8;
+
+  --primary: #2563EB;
+  --primary-hover: #1D4ED8;
+  --primary-soft: #EFF6FF;
+
+  --success: #16A34A;
+  --success-soft: #DCFCE7;
+  --warning: #D97706;
+  --warning-soft: #FEF3C7;
+  --danger: #DC2626;
+  --danger-soft: #FEE2E2;
+
+  --pnf: #2563EB;
+  --cda: #F97316;
+  --gup: #16A34A;
+  --ind: #8B5CF6;
+
+  --font: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.04);
+  --shadow: 0 1px 3px rgba(15, 23, 42, 0.06), 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 15px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+.tnum { font-variant-numeric: tabular-nums; }
+a { color: inherit; text-decoration: none; }
+button { font-family: inherit; }
+
+/* ─── HEADER ─────────────────────────────────────── */
+.header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+.header-inner {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 14px 32px;
+  display: flex;
+  align-items: center;
+  gap: 36px;
+}
+.logo {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 17px; font-weight: 700;
+}
+.logo-mark {
+  width: 30px; height: 30px;
+  border-radius: 8px;
+  background: var(--primary);
+  color: #fff;
+  display: grid; place-items: center;
+  font-weight: 800; font-size: 15px;
+}
+.nav { display: flex; gap: 4px; margin-left: 8px; }
+.nav a {
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-2);
+  transition: all 0.15s;
+}
+.nav a:hover { background: var(--surface-2); color: var(--text); }
+.nav a.active { background: var(--primary-soft); color: var(--primary); font-weight: 600; }
+.header-spacer { flex: 1; }
+
+.user {
+  display: flex; align-items: center; gap: 10px;
+  padding: 4px 4px 4px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+}
+.user-name { font-size: 13px; font-weight: 600; }
+.user-role { font-size: 11px; color: var(--text-3); display: block; line-height: 1.1; margin-top: 2px;}
+.user-meta { line-height: 1; }
+.avatar {
+  width: 30px; height: 30px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #6366F1, #2563EB);
+  color: #fff;
+  display: grid; place-items: center;
+  font-weight: 700; font-size: 12px;
+}
+
+/* ─── LAYOUT ─────────────────────────────────────── */
+.shell {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 36px 32px 80px;
+}
+
+.page-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 24px;
+}
+.page-head-left { display: flex; align-items: center; gap: 14px; }
+.page-head h1 {
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.live-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--success);
+  background: var(--success-soft);
+  padding: 5px 11px;
+  border-radius: 999px;
+}
+.live-pill::before {
+  content: "";
+  width: 7px; height: 7px;
+  background: var(--success);
+  border-radius: 50%;
+  box-shadow: 0 0 0 0 rgba(22, 163, 74, 0.5);
+  animation: pulse 1.6s infinite;
+}
+@keyframes pulse {
+  0% { box-shadow: 0 0 0 0 rgba(22, 163, 74, 0.5); }
+  100% { box-shadow: 0 0 0 6px rgba(22, 163, 74, 0); }
+}
+.page-head p {
+  color: var(--text-2);
+  font-size: 14px;
+  margin-top: 4px;
+}
+.page-head-actions { display: flex; gap: 8px; }
+
+.btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 9px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.btn:hover { background: var(--surface-2); border-color: var(--border-strong); }
+.btn-primary { background: var(--primary); color: #fff; border-color: var(--primary); }
+.btn-primary:hover { background: var(--primary-hover); border-color: var(--primary-hover); }
+.btn svg { width: 14px; height: 14px; }
+
+/* ─── FILTER BAR ─────────────────────────────────────── */
+.filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+.filter-bar-label {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-2);
+  padding-right: 4px;
+}
+.filter-bar-label svg { width: 16px; height: 16px; }
+
+.filter-select {
+  position: relative;
+  display: flex; flex-direction: column;
+}
+.filter-select label {
+  font-size: 11px;
+  color: var(--text-3);
+  font-weight: 500;
+  margin-bottom: 2px;
+  margin-left: 2px;
+}
+.filter-select select {
+  appearance: none;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: 8px;
+  padding: 8px 32px 8px 12px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text);
+  cursor: pointer;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'><path d='M1 1.5L6 6.5L11 1.5' fill='none' stroke='%2364748B' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.filter-select select:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+.filter-bar-spacer { flex: 1; }
+
+/* ─── KPI CARDS ─────────────────────────────────────── */
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.kpi {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px 22px;
+  position: relative;
+  overflow: hidden;
+}
+.kpi-label {
+  font-size: 13px;
+  color: var(--text-2);
+  font-weight: 500;
+  margin-bottom: 14px;
+  display: flex; align-items: center; gap: 8px;
+}
+.kpi-icon {
+  width: 26px; height: 26px;
+  border-radius: 7px;
+  display: grid; place-items: center;
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+.kpi-icon svg { width: 14px; height: 14px; }
+.kpi-icon.green { background: var(--success-soft); color: var(--success); }
+.kpi-icon.amber { background: var(--warning-soft); color: var(--warning); }
+.kpi-icon.purple { background: #EDE9FE; color: #7C3AED; }
+
+.kpi-value {
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+.kpi-value .suffix {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-3);
+  margin-left: 4px;
+}
+.kpi-trend {
+  margin-top: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  display: flex; align-items: center; gap: 6px;
+  color: var(--text-2);
+}
+.kpi-trend strong { font-weight: 600; font-variant-numeric: tabular-nums; }
+.kpi-trend.up strong { color: var(--success); }
+.kpi-trend.down strong { color: var(--danger); }
+
+.kpi-spark {
+  position: absolute;
+  bottom: 12px; right: 14px;
+  width: 70px; height: 30px;
+  pointer-events: none;
+  opacity: 0.85;
+}
+
+/* leader kpi inline layout */
+.kpi-leader {
+  display: flex; align-items: center; gap: 12px;
+}
+.kpi-leader-glyph {
+  width: 44px; height: 44px;
+  border-radius: 10px;
+  background: var(--pnf);
+  color: #fff;
+  display: grid; place-items: center;
+  font-size: 18px; font-weight: 700;
+  flex-shrink: 0;
+}
+.kpi-leader-name {
+  font-size: 22px; font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.kpi-leader-share {
+  font-size: 13px;
+  color: var(--text-2);
+  margin-top: 2px;
+}
+
+/* ─── CHART CARD ─────────────────────────────────────── */
+.chart-row {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.chart-row.single { grid-template-columns: 1fr; }
+
+.chart-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 22px 24px;
+}
+.chart-card-head {
+  display: flex; justify-content: space-between; align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+.chart-title {
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+}
+.chart-sub {
+  font-size: 13px;
+  color: var(--text-2);
+  margin-top: 2px;
+}
+.chart-tag {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--text-2);
+}
+
+.chart-canvas-wrap { position: relative; height: 280px; }
+.chart-canvas-wrap.tall { height: 340px; }
+
+.chart-legend {
+  display: flex; flex-wrap: wrap; gap: 18px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+  font-size: 13px;
+  color: var(--text-2);
+}
+.chart-legend-item {
+  display: inline-flex; align-items: center; gap: 8px;
+}
+.chart-legend-swatch { width: 10px; height: 10px; border-radius: 3px; }
+.chart-legend strong {
+  color: var(--text);
+  font-weight: 600;
+  margin-left: 4px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ─── DONUT WRAPPER ─────────────────────────────────────── */
+.donut-wrap {
+  display: grid;
+  grid-template-columns: 1fr 1.2fr;
+  gap: 20px;
+  align-items: center;
+}
+.donut-canvas-wrap { position: relative; height: 200px; }
+.donut-center {
+  position: absolute; inset: 0;
+  display: grid; place-content: center; text-align: center;
+  pointer-events: none;
+}
+.donut-center-num {
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.donut-center-lbl {
+  font-size: 11px;
+  color: var(--text-2);
+  margin-top: 2px;
+  font-weight: 500;
+}
+.donut-list { display: flex; flex-direction: column; gap: 6px; }
+.donut-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+.donut-row:last-child { border-bottom: 0; }
+.donut-row .swatch { width: 9px; height: 9px; border-radius: 2px; }
+.donut-row .name { font-weight: 600; }
+.donut-row .name .meta { color: var(--text-2); font-weight: 400; }
+.donut-row .pct { font-weight: 700; font-variant-numeric: tabular-nums; }
+.donut-row .votes { color: var(--text-2); font-size: 12px; font-variant-numeric: tabular-nums; }
+
+/* ─── MAP / CONSTITUENCY GRID ─────────────────────────────────────── */
+.map-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 22px 24px;
+  margin-bottom: 16px;
+}
+
+.map-grid-wrap {
+  display: grid;
+  grid-template-columns: 1fr 220px;
+  gap: 28px;
+  align-items: start;
+}
+.map-grid {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 5px;
+}
+.cell {
+  aspect-ratio: 1;
+  display: grid; place-items: center;
+  font-size: 9.5px;
+  font-weight: 700;
+  cursor: pointer;
+  border-radius: 5px;
+  position: relative;
+  color: rgba(255,255,255,0.96);
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+.cell:hover {
+  transform: scale(1.18);
+  z-index: 5;
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.22);
+}
+.cell-tooltip {
+  position: absolute;
+  top: -8px; left: 50%;
+  transform: translate(-50%, -100%);
+  background: var(--text); color: #fff;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s;
+  z-index: 10;
+  font-weight: 500;
+  line-height: 1.4;
+}
+.cell-tooltip strong { display: block; font-size: 13px; font-weight: 700; margin-bottom: 1px; }
+.cell-tooltip .pct-line { color: #93C5FD; }
+.cell:hover .cell-tooltip { opacity: 1; }
+
+.map-legend {
+  border-left: 1px solid var(--border);
+  padding-left: 24px;
+}
+.map-legend h4 {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-2);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 12px;
+}
+.map-legend-item {
+  display: grid;
+  grid-template-columns: 18px 1fr auto;
+  gap: 10px; align-items: center;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--border);
+}
+.map-legend-item:last-child { border-bottom: 0; }
+.map-legend-swatch { width: 14px; height: 14px; border-radius: 4px; }
+.map-legend-name { font-size: 14px; font-weight: 600; }
+.map-legend-count { font-size: 12px; color: var(--text-2); font-variant-numeric: tabular-nums; }
+
+.map-legend-divider { height: 1px; background: var(--border); margin: 16px 0 12px; }
+.map-legend-row {
+  display: flex; justify-content: space-between;
+  font-size: 13px;
+  color: var(--text-2);
+  padding: 5px 0;
+}
+.map-legend-row strong { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
+
+/* ─── RESULTS TABLE ─────────────────────────────────────── */
+.results-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.results-head {
+  padding: 20px 24px 18px;
+  border-bottom: 1px solid var(--border);
+  display: flex; justify-content: space-between; align-items: center;
+}
+.results-head h2 { font-size: 17px; font-weight: 600; }
+.results-head p { font-size: 13px; color: var(--text-2); margin-top: 2px; }
+
+table.results {
+  width: 100%;
+  border-collapse: collapse;
+}
+table.results th {
+  text-align: left;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-2);
+  padding: 12px 16px;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+}
+table.results th.right { text-align: right; }
+table.results td {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+  font-size: 14px;
+  vertical-align: middle;
+}
+table.results tr:last-child td { border-bottom: 0; }
+table.results tr:hover td { background: #FAFBFC; }
+table.results td.right { text-align: right; }
+
+.r-rank {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+.r-rank.lead { color: var(--primary); }
+.r-name { font-weight: 600; }
+.r-cand { font-size: 12px; color: var(--text-2); margin-top: 2px; }
+.r-num { font-weight: 600; font-variant-numeric: tabular-nums; }
+
+.party-tag {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 999px;
+}
+.party-tag::before { content: ""; width: 7px; height: 7px; border-radius: 50%; }
+.party-tag.pnf { color: var(--pnf); background: rgba(37, 99, 235, 0.10); }
+.party-tag.pnf::before { background: var(--pnf); }
+.party-tag.cda { color: var(--cda); background: rgba(249, 115, 22, 0.10); }
+.party-tag.cda::before { background: var(--cda); }
+.party-tag.gup { color: var(--gup); background: rgba(22, 163, 74, 0.10); }
+.party-tag.gup::before { background: var(--gup); }
+.party-tag.ind { color: var(--ind); background: rgba(139, 92, 246, 0.10); }
+.party-tag.ind::before { background: var(--ind); }
+
+.bar-share {
+  width: 100%; max-width: 130px;
+  height: 6px;
+  background: var(--surface-2);
+  border-radius: 999px;
+  margin-top: 4px;
+  margin-left: auto;
+  overflow: hidden;
+}
+.bar-share-fill { height: 100%; border-radius: 999px; }
+
+.lead-pill {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--success-soft);
+  color: var(--success);
+}
+.lead-pill.tight { background: var(--warning-soft); color: var(--warning); }
+
+/* ─── RESPONSIVE ─────────────────────────────────────── */
+@media (max-width: 1100px) {
+  .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+  .chart-row { grid-template-columns: 1fr; }
+  .donut-wrap { grid-template-columns: 1fr; }
+  .map-grid-wrap { grid-template-columns: 1fr; }
+  .map-legend { border-left: 0; padding-left: 0; border-top: 1px solid var(--border); padding-top: 18px; }
+}
+@media (max-width: 720px) {
+  .header-inner { padding: 12px 18px; gap: 16px; }
+  .nav { display: none; }
+  .shell { padding: 24px 18px 60px; }
+  .page-head h1 { font-size: 24px; }
+  .page-head { flex-direction: column; align-items: stretch; }
+  .page-head-actions { width: 100%; }
+  .page-head-actions .btn { flex: 1; justify-content: center; }
+  .kpi-grid { grid-template-columns: 1fr; }
+  .filter-bar { flex-direction: column; align-items: stretch; }
+  .filter-select { width: 100%; }
+  .filter-select select { width: 100%; }
+  .map-grid { grid-template-columns: repeat(8, 1fr); }
+}
+</style>
+</head>
+<body>
+
+<header class="header">
+  <div class="header-inner">
+    <a href="user.html" class="logo">
+      <div class="logo-mark">E</div>
+      <span>Electioneering</span>
+    </a>
+    <nav class="nav">
+      <a href="user.html">Upload Data</a>
+      <a href="analytics.html" class="active">Analytics</a>
+    </nav>
+    <div class="header-spacer"></div>
+    <div class="user">
+      <div class="user-meta">
+        <div class="user-name">R. Khanna</div>
+        <span class="user-role">Officer · Level 2</span>
+      </div>
+      <div class="avatar">RK</div>
+    </div>
+  </div>
+</header>
+
+<main class="shell">
+
+  <!-- ─── PAGE HEAD ─────────────────────────────────────── -->
+  <div class="page-head">
+    <div>
+      <div class="page-head-left">
+        <h1>Analytics</h1>
+        <span class="live-pill">Live</span>
+      </div>
+      <p>Real-time vote share, turnout, and constituency results. Updated automatically as new data comes in.</p>
+    </div>
+    <div class="page-head-actions">
+      <button class="btn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Export CSV
+      </button>
+      <button class="btn btn-primary" id="refreshBtn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+        Refresh
+      </button>
+    </div>
+  </div>
+
+  <!-- ─── FILTER BAR ─────────────────────────────────────── -->
+  <div class="filter-bar">
+    <div class="filter-bar-label">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+      Filters
+    </div>
+    <div class="filter-select">
+      <label>Date</label>
+      <select>
+        <option>Today · 02 May 2026</option>
+        <option>Last 24 hours</option>
+        <option>Round 3 only</option>
+        <option>All rounds</option>
+      </select>
+    </div>
+    <div class="filter-select">
+      <label>Region</label>
+      <select>
+        <option>All regions</option>
+        <option>Maharashtra 24N</option>
+        <option>Karnataka 18S</option>
+        <option>Delhi NCR</option>
+        <option>Tamil Nadu 12W</option>
+      </select>
+    </div>
+    <div class="filter-select">
+      <label>Source</label>
+      <select>
+        <option>Excel + manual entries</option>
+        <option>Excel uploads only</option>
+        <option>Manual entries only</option>
+      </select>
+    </div>
+    <div class="filter-bar-spacer"></div>
+    <div style="font-size: 12px; color: var(--text-3);">Last refresh <strong style="color: var(--text); font-weight: 600;" class="tnum" id="lastRefresh">14:31</strong></div>
+  </div>
+
+  <!-- ─── KPI CARDS ─────────────────────────────────────── -->
+  <section class="kpi-grid">
+    <div class="kpi">
+      <div class="kpi-label">
+        <span class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
+        Total Votes
+      </div>
+      <div class="kpi-value tnum" id="bigNum">2,847,193</div>
+      <div class="kpi-trend up"><strong>↑ +6.9%</strong> vs. last refresh</div>
+      <canvas class="kpi-spark" id="spark1"></canvas>
+    </div>
+
+    <div class="kpi">
+      <div class="kpi-label">
+        <span class="kpi-icon green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></span>
+        Voter Turnout
+      </div>
+      <div class="kpi-value tnum">63.4<span class="suffix">%</span></div>
+      <div class="kpi-trend up"><strong>↑ +2.1pt</strong> vs. 2022 cycle</div>
+      <canvas class="kpi-spark" id="spark2"></canvas>
+    </div>
+
+    <div class="kpi">
+      <div class="kpi-label">
+        <span class="kpi-icon amber"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg></span>
+        Reporting
+      </div>
+      <div class="kpi-value tnum">437<span class="suffix">/488</span></div>
+      <div class="kpi-trend up"><strong>89.5%</strong> reporting rate</div>
+      <canvas class="kpi-spark" id="spark3"></canvas>
+    </div>
+
+    <div class="kpi">
+      <div class="kpi-label">
+        <span class="kpi-icon purple"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></span>
+        Leading
+      </div>
+      <div class="kpi-leader">
+        <div class="kpi-leader-glyph">P</div>
+        <div>
+          <div class="kpi-leader-name">PNF</div>
+          <div class="kpi-leader-share tnum">38.7% · ahead by 2.4pt</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── CHARTS ─────────────────────────────────────── -->
+  <div class="chart-row">
+    <div class="chart-card">
+      <div class="chart-card-head">
+        <div>
+          <div class="chart-title">Party-wise vote totals</div>
+          <div class="chart-sub">Round 3 · 437 of 488 reported</div>
+        </div>
+        <span class="chart-tag">Live</span>
+      </div>
+      <div class="chart-canvas-wrap"><canvas id="barChart"></canvas></div>
+    </div>
+
+    <div class="chart-card">
+      <div class="chart-card-head">
+        <div>
+          <div class="chart-title">Vote share</div>
+          <div class="chart-sub">% of valid votes</div>
+        </div>
+        <span class="chart-tag">89.5%</span>
+      </div>
+      <div class="donut-wrap">
+        <div class="donut-canvas-wrap">
+          <canvas id="donutChart"></canvas>
+          <div class="donut-center">
+            <div class="donut-center-num">2.84M</div>
+            <div class="donut-center-lbl">Total cast</div>
+          </div>
+        </div>
+        <div class="donut-list">
+          <div class="donut-row">
+            <div class="swatch" style="background: var(--pnf)"></div>
+            <div class="name">PNF <span class="meta">National Front</span></div>
+            <div class="pct">38.7%</div>
+            <div class="votes">1.10M</div>
+          </div>
+          <div class="donut-row">
+            <div class="swatch" style="background: var(--cda)"></div>
+            <div class="name">CDA <span class="meta">Democratic</span></div>
+            <div class="pct">36.3%</div>
+            <div class="votes">1.03M</div>
+          </div>
+          <div class="donut-row">
+            <div class="swatch" style="background: var(--gup)"></div>
+            <div class="name">GUP <span class="meta">Green Unity</span></div>
+            <div class="pct">17.2%</div>
+            <div class="votes">490K</div>
+          </div>
+          <div class="donut-row">
+            <div class="swatch" style="background: var(--ind)"></div>
+            <div class="name">IND <span class="meta">Independents</span></div>
+            <div class="pct">7.8%</div>
+            <div class="votes">221K</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="chart-row single">
+    <div class="chart-card">
+      <div class="chart-card-head">
+        <div>
+          <div class="chart-title">Hourly turnout</div>
+          <div class="chart-sub">07:00 to 18:00 IST · cumulative</div>
+        </div>
+        <span class="chart-tag">vs. 2022</span>
+      </div>
+      <div class="chart-canvas-wrap tall"><canvas id="lineChart"></canvas></div>
+      <div class="chart-legend">
+        <span class="chart-legend-item"><span class="chart-legend-swatch" style="background: var(--primary)"></span> Today's turnout <strong>63.4%</strong></span>
+        <span class="chart-legend-item"><span class="chart-legend-swatch" style="background: var(--text-3)"></span> 2022 same hour <strong>61.3%</strong></span>
+        <span class="chart-legend-item"><span class="chart-legend-swatch" style="background: var(--success)"></span> Forecast <strong>67.8%</strong></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── MAP ─────────────────────────────────────── -->
+  <div class="map-card">
+    <div class="chart-card-head" style="margin-bottom: 22px;">
+      <div>
+        <div class="chart-title">Constituency outlook</div>
+        <div class="chart-sub">96 seats shown · coloured by leading party · hover for details</div>
+      </div>
+      <span class="chart-tag">96 seats</span>
+    </div>
+    <div class="map-grid-wrap">
+      <div class="map-grid" id="mapGrid"></div>
+      <div class="map-legend">
+        <h4>Lead by party</h4>
+        <div class="map-legend-item">
+          <div class="map-legend-swatch" style="background: var(--pnf)"></div>
+          <div class="map-legend-name">PNF</div>
+          <div class="map-legend-count">37 seats</div>
+        </div>
+        <div class="map-legend-item">
+          <div class="map-legend-swatch" style="background: var(--cda)"></div>
+          <div class="map-legend-name">CDA</div>
+          <div class="map-legend-count">34 seats</div>
+        </div>
+        <div class="map-legend-item">
+          <div class="map-legend-swatch" style="background: var(--gup)"></div>
+          <div class="map-legend-name">GUP</div>
+          <div class="map-legend-count">17 seats</div>
+        </div>
+        <div class="map-legend-item">
+          <div class="map-legend-swatch" style="background: var(--ind)"></div>
+          <div class="map-legend-name">IND</div>
+          <div class="map-legend-count">8 seats</div>
+        </div>
+
+        <div class="map-legend-divider"></div>
+        <h4 style="margin-bottom: 8px;">Margin shading</h4>
+        <div style="display:flex; gap: 3px; height: 12px; margin-bottom: 6px;">
+          <div style="flex:1; background: var(--pnf); opacity: 0.35; border-radius: 3px;"></div>
+          <div style="flex:1; background: var(--pnf); opacity: 0.55; border-radius: 3px;"></div>
+          <div style="flex:1; background: var(--pnf); opacity: 0.75; border-radius: 3px;"></div>
+          <div style="flex:1; background: var(--pnf); opacity: 1; border-radius: 3px;"></div>
+        </div>
+        <div style="display:flex; justify-content:space-between; font-size:11px; color: var(--text-3);">
+          <span>Tight</span>
+          <span>Safe</span>
+        </div>
+
+        <div class="map-legend-divider"></div>
+        <div class="map-legend-row"><span>Total seats</span><strong>96</strong></div>
+        <div class="map-legend-row"><span>Tight (≤ 2%)</span><strong>11</strong></div>
+        <div class="map-legend-row"><span>Yet to report</span><strong style="color: var(--danger)">12</strong></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── RESULTS TABLE ─────────────────────────────────────── -->
+  <div class="results-card">
+    <div class="results-head">
+      <div>
+        <h2>Top constituencies by margin</h2>
+        <p>Sorted by leading candidate's vote share</p>
+      </div>
+      <button class="btn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        Sort
+      </button>
+    </div>
+    <table class="results">
+      <thead>
+        <tr>
+          <th style="width:50px">#</th>
+          <th>Constituency</th>
+          <th>Leader</th>
+          <th class="right">Votes</th>
+          <th class="right" style="width:170px">Share</th>
+          <th>Margin</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><div class="r-rank lead">01</div></td>
+          <td><div class="r-name">Bandra North</div><div class="r-cand">A. Mehrotra · 412 stations</div></td>
+          <td><span class="party-tag pnf">PNF</span></td>
+          <td class="right r-num">48,219</td>
+          <td class="right">
+            <div class="r-num">52.8%</div>
+            <div class="bar-share"><div class="bar-share-fill" style="width:52.8%; background: var(--pnf);"></div></div>
+          </td>
+          <td><span class="lead-pill">+ 18.2pt safe</span></td>
+        </tr>
+        <tr>
+          <td><div class="r-rank">02</div></td>
+          <td><div class="r-name">Powai Lake</div><div class="r-cand">S. Reddy · 521 stations</div></td>
+          <td><span class="party-tag cda">CDA</span></td>
+          <td class="right r-num">61,402</td>
+          <td class="right">
+            <div class="r-num">47.6%</div>
+            <div class="bar-share"><div class="bar-share-fill" style="width:47.6%; background: var(--cda);"></div></div>
+          </td>
+          <td><span class="lead-pill">+ 12.4pt safe</span></td>
+        </tr>
+        <tr>
+          <td><div class="r-rank">03</div></td>
+          <td><div class="r-name">Versova</div><div class="r-cand">M. Iqbal · 308 stations</div></td>
+          <td><span class="party-tag gup">GUP</span></td>
+          <td class="right r-num">29,847</td>
+          <td class="right">
+            <div class="r-num">41.2%</div>
+            <div class="bar-share"><div class="bar-share-fill" style="width:41.2%; background: var(--gup);"></div></div>
+          </td>
+          <td><span class="lead-pill tight">+ 1.8pt tight</span></td>
+        </tr>
+        <tr>
+          <td><div class="r-rank">04</div></td>
+          <td><div class="r-name">Andheri West</div><div class="r-cand">P. Kulkarni · 196 stations</div></td>
+          <td><span class="party-tag pnf">PNF</span></td>
+          <td class="right r-num">37,581</td>
+          <td class="right">
+            <div class="r-num">44.9%</div>
+            <div class="bar-share"><div class="bar-share-fill" style="width:44.9%; background: var(--pnf);"></div></div>
+          </td>
+          <td><span class="lead-pill">+ 7.3pt</span></td>
+        </tr>
+        <tr>
+          <td><div class="r-rank">05</div></td>
+          <td><div class="r-name">Goregaon East</div><div class="r-cand">D. Patil · 308 stations</div></td>
+          <td><span class="party-tag cda">CDA</span></td>
+          <td class="right r-num">42,118</td>
+          <td class="right">
+            <div class="r-num">39.4%</div>
+            <div class="bar-share"><div class="bar-share-fill" style="width:39.4%; background: var(--cda);"></div></div>
+          </td>
+          <td><span class="lead-pill tight">+ 0.9pt recount</span></td>
+        </tr>
+        <tr>
+          <td><div class="r-rank">06</div></td>
+          <td><div class="r-name">Vile Parle</div><div class="r-cand">N. Joshi · 287 stations</div></td>
+          <td><span class="party-tag ind">IND</span></td>
+          <td class="right r-num">19,842</td>
+          <td class="right">
+            <div class="r-num">36.7%</div>
+            <div class="bar-share"><div class="bar-share-fill" style="width:36.7%; background: var(--ind);"></div></div>
+          </td>
+          <td><span class="lead-pill">+ 4.2pt</span></td>
+        </tr>
+        <tr>
+          <td><div class="r-rank">07</div></td>
+          <td><div class="r-name">Jogeshwari</div><div class="r-cand">L. Banerjee · 196 stations</div></td>
+          <td><span class="party-tag pnf">PNF</span></td>
+          <td class="right r-num">28,914</td>
+          <td class="right">
+            <div class="r-num">42.3%</div>
+            <div class="bar-share"><div class="bar-share-fill" style="width:42.3%; background: var(--pnf);"></div></div>
+          </td>
+          <td><span class="lead-pill">+ 9.1pt</span></td>
+        </tr>
+        <tr>
+          <td><div class="r-rank">08</div></td>
+          <td><div class="r-name">Khar Danda</div><div class="r-cand">V. Sharma · 142 stations</div></td>
+          <td><span class="party-tag cda">CDA</span></td>
+          <td class="right r-num">21,407</td>
+          <td class="right">
+            <div class="r-num">38.8%</div>
+            <div class="bar-share"><div class="bar-share-fill" style="width:38.8%; background: var(--cda);"></div></div>
+          </td>
+          <td><span class="lead-pill tight">+ 1.4pt tight</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+</main>
+
+<script>
+/* ── chart.js defaults ── */
+Chart.defaults.font.family = 'Plus Jakarta Sans, system-ui, sans-serif';
+Chart.defaults.font.size = 12;
+Chart.defaults.color = '#475569';
+Chart.defaults.borderColor = '#E5E7EB';
+Chart.defaults.plugins.tooltip.backgroundColor = '#0F172A';
+Chart.defaults.plugins.tooltip.titleFont = { family: 'Plus Jakarta Sans', size: 13, weight: 600 };
+Chart.defaults.plugins.tooltip.bodyFont = { family: 'Plus Jakarta Sans', size: 12 };
+Chart.defaults.plugins.tooltip.padding = 10;
+Chart.defaults.plugins.tooltip.cornerRadius = 8;
+Chart.defaults.plugins.tooltip.displayColors = true;
+Chart.defaults.plugins.tooltip.boxPadding = 4;
+
+const COLORS = {
+  pnf: '#2563EB',
+  cda: '#F97316',
+  gup: '#16A34A',
+  ind: '#8B5CF6',
+};
+
+/* ── BAR CHART ── */
+const barLabels = ['PNF','CDA','GUP','IND','REG','VRT','OTH'];
+const barFull = ["People's National Front", "Citizens' Democratic Alliance", "Green Unity Party", "Independents", "Regional Bloc", "Vox Republic", "Others"];
+const barData = [1102000, 1034000, 490000, 221000, 168000, 92000, 38000];
+const barColors = [COLORS.pnf, COLORS.cda, COLORS.gup, COLORS.ind, '#0EA5E9', '#EC4899', '#94A3B8'];
+
+new Chart(document.getElementById('barChart'), {
+  type: 'bar',
+  data: {
+    labels: barLabels,
+    datasets: [{
+      data: barData,
+      backgroundColor: barColors,
+      borderRadius: 6,
+      barPercentage: 0.7,
+    }]
+  },
+  options: {
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        callbacks: {
+          title: items => barFull[items[0].dataIndex],
+          label: item => 'Votes  ' + item.parsed.y.toLocaleString(),
+        }
+      }
+    },
+    scales: {
+      x: {
+        grid: { display: false },
+        ticks: { font: { weight: 600, size: 13 }, color: '#0F172A' },
+        border: { color: '#E5E7EB' }
+      },
+      y: {
+        beginAtZero: true,
+        grid: { color: '#F1F3F6', drawBorder: false },
+        border: { display: false },
+        ticks: {
+          padding: 8,
+          callback: v => v >= 1e6 ? (v/1e6).toFixed(1) + 'M' : (v/1e3).toFixed(0) + 'k',
+        }
+      }
+    }
+  }
+});
+
+/* ── DONUT ── */
+new Chart(document.getElementById('donutChart'), {
+  type: 'doughnut',
+  data: {
+    labels: ['PNF','CDA','GUP','IND'],
+    datasets: [{
+      data: [38.7, 36.3, 17.2, 7.8],
+      backgroundColor: [COLORS.pnf, COLORS.cda, COLORS.gup, COLORS.ind],
+      borderColor: '#FFFFFF',
+      borderWidth: 4,
+      hoverOffset: 6,
+    }]
+  },
+  options: {
+    maintainAspectRatio: false,
+    cutout: '68%',
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        callbacks: { label: item => item.label + '  ' + item.parsed + '%' }
+      }
+    }
+  }
+});
+
+/* ── LINE ── */
+const hours = ['07','08','09','10','11','12','13','14','15','16','17','18'];
+const today2026 = [3.1, 9.4, 17.2, 26.5, 34.8, 41.2, 47.9, 54.7, 63.4, null, null, null];
+const data2022  = [2.7, 8.1, 14.9, 23.2, 30.5, 36.8, 43.1, 49.4, 55.2, 60.1, 64.8, 68.2];
+const forecast  = [null, null, null, null, null, null, null, null, 63.4, 65.6, 67.0, 67.8];
+
+new Chart(document.getElementById('lineChart'), {
+  type: 'line',
+  data: {
+    labels: hours,
+    datasets: [
+      {
+        label: '2022 cycle',
+        data: data2022,
+        borderColor: '#94A3B8',
+        backgroundColor: 'transparent',
+        borderDash: [4, 4],
+        borderWidth: 1.6,
+        pointRadius: 0,
+        tension: 0.4,
+      },
+      {
+        label: 'Forecast',
+        data: forecast,
+        borderColor: COLORS.gup,
+        backgroundColor: 'transparent',
+        borderDash: [3, 4],
+        borderWidth: 1.6,
+        pointRadius: 0,
+        tension: 0.4,
+      },
+      {
+        label: "Today's turnout",
+        data: today2026,
+        borderColor: COLORS.pnf,
+        backgroundColor: ctx => {
+          const c = ctx.chart.ctx;
+          const g = c.createLinearGradient(0, 0, 0, 340);
+          g.addColorStop(0, 'rgba(37, 99, 235, 0.18)');
+          g.addColorStop(1, 'rgba(37, 99, 235, 0)');
+          return g;
+        },
+        fill: true,
+        borderWidth: 2.5,
+        pointRadius: 4,
+        pointBackgroundColor: '#FFFFFF',
+        pointBorderColor: COLORS.pnf,
+        pointBorderWidth: 2,
+        tension: 0.35,
+      }
+    ]
+  },
+  options: {
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        callbacks: {
+          title: items => items[0].label + ':00 IST',
+          label: item => item.dataset.label + '  ' + item.parsed.y + '%',
+        }
+      }
+    },
+    scales: {
+      x: {
+        grid: { display: false },
+        ticks: { font: { size: 12 } },
+        border: { color: '#E5E7EB' }
+      },
+      y: {
+        beginAtZero: true, max: 80,
+        grid: { color: '#F1F3F6', drawBorder: false },
+        border: { display: false },
+        ticks: { padding: 8, callback: v => v + '%' }
+      }
+    }
+  }
+});
+
+/* ── SPARKLINES ── */
+function drawSpark(id, points, color) {
+  const c = document.getElementById(id);
+  if (!c) return;
+  const ctx = c.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  const w = c.clientWidth, h = c.clientHeight;
+  c.width = w * dpr; c.height = h * dpr;
+  ctx.scale(dpr, dpr);
+  const min = Math.min(...points), max = Math.max(...points);
+  const range = max - min || 1;
+
+  const grad = ctx.createLinearGradient(0, 0, 0, h);
+  grad.addColorStop(0, color + '33');
+  grad.addColorStop(1, color + '00');
+
+  ctx.beginPath();
+  points.forEach((p, i) => {
+    const x = (i / (points.length - 1)) * (w - 2) + 1;
+    const y = h - ((p - min) / range) * (h - 6) - 3;
+    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  });
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1.6;
+  ctx.stroke();
+
+  const lx = (w - 2) + 1;
+  const ly = h - ((points[points.length-1] - min) / range) * (h - 6) - 3;
+  ctx.beginPath();
+  ctx.arc(lx - 1, ly, 2.5, 0, Math.PI*2);
+  ctx.fillStyle = color;
+  ctx.fill();
+}
+setTimeout(() => {
+  drawSpark('spark1', [1.4, 1.6, 1.9, 2.1, 2.3, 2.5, 2.7, 2.84], COLORS.pnf);
+  drawSpark('spark2', [42, 47, 51, 54, 57, 59, 61, 63.4], COLORS.gup);
+  drawSpark('spark3', [120, 180, 240, 290, 340, 380, 410, 437], COLORS.cda);
+}, 60);
+
+/* ── CONSTITUENCY GRID ── */
+const constituencies = [
+  ['Bandra North','PNF',52.8],['Andheri West','PNF',44.9],['Versova','GUP',41.2],['Jogeshwari','PNF',42.3],
+  ['Goregaon East','CDA',39.4],['Powai Lake','CDA',47.6],['Vile Parle','IND',36.7],['Khar Danda','CDA',38.8],
+  ['Malad','PNF',49.1],['Kandivali','CDA',42.0],['Borivali','PNF',54.2],['Dahisar','PNF',46.8],
+  ['Mahim','CDA',41.7],['Worli','CDA',44.8],['Lower Parel','GUP',39.0],['Byculla','PNF',43.5],
+  ['Colaba','CDA',51.2],['Marine Drive','CDA',48.9],['Churchgate','CDA',44.4],['Fort','PNF',42.8],
+  ['Dadar','PNF',46.0],['Mahalaxmi','GUP',38.2],['Sion','PNF',44.1],['Kurla','PNF',47.5],
+  ['Ghatkopar','CDA',43.7],['Vikhroli','GUP',40.5],['Mulund','CDA',45.3],['Bhandup','PNF',42.9],
+  ['Chembur','CDA',46.2],['Trombay','GUP',39.4],['Thane','CDA',48.0],['Mira Road','PNF',45.6],
+  ['Vasai','GUP',41.3],['Virar','PNF',44.0],['Naigaon','CDA',42.7],['Bhayander','PNF',43.8],
+  ['Kalyan','CDA',46.5],['Dombivli','PNF',45.0],['Ulhasnagar','IND',38.9],['Ambernath','PNF',43.4],
+  ['Badlapur','CDA',44.6],['Karjat','GUP',40.1],['Khopoli','PNF',42.5],['Panvel','CDA',47.2],
+  ['Uran','GUP',39.8],['Vashi','CDA',45.9],['Belapur','PNF',46.1],['Kharghar','CDA',44.3],
+  ['Pen','IND',37.4],['Alibag','GUP',41.0],['Roha','PNF',43.2],['Mangaon','CDA',42.8],
+  ['Mahabaleshwar','GUP',39.5],['Satara','PNF',45.4],['Karad','CDA',44.7],['Kolhapur','PNF',46.9],
+  ['Ichalkaranji','CDA',43.1],['Sangli','PNF',45.7],['Miraj','CDA',44.0],['Tasgaon','GUP',40.7],
+  ['Pune Cant','CDA',47.8],['Kothrud','PNF',49.5],['Hadapsar','CDA',43.6],['Hinjewadi','GUP',41.5],
+  ['Wakad','PNF',44.2],['Aundh','CDA',46.3],['Baner','PNF',45.8],['Kondhwa','GUP',40.9],
+  ['Khadki','PNF',42.4],['Yerwada','CDA',43.9],['Wagholi','PNF',44.5],['Pimpri','CDA',45.1],
+  ['Chinchwad','PNF',46.7],['Bhosari','CDA',43.3],['Akurdi','PNF',45.5],['Nashik','CDA',47.4],
+  ['Malegaon','GUP',40.6],['Sinnar','PNF',43.0],['Niphad','CDA',42.6],['Igatpuri','GUP',39.2],
+  ['Aurangabad','PNF',46.6],['Jalna','CDA',43.5],['Beed','PNF',44.8],['Ahmadnagar','CDA',45.0],
+  ['Solapur','PNF',46.2],['Pandharpur','GUP',40.3],['Akkalkot','PNF',43.7],['Latur','CDA',44.9],
+  ['Osmanabad','PNF',45.6],['Nanded','CDA',46.0],['Hingoli','GUP',39.9],['Parbhani','PNF',43.8],
+  ['Yavatmal','CDA',44.4],['Wardha','PNF',45.2],['Chandrapur','GUP',41.8],['Nagpur East','PNF',47.0],
+];
+
+const partyColor = { PNF: COLORS.pnf, CDA: COLORS.cda, GUP: COLORS.gup, IND: COLORS.ind };
+
+const grid = document.getElementById('mapGrid');
+constituencies.forEach((c) => {
+  const [name, party, share] = c;
+  const cell = document.createElement('div');
+  cell.className = 'cell';
+  const t = Math.max(0, Math.min(1, (share - 35) / 22));
+  const opacity = 0.45 + t * 0.55;
+  cell.style.background = partyColor[party];
+  cell.style.opacity = opacity;
+  cell.textContent = party;
+  cell.dataset.name = name;
+
+  const tt = document.createElement('div');
+  tt.className = 'cell-tooltip';
+  tt.innerHTML = `<strong>${name}</strong>${party} leading · <span class="pct-line">${share}%</span>`;
+  cell.appendChild(tt);
+  grid.appendChild(cell);
+});
+
+/* ── live ticker ── */
+let bn = 2847193;
+function updateTick() {
+  bn += Math.floor(Math.random() * 280 + 60);
+  document.getElementById('bigNum').textContent = bn.toLocaleString();
+  const now = new Date();
+  document.getElementById('lastRefresh').textContent =
+    now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+}
+setInterval(updateTick, 4000);
+
+document.getElementById('refreshBtn').addEventListener('click', () => {
+  updateTick();
+});
+</script>
+</body>
+</html>
