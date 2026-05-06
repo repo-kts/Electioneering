@@ -1,18 +1,14 @@
 import { validationChecks } from '../../data/history.js';
+import Card from '../ui/Card.jsx';
 
 const STATUS_LABEL = { ok: 'Pass', warn: 'Review', fail: 'Fail' };
 const STATUS_GLYPH = { ok: '✓', warn: '!', fail: '✕' };
 
 export default function ValidationCard() {
   return (
-    <div className="card">
-      <div className="card-head">
-        <div>
-          <h2>Validation checks</h2>
-          <p>What we check before saving</p>
-        </div>
-      </div>
-      <div className="card-body">
+    <Card>
+      <Card.Head title="Validation checks" subtitle="What we check before saving" />
+      <Card.Body>
         <div className="validation-list">
           {validationChecks.map((c) => (
             <div className="validation-item" key={c.id}>
@@ -25,7 +21,7 @@ export default function ValidationCard() {
             </div>
           ))}
         </div>
-      </div>
-    </div>
+      </Card.Body>
+    </Card>
   );
 }

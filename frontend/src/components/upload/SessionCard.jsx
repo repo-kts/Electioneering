@@ -1,40 +1,35 @@
 import { session } from '../../data/history.js';
+import Card from '../ui/Card.jsx';
+
+const ROWS = [
+  { key: 'User', val: (s) => s.user },
+  {
+    key: 'Role',
+    val: (s) => (
+      <>
+        {s.role} <span className="badge-tag">Active</span>
+      </>
+    ),
+  },
+  { key: 'Region', val: (s) => s.region },
+  { key: 'Permissions', val: (s) => s.permissions },
+  { key: 'Session expires', val: (s) => <span className="tnum">{s.expires}</span> },
+];
 
 export default function SessionCard() {
   return (
-    <div className="card">
-      <div className="card-head">
-        <div>
-          <h2>Your session</h2>
-          <p>Active sign-in details</p>
-        </div>
-      </div>
-      <div className="card-body">
+    <Card>
+      <Card.Head title="Your session" subtitle="Active sign-in details" />
+      <Card.Body>
         <div className="session-list">
-          <div className="session-row">
-            <div className="session-key">User</div>
-            <div className="session-val">{session.user}</div>
-          </div>
-          <div className="session-row">
-            <div className="session-key">Role</div>
-            <div className="session-val">
-              {session.role} <span className="badge-tag">Active</span>
+          {ROWS.map((r) => (
+            <div className="session-row" key={r.key}>
+              <div className="session-key">{r.key}</div>
+              <div className="session-val">{r.val(session)}</div>
             </div>
-          </div>
-          <div className="session-row">
-            <div className="session-key">Region</div>
-            <div className="session-val">{session.region}</div>
-          </div>
-          <div className="session-row">
-            <div className="session-key">Permissions</div>
-            <div className="session-val">{session.permissions}</div>
-          </div>
-          <div className="session-row">
-            <div className="session-key">Session expires</div>
-            <div className="session-val tnum">{session.expires}</div>
-          </div>
+          ))}
         </div>
-      </div>
-    </div>
+      </Card.Body>
+    </Card>
   );
 }

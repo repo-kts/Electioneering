@@ -1,6 +1,7 @@
 import { topResults } from '../../data/results.js';
 import { PARTY_COLORS } from '../../data/parties.js';
 import { ChevronDownIcon } from '../ui/Icon.jsx';
+import Button from '../ui/Button.jsx';
 
 function pad(n) {
   return String(n).padStart(2, '0');
@@ -14,10 +15,7 @@ export default function ResultsTable() {
           <h2>Top constituencies by margin</h2>
           <p>Sorted by leading candidate's vote share</p>
         </div>
-        <button className="btn">
-          <ChevronDownIcon />
-          Sort
-        </button>
+        <Button leadingIcon={<ChevronDownIcon />}>Sort</Button>
       </div>
       <table className="results">
         <thead>

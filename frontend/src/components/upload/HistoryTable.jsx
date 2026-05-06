@@ -6,6 +6,8 @@ import {
   RetryIcon,
   SearchIcon,
 } from '../ui/Icon.jsx';
+import Card from '../ui/Card.jsx';
+import IconButton from '../ui/IconButton.jsx';
 
 const STATUS_LABEL = {
   validated: 'Validated',
@@ -19,6 +21,12 @@ const FILTERS = [
   { key: 'processing', label: 'Processing' },
   { key: 'failed', label: 'Failed' },
 ];
+
+function rowAction(status) {
+  if (status === 'failed') return { Icon: RetryIcon, title: 'Retry' };
+  if (status === 'processing') return { Icon: CloseIcon, title: 'Cancel' };
+  return { Icon: EyeIcon, title: 'View' };
+}
 
 export default function HistoryTable({ rows }) {
   const [filter, setFilter] = useState('all');
@@ -37,15 +45,13 @@ export default function HistoryTable({ rows }) {
   }, [rows, filter, query]);
 
   return (
-    <div className="card">
-      <div className="card-head">
-        <div>
-          <h2>Upload history</h2>
-          <p>Recent uploads and manual entries from the last 24 hours.</p>
-        </div>
-      </div>
-      <div className="card-body" style={{ padding: '20px 24px 24px' }}>
-        <div className="history-toolbar">
+    <Card>
+      <Card.Head
+        title="Upload history"
+        subtitle="Recent uploads and manual entries from the last 24 hours."
+      />
+      <Card.Body style={{ padding: '20px 22px 22px' }}>
+        <div className="toolbar">
           <div className="search">
             <SearchIcon />
             <input
@@ -78,52 +84,52 @@ export default function HistoryTable({ rows }) {
               </th>
               <th>Constituency</th>
               <th style={{ width: 130 }}>Status</th>
-              <th className="right" style={{ width: 90 }} />
+              <th className="right" style={{ width: 110 }} />
             </tr>
           </thead>
           <tbody>
-            {visible.map((r) => (
-              <tr key={r.id}>
-                <td className="h-time">{r.time}</td>
-                <td>
-                  <div className="h-file">{r.file}</div>
-                  <div className="h-source">{r.source}</div>
-                </td>
-                <td className="right h-records">{r.records}</td>
-                <td>{r.constituency}</td>
-                <td>
-                  <span className={`status ${r.status}`}>{STATUS_LABEL[r.status]}</span>
-                </td>
-                <td className="right">
-                  {r.status === 'failed' ? (
-                    <button className="icon-btn" title="Retry">
-                      <RetryIcon />
-                    </button>
-                  ) : r.status === 'processing' ? (
-                    <button className="icon-btn" title="Cancel">
-                      <CloseIcon />
-                    </button>
-                  ) : (
-                    <button className="icon-btn" title="View">
-                      <EyeIcon />
-                    </button>
-                  )}
-                  <button className="icon-btn" title="Download">
-                    <DownloadIcon />
-                  </button>
-                </td>
-              </tr>
-            ))}
+            {visible.map((r) => {
+              const { Icon, title } = rowAction(r.status);
+              return (
+                <tr key={r.id}>
+                  <td className="h-time">{r.time}</td>
+                  <td>
+                    <div className="h-file">{r.file}</div>
+                    <div className="h-source">{r.source}</div>
+                  </td>
+                  <td className="right h-records">{r.records}</td>
+                  <td>{r.constituency}</td>
+                  <td>
+                    <span className={`status ${r.status}`}>{STATUS_LABEL[r.status]}</span>
+                  </td>
+                  <td className="right">
+                    <IconButton title={title}>
+                      <Icon />
+                    </IconButton>
+                    <IconButton title="Download">
+                      <DownloadIcon />
+                    </IconButton>
+                  </td>
+                </tr>
+              );
+            })}
             {visible.length === 0 && (
               <tr>
-                <td colSpan={6} style={{ textAlign: 'center', color: 'var(--text-3)', padding: '32px 0' }}>
+                <td
+                  colSpan={6}
+                  style={{
+                    textAlign: 'center',
+                    color: 'var(--text-3)',
+                    padding: '40px 0',
+                  }}
+                >
                   No records match your search.
                 </td>
               </tr>
             )}
           </tbody>
         </table>
-      </div>
-    </div>
+      </Card.Body>
+    </Card>
   );
 }

@@ -1,4 +1,22 @@
 import { NavLink, Link } from 'react-router-dom';
+import { session } from '../../data/history.js';
+
+const NAV = [
+  { to: '/', label: 'Home', end: true },
+  { to: '/voter-detail', label: 'Voter Detail' },
+  { to: '/form-20', label: 'Form 20' },
+  { to: '/analytics', label: 'Analytics' },
+];
+
+function initials(name) {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((s) => s[0])
+    .join('')
+    .toUpperCase();
+}
 
 export default function Header() {
   return (
@@ -9,20 +27,19 @@ export default function Header() {
           <span>Electioneering</span>
         </Link>
         <nav className="nav">
-          <NavLink to="/" end>
-            Home
-          </NavLink>
-          <NavLink to="/voter-detail">Voter Detail</NavLink>
-          <NavLink to="/form-20">Form 20</NavLink>
-          <NavLink to="/analytics">Analytics</NavLink>
+          {NAV.map((n) => (
+            <NavLink key={n.to} to={n.to} end={n.end}>
+              {n.label}
+            </NavLink>
+          ))}
         </nav>
         <div className="header-spacer" />
         <div className="user">
           <div className="user-meta">
-            <div className="user-name">R. Khanna</div>
-            <span className="user-role">Officer · Level 2</span>
+            <div className="user-name">{session.user}</div>
+            <span className="user-role">{session.role}</span>
           </div>
-          <div className="avatar">RK</div>
+          <div className="avatar">{initials(session.user)}</div>
         </div>
       </div>
     </header>

@@ -1,5 +1,7 @@
 import { useMemo, useState } from 'react';
 import { CheckIcon, CloseIcon, PlusIcon } from '../ui/Icon.jsx';
+import Button from '../ui/Button.jsx';
+import Card from '../ui/Card.jsx';
 import {
   FORM20_CANDIDATES,
   FORM20_HEADER,
@@ -108,15 +110,12 @@ export default function Form20({ onSubmit }) {
   }
 
   return (
-    <div className="card">
-      <div className="card-head">
-        <div>
-          <h2>Form 20 — Detailed Result Sheet</h2>
-          <p>Polling-station-wise vote count for each candidate. Totals recalculate automatically.</p>
-        </div>
-      </div>
-
-      <div className="card-body">
+    <Card>
+      <Card.Head
+        title="Form 20 — Detailed Result Sheet"
+        subtitle="Polling-station-wise vote count for each candidate. Totals recalculate automatically."
+      />
+      <Card.Body>
         {/* ─── Header info ─── */}
         <div className="form20-header">
           <div className="form20-header-row">
@@ -153,10 +152,9 @@ export default function Form20({ onSubmit }) {
             <strong>{totals.total.toLocaleString()}</strong> total votes
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
-            <button type="button" className="btn btn-primary" onClick={handleSave}>
-              <CheckIcon />
+            <Button variant="primary" leadingIcon={<CheckIcon />} onClick={handleSave}>
               Save Form 20
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -278,7 +276,7 @@ export default function Form20({ onSubmit }) {
           <PlusIcon />
           Add Polling Station
         </button>
-      </div>
-    </div>
+      </Card.Body>
+    </Card>
   );
 }

@@ -10,6 +10,8 @@ import SurnameChart from '../components/analytics/SurnameChart.jsx';
 import GenderChart from '../components/analytics/GenderChart.jsx';
 import AgeGroupChart from '../components/analytics/AgeGroupChart.jsx';
 import { DownloadIcon, RetryIcon } from '../components/ui/Icon.jsx';
+import Button from '../components/ui/Button.jsx';
+import PageHead from '../components/ui/PageHead.jsx';
 
 function fmtClock(d = new Date()) {
   return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
@@ -36,28 +38,19 @@ export default function AnalyticsPage() {
 
   return (
     <div className="shell">
-      <div className="page-head">
-        <div>
-          <div className="page-head-left">
-            <h1>Analytics</h1>
-            <span className="live-pill">Live</span>
-          </div>
-          <p>
-            Real-time vote share, turnout, and constituency results. Updated automatically
-            as new data comes in.
-          </p>
-        </div>
-        <div className="page-head-actions">
-          <button className="btn">
-            <DownloadIcon />
-            Export CSV
-          </button>
-          <button className="btn btn-primary" onClick={refresh}>
-            <RetryIcon />
-            Refresh
-          </button>
-        </div>
-      </div>
+      <PageHead
+        title="Analytics"
+        badge={<span className="live-pill">Live</span>}
+        subtitle="Real-time vote share, turnout, and constituency results. Updated automatically as new data comes in."
+        actions={
+          <>
+            <Button leadingIcon={<DownloadIcon />}>Export CSV</Button>
+            <Button variant="primary" leadingIcon={<RetryIcon />} onClick={refresh}>
+              Refresh
+            </Button>
+          </>
+        }
+      />
 
       <FilterBar filters={filters} onChange={setFilters} lastRefresh={lastRefresh} />
       <KpiGrid totalVotes={totalVotes} />
@@ -67,7 +60,6 @@ export default function AnalyticsPage() {
         <VoteShareDonut />
       </div>
 
-      {/* ─── Voter Demographics ─── */}
       <div className="section-divider" style={{ marginTop: 16 }}>
         <div className="section-info">
           <h2>Voter Demographics</h2>

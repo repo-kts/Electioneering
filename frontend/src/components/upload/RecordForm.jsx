@@ -1,5 +1,7 @@
 import { useMemo, useState } from 'react';
 import { CheckIcon, CloseIcon, PlusIcon } from '../ui/Icon.jsx';
+import Button from '../ui/Button.jsx';
+import Card from '../ui/Card.jsx';
 import {
   DUMMY_VOTERS,
   EPIC_PATTERN,
@@ -179,15 +181,12 @@ export default function RecordForm({ onSubmit }) {
   }
 
   return (
-    <div className="card">
-      <div className="card-head">
-        <div>
-          <h2>Voter Details</h2>
-          <p>Add voter records like a spreadsheet. Click any cell to edit, "+ Add Row" to insert a new entry.</p>
-        </div>
-      </div>
-
-      <div className="card-body">
+    <Card>
+      <Card.Head
+        title="Voter Details"
+        subtitle='Add voter records like a spreadsheet. Click any cell to edit, "+ Add Row" to insert a new entry.'
+      />
+      <Card.Body>
         <div className="grid-toolbar">
           <div className="row-count">
             <strong>{filledCount}</strong> of <strong>{rows.length}</strong> rows have data
@@ -198,14 +197,15 @@ export default function RecordForm({ onSubmit }) {
             )}
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
-            <button type="button" className="btn" onClick={handleClear}>
-              Clear all
-            </button>
-            <button type="button" className="btn btn-primary" onClick={handleSave}>
-              <CheckIcon />
+            <Button onClick={handleClear}>Clear all</Button>
+            <Button
+              variant="primary"
+              leadingIcon={<CheckIcon />}
+              onClick={handleSave}
+            >
               Save {filledCount > 0 ? `${filledCount} ` : ''}
               {filledCount === 1 ? 'Voter' : 'Voters'}
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -247,7 +247,7 @@ export default function RecordForm({ onSubmit }) {
           <PlusIcon />
           Add Row
         </button>
-      </div>
-    </div>
+      </Card.Body>
+    </Card>
   );
 }
