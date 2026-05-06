@@ -1,0 +1,283 @@
+/* Reset, base typography, header, layout shell, focus ring. */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+html,
+body,
+#root {
+  height: 100%;
+}
+body {
+  background: var(--bg);
+  background-image:
+    radial-gradient(1200px 600px at 0% -10%, rgba(37, 99, 235, 0.04), transparent 60%),
+    radial-gradient(900px 500px at 100% -10%, rgba(139, 92, 246, 0.03), transparent 60%);
+  background-attachment: fixed;
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 15px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  accent-color: var(--primary);
+}
+a {
+  color: inherit;
+  text-decoration: none;
+}
+button {
+  font-family: inherit;
+}
+img,
+svg {
+  display: block;
+  max-width: 100%;
+}
+
+/* Consistent focus ring across interactive elements */
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--primary-ring);
+  border-color: var(--primary);
+  border-radius: inherit;
+}
+
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ─── Header ─── */
+.header {
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: saturate(160%) blur(10px);
+  -webkit-backdrop-filter: saturate(160%) blur(10px);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: var(--z-header);
+}
+.header-inner {
+  max-width: var(--shell-max);
+  margin: 0 auto;
+  padding: 12px var(--shell-pad-x);
+  display: flex;
+  align-items: center;
+  gap: 32px;
+  min-height: var(--header-h);
+}
+.logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+.logo-mark {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #4f46e5, var(--primary));
+  color: #fff;
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  font-size: 14px;
+  box-shadow: var(--shadow-sm);
+}
+.nav {
+  display: flex;
+  gap: 2px;
+  margin-left: 4px;
+}
+.nav a {
+  padding: 7px 12px;
+  border-radius: var(--r);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-2);
+  transition: background var(--t-fast), color var(--t-fast);
+}
+.nav a:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+.nav a.active {
+  background: var(--primary-soft);
+  color: var(--primary);
+  font-weight: 600;
+}
+.header-spacer {
+  flex: 1;
+}
+.user {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 4px 4px 12px;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  box-shadow: var(--shadow-xs);
+}
+.user-meta {
+  line-height: 1;
+  text-align: right;
+}
+.user-name {
+  font-size: 13px;
+  font-weight: 600;
+}
+.user-role {
+  font-size: 11px;
+  color: var(--text-3);
+  display: block;
+  line-height: 1.1;
+  margin-top: 2px;
+}
+.avatar {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #6366f1, var(--primary));
+  color: #fff;
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  font-size: 12px;
+}
+
+/* ─── Shell ─── */
+.shell {
+  max-width: var(--shell-max);
+  margin: 0 auto;
+  padding: 36px var(--shell-pad-x) 80px;
+}
+
+/* ─── Live pill (used in PageHead) ─── */
+.live-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--success);
+  background: var(--success-soft);
+  padding: 4px 10px;
+  border-radius: var(--r-pill);
+}
+.live-pill::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  background: var(--success);
+  border-radius: 50%;
+  box-shadow: 0 0 0 0 rgba(22, 163, 74, 0.5);
+  animation: pulse 1.6s infinite;
+}
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(22, 163, 74, 0.5);
+  }
+  100% {
+    box-shadow: 0 0 0 6px rgba(22, 163, 74, 0);
+  }
+}
+@keyframes blink {
+  50% {
+    opacity: 0.3;
+  }
+}
+
+/* ─── Page head ─── */
+.page-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 24px;
+}
+.page-head h1 {
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  margin-bottom: 6px;
+}
+.page-head p {
+  color: var(--text-2);
+  font-size: 15px;
+  max-width: 620px;
+}
+.page-head-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 4px;
+}
+.page-head-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* ─── Section divider (used between groups inside a page) ─── */
+.section-divider {
+  margin: 32px 0 18px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.section-divider .section-info {
+  flex: 1;
+}
+.section-divider h2 {
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+}
+.section-divider p {
+  font-size: 13px;
+  color: var(--text-2);
+  margin-top: 2px;
+}
+
+/* ─── Toast ─── */
+.toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  background: var(--text);
+  color: #fff;
+  padding: 12px 22px;
+  border-radius: var(--r-md);
+  font-size: 14px;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  box-shadow: var(--shadow-lg);
+  opacity: 0;
+  pointer-events: none;
+  transition: all var(--t-slow) var(--ease);
+  z-index: var(--z-toast);
+}
+.toast.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+.toast .toast-icon {
+  font-weight: 700;
+}
+.toast.success .toast-icon {
+  color: #4ade80;
+}
+.toast.error .toast-icon {
+  color: #fca5a5;
+}

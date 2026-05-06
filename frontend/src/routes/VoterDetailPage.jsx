@@ -1,17 +1,23 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import RecordForm from '../components/upload/RecordForm.jsx';
 import HistoryTable from '../components/upload/HistoryTable.jsx';
 import Dropzone from '../components/upload/Dropzone.jsx';
 import SessionCard from '../components/upload/SessionCard.jsx';
+import ValidationCard from '../components/upload/ValidationCard.jsx';
 import { initialHistory } from '../data/history.js';
 import { useToast } from '../context/ToastContext.jsx';
 import { ClockIcon, PlusIcon, UploadIcon } from '../components/ui/Icon.jsx';
+import Button from '../components/ui/Button.jsx';
+import Card from '../components/ui/Card.jsx';
+import Tabs from '../components/ui/Tabs.jsx';
+import PageHead from '../components/ui/PageHead.jsx';
+import StatGroup from '../components/ui/StatGroup.jsx';
 
 const TABS = [
   { key: 'add', label: 'Add Voter', Icon: PlusIcon },
   { key: 'upload', label: 'Upload File', Icon: UploadIcon },
-  { key: 'history', label: 'History', Icon: ClockIcon, count: true },
+  { key: 'history', label: 'History', Icon: ClockIcon },
 ];
 
 function nowTime() {
@@ -25,6 +31,20 @@ export default function VoterDetailPage() {
   const [tab, setTab] = useState('add');
   const [history, setHistory] = useState(initialHistory);
   const { show } = useToast();
+
+  const stats = useMemo(() => {
+    const counts = { validated: 0, processing: 0, failed: 0 };
+    history.forEach((r) => (counts[r.status] = (counts[r.status] || 0) + 1));
+    return [
+      { value: counts.validated, label: 'Submitted today' },
+      { value: counts.processing, label: 'Pending', tone: 'warning' },
+      { value: counts.failed, label: 'Failed', tone: 'danger' },
+    ];
+  }, [history]);
+
+  const tabsWithCount = TABS.map((t) =>
+    t.key === 'history' ? { ...t, count: history.length } : t,
+  );
 
   function addHistoryRow(partial, status) {
     const row = { id: Date.now(), time: nowTime(), status, ...partial };
@@ -63,52 +83,39 @@ export default function VoterDetailPage() {
 
   return (
     <div className="shell">
-      <div className="page-head">
-        <div>
-          <h1>Voter Detail</h1>
-          <p>
-            Add voter records by hand, upload bulk data from Excel, or review the
-            submission history. Everything is checked before it's saved.
-          </p>
-        </div>
-        <Link
-          to="/"
-          className="btn"
-          style={{ alignSelf: 'flex-start', textDecoration: 'none' }}
-        >
-          ← Back to Home
-        </Link>
-      </div>
+      <PageHead
+        title="Voter Detail"
+        subtitle="Add voter records by hand, upload bulk data from Excel, or review submission history. Everything is checked before it's saved."
+        stats={<StatGroup items={stats} />}
+        actions={
+          <Link to="/" style={{ textDecoration: 'none' }}>
+            <Button>← Home</Button>
+          </Link>
+        }
+      />
 
-      <div className="tabs">
-        {TABS.map(({ key, label, Icon, count }) => (
-          <button
-            key={key}
-            className={`tab ${tab === key ? 'active' : ''}`}
-            onClick={() => setTab(key)}
-          >
-            <Icon width="16" height="16" />
-            {label}
-            {count && <span className="tab-count">{history.length}</span>}
-          </button>
-        ))}
-      </div>
+      <Tabs tabs={tabsWithCount} active={tab} onChange={setTab} />
 
-      {tab === 'add' && <RecordForm onSubmit={handleRecordSubmit} />}
+      {tab === 'add' && (
+        <>
+          <RecordForm onSubmit={handleRecordSubmit} />
+          <div style={{ marginTop: 16 }}>
+            <ValidationCard />
+          </div>
+        </>
+      )}
 
       {tab === 'upload' && (
         <div className="two-col">
-          <div className="card">
-            <div className="card-head">
-              <div>
-                <h2>Upload Excel file</h2>
-                <p>Drop your tally sheet here, or browse to select one from your computer.</p>
-              </div>
-            </div>
-            <div className="card-body">
+          <Card>
+            <Card.Head
+              title="Upload Excel file"
+              subtitle="Drop your tally sheet here, or browse to select one from your computer."
+            />
+            <Card.Body>
               <Dropzone onFileAccepted={handleFileAccepted} />
-            </div>
-          </div>
+            </Card.Body>
+          </Card>
           <SessionCard />
         </div>
       )}
