@@ -23,6 +23,7 @@ const COLUMNS = [
   { key: 'age', label: 'Age', type: 'number', required: true, placeholder: '23', short: true, min: 18, max: 120 },
   { key: 'gender', label: 'Gender', type: 'select', required: true, options: GENDER_OPTIONS, short: true },
   { key: 'epic', label: 'EPIC No', type: 'text', required: true, placeholder: 'TGK3378866', uppercase: true, maxLength: 10 },
+  { key: 'mobile', label: 'Mobile No', type: 'tel', placeholder: '9876543210', maxLength: 10, short: true },
   { key: 'state', label: 'State', type: 'select', required: true, options: INDIAN_STATES },
   { key: 'parlNo', label: 'Parl. No', type: 'number', required: true, placeholder: '29', short: true, min: 1 },
   { key: 'parlName', label: 'Parl. Constituency', type: 'text', required: true, placeholder: 'Nalanda' },
@@ -93,6 +94,8 @@ export default function RecordForm({ onSubmit }) {
           next[`${row.id}-${c.key}`] = 'Required';
         } else if (c.key === 'epic' && val && !EPIC_PATTERN.test(val)) {
           next[`${row.id}-${c.key}`] = 'Bad format';
+        } else if (c.key === 'mobile' && val && !/^[6-9]\d{9}$/.test(val)) {
+          next[`${row.id}-${c.key}`] = 'Bad mobile';
         } else if (c.key === 'age' && val && Number(val) < 18) {
           next[`${row.id}-${c.key}`] = 'Min 18';
         }
@@ -114,6 +117,21 @@ export default function RecordForm({ onSubmit }) {
     }
     onSubmit?.({
       ok: true,
+      voters: usable.map((r) => {
+        const out = {};
+        COLUMNS.forEach((c) => {
+          let v = r[c.key];
+          if (c.key === 'pollingStation') return; // legacy
+          if (c.key === 'pollingDate') {
+            out.pollingDate = v ? v : undefined;
+            return;
+          }
+          out[c.key] = v;
+        });
+        // backend uses pollingStationName
+        out.pollingStationName = r.pollingStation;
+        return out;
+      }),
       record: {
         file: `voter_batch_${usable.length}_records`,
         source: `Manual entry · ${usable.length} ${
@@ -123,9 +141,11 @@ export default function RecordForm({ onSubmit }) {
         constituency:
           usable[0].assemblyName ? `${usable[0].assemblyNo}-${usable[0].assemblyName}` : '—',
       },
+      reset: () => {
+        setRows([makeRow()]);
+        setErrors({});
+      },
     });
-    setRows([makeRow()]);
-    setErrors({});
   }
 
   function handleClear() {

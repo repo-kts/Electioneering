@@ -62,6 +62,7 @@ export const DUMMY_VOTERS = [
     partName: 'Madarasa Ajijaya Dakshini Bhag',
     partSerial: '283',
     pollingDate: '',
+    mobile: '',
   },
   {
     firstName: 'PRIYA',
@@ -81,6 +82,7 @@ export const DUMMY_VOTERS = [
     partName: 'Karawal Nagar Block A',
     partSerial: '47',
     pollingDate: '',
+    mobile: '',
   },
   {
     firstName: 'ARJUN',
@@ -100,6 +102,7 @@ export const DUMMY_VOTERS = [
     partName: 'Sabarmati North Ward',
     partSerial: '215',
     pollingDate: '',
+    mobile: '',
   },
   {
     firstName: 'ANITA',
@@ -119,6 +122,7 @@ export const DUMMY_VOTERS = [
     partName: 'Jubilee Hills Sector 4',
     partSerial: '89',
     pollingDate: '',
+    mobile: '',
   },
   {
     firstName: 'RAVI',
@@ -138,6 +142,7 @@ export const DUMMY_VOTERS = [
     partName: 'Mylapore West Block',
     partSerial: '312',
     pollingDate: '',
+    mobile: '',
   },
   {
     firstName: 'MEERA',
@@ -157,6 +162,7 @@ export const DUMMY_VOTERS = [
     partName: 'Kovalam Beach Ward',
     partSerial: '178',
     pollingDate: '',
+    mobile: '',
   },
   {
     firstName: 'VIKRAM',
@@ -176,6 +182,7 @@ export const DUMMY_VOTERS = [
     partName: 'Majitha Central',
     partSerial: '521',
     pollingDate: '',
+    mobile: '',
   },
   {
     firstName: 'KAVYA',
@@ -195,5 +202,6 @@ export const DUMMY_VOTERS = [
     partName: 'Jayanagar 4th Block',
     partSerial: '67',
     pollingDate: '',
+    mobile: '',
   },
 ];

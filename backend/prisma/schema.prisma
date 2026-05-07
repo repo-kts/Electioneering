@@ -1,0 +1,144 @@
+// Electioneering — Prisma schema
+// Postgres-backed. Models mirror frontend forms (Voter Info, Form 20).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Gender {
+  Male
+  Female
+  Other
+}
+
+enum UploadStatus {
+  processing
+  validated
+  failed
+}
+
+enum UploadKind {
+  voter
+  form20
+}
+
+// ─── Election (per assembly constituency / contest) ─────────────────────
+model Election {
+  id              Int      @id @default(autoincrement())
+  state           String
+  parlNo          String
+  parlName        String
+  assemblyNo      String
+  assemblyName    String
+  electionType    String   @default("Assembly Election")
+  totalElectors   Int?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  candidates      Candidate[]
+  pollingStations PollingStation[]
+
+  @@unique([assemblyNo, assemblyName])
+  @@index([state])
+}
+
+// ─── Candidate (dynamic per election) ───────────────────────────────────
+model Candidate {
+  id          Int      @id @default(autoincrement())
+  electionId  Int
+  election    Election @relation(fields: [electionId], references: [id], onDelete: Cascade)
+  name        String
+  party       String?
+  position    Int      @default(0) // column order in Form 20
+  createdAt   DateTime @default(now())
+
+  voteResults VoteResult[]
+
+  @@index([electionId])
+}
+
+// ─── Polling Station ────────────────────────────────────────────────────
+model PollingStation {
+  id           Int      @id @default(autoincrement())
+  electionId   Int
+  election     Election @relation(fields: [electionId], references: [id], onDelete: Cascade)
+  serial       Int      // PS # in Form 20 (1..N)
+  name         String?  // e.g. "Madarasa Ajijiya"
+  rejectedVotes Int     @default(0)
+  notaVotes    Int      @default(0)
+  tenderedVotes Int     @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  voteResults  VoteResult[]
+  voters       Voter[]
+
+  @@unique([electionId, serial])
+  @@index([electionId])
+}
+
+// ─── Vote results (cells in Form 20 grid) ───────────────────────────────
+model VoteResult {
+  id               Int      @id @default(autoincrement())
+  pollingStationId Int
+  candidateId      Int
+  votes            Int      @default(0)
+
+  pollingStation   PollingStation @relation(fields: [pollingStationId], references: [id], onDelete: Cascade)
+  candidate        Candidate      @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  @@unique([pollingStationId, candidateId])
+  @@index([candidateId])
+}
+
+// ─── Voter (matches Voter Information form + mobile) ────────────────────
+model Voter {
+  id             Int      @id @default(autoincrement())
+  firstName      String
+  lastName       String
+  relFirstName   String
+  relLastName    String
+  age            Int
+  gender         Gender
+  epic           String   @unique // EPIC No, e.g. TGK3378866
+  mobile         String?  // optional, 10-digit Indian mobile
+  state          String
+  parlNo         String
+  parlName       String
+  assemblyNo     String
+  assemblyName   String
+  pollingStationName String
+  partNumber     String
+  partName       String?
+  partSerial     String
+  pollingDate    DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  pollingStationId Int?
+  pollingStation   PollingStation? @relation(fields: [pollingStationId], references: [id])
+
+  @@index([assemblyNo, assemblyName])
+  @@index([state])
+  @@index([epic])
+}
+
+// ─── Upload history (audit trail for file uploads) ──────────────────────
+model UploadHistory {
+  id           Int          @id @default(autoincrement())
+  fileName     String
+  source       String       // e.g. "Excel · Officer L2"
+  kind         UploadKind   // voter | form20
+  records      Int          @default(0)
+  constituency String?
+  status       UploadStatus @default(processing)
+  errorMsg     String?
+  createdAt    DateTime     @default(now())
+
+  @@index([createdAt])
+}
