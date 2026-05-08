@@ -8,6 +8,7 @@ import {
   normalizeVoterRows,
   normalizeForm20,
 } from '../services/parseUpload.js';
+import { validateVoter, type VoterClean } from '../services/voterValidation.js';
 
 const router = Router();
 
@@ -49,14 +50,21 @@ router.post(
       return;
     }
 
-    const rows = normalizeVoterRows(parsed.rows);
+    const normalized = normalizeVoterRows(parsed.rows);
+    const annotated = normalized.map((r) => {
+      const v = validateVoter(r);
+      return { ...r, __errors: v.errors };
+    });
+    const errorCount = annotated.filter((r) => Object.keys(r.__errors).length > 0).length;
     res.json({
       kind: 'voter',
       fileName: req.file.originalname,
       size: req.file.size,
       headers: parsed.headers,
-      rows,
-      totalRows: rows.length,
+      rows: annotated,
+      totalRows: annotated.length,
+      validCount: annotated.length - errorCount,
+      errorCount,
     });
   }),
 );
@@ -68,73 +76,23 @@ const voterCommitSchema = z.object({
   rows: z.array(z.record(z.string(), z.any())),
 });
 
-const EPIC_RE = /^[A-Z]{3}\d{7}$/;
-const MOBILE_RE = /^[6-9]\d{9}$/;
-
 router.post(
   '/voters/commit',
   asyncHandler(async (req, res) => {
     const { fileName, source, rows } = voterCommitSchema.parse(req.body);
 
-    const cleaned: Array<{
-      firstName: string; lastName: string; relFirstName: string; relLastName: string;
-      age: number; gender: 'Male' | 'Female' | 'Other'; epic: string; mobile: string | null;
-      state: string; parlNo: string; parlName: string; assemblyNo: string; assemblyName: string;
-      pollingStationName: string; partNumber: string; partName: string | null;
-      partSerial: string; pollingDate: Date | null;
-    }> = [];
-    const errors: Array<{ row: number; message: string }> = [];
+    const cleaned: VoterClean[] = [];
+    const errors: Array<{ row: number; field: string; message: string }> = [];
 
     rows.forEach((r, i) => {
-      const epic = String(r.epic ?? '').trim().toUpperCase();
-      const mobile = r.mobile ? String(r.mobile).trim() : '';
-      if (!String(r.firstName ?? '').trim()) {
-        errors.push({ row: i + 1, message: 'firstName required' });
-        return;
+      const v = validateVoter(r as Record<string, unknown>);
+      if (v.ok && v.value) {
+        cleaned.push(v.value);
+      } else {
+        for (const [field, msg] of Object.entries(v.errors)) {
+          errors.push({ row: i + 1, field, message: msg });
+        }
       }
-      if (!String(r.lastName ?? '').trim()) {
-        errors.push({ row: i + 1, message: 'lastName required' });
-        return;
-      }
-      if (!EPIC_RE.test(epic)) {
-        errors.push({ row: i + 1, message: `EPIC bad format (${epic || 'empty'})` });
-        return;
-      }
-      if (mobile && !MOBILE_RE.test(mobile)) {
-        errors.push({ row: i + 1, message: `mobile bad (${mobile})` });
-        return;
-      }
-      const age = Number(r.age);
-      if (!Number.isFinite(age) || age < 18 || age > 120) {
-        errors.push({ row: i + 1, message: `age invalid (${r.age})` });
-        return;
-      }
-      const gender = (['Male', 'Female', 'Other'] as const).includes(r.gender)
-        ? (r.gender as 'Male' | 'Female' | 'Other')
-        : 'Other';
-      let pollingDate: Date | null = null;
-      if (r.pollingDate) {
-        const d = new Date(r.pollingDate);
-        pollingDate = Number.isFinite(d.getTime()) ? d : null;
-      }
-      cleaned.push({
-        firstName: String(r.firstName).trim().toUpperCase(),
-        lastName: String(r.lastName).trim().toUpperCase(),
-        relFirstName: String(r.relFirstName ?? '').trim().toUpperCase(),
-        relLastName: String(r.relLastName ?? '').trim().toUpperCase(),
-        age, gender, epic,
-        mobile: mobile || null,
-        state: String(r.state ?? '').trim(),
-        parlNo: String(r.parlNo ?? '').trim(),
-        parlName: String(r.parlName ?? '').trim(),
-        assemblyNo: String(r.assemblyNo ?? '').trim(),
-        assemblyName: String(r.assemblyName ?? '').trim(),
-        pollingStationName: String(r.pollingStationName ?? '').trim(),
-        partNumber: String(r.partNumber ?? '').trim(),
-        partName: r.partName ? String(r.partName).trim() : null,
-        partSerial: String(r.partSerial ?? '').trim(),
-        pollingDate,
-      });
     });
 
     const result = await prisma.voter.createMany({
@@ -149,7 +107,7 @@ router.post(
         kind: 'voter',
         records: result.count,
         status: errors.length === 0 ? 'validated' : 'failed',
-        errorMsg: errors.length ? `${errors.length} rows skipped` : null,
+        errorMsg: errors.length ? `${errors.length} field error(s) across ${rows.length - cleaned.length} row(s)` : null,
       },
     });
 
