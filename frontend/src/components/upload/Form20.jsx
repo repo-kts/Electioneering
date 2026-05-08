@@ -374,7 +374,7 @@ export default function Form20({ electionId, onSubmit, onChangeElection }) {
         {election && candidates.length > 0 && (
           <>
             <div className="grid-wrap">
-              <table className="voter-grid form20-grid" data-grid-id={gridId} {...gridProps}>
+              <table className="voter-grid form20-grid excel-compact" data-grid-id={gridId} {...gridProps}>
                 <thead>
                   <tr>
                     <th rowSpan="2" className="row-num">PS #</th>

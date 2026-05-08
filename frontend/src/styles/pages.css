@@ -521,6 +521,115 @@
   border-right: 1px solid rgba(255, 255, 255, 0.1);
 }
 
+/* ─── Excel-style cell error markers + custom hover tooltip ─── */
+.voter-grid td.cell-error {
+  position: relative;
+  background-color: var(--danger-soft);
+}
+.voter-grid td.cell-error .cell-input,
+.voter-grid td.cell-error .cell-select {
+  color: var(--danger);
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--danger);
+}
+.voter-grid td.cell-error::before {
+  content: '';
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 6px;
+  height: 6px;
+  background: var(--danger);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 4;
+}
+.voter-grid td.cell-error:hover::after,
+.voter-grid td.cell-error:focus-within::after {
+  content: attr(data-error);
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 50;
+  background: #1e293b;
+  color: #fff;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.18);
+  max-width: 320px;
+  white-space: normal;
+}
+.voter-grid tr.row-has-error td.row-num {
+  background: rgba(239, 68, 68, 0.18);
+  color: var(--danger);
+  font-weight: 700;
+}
+.voter-grid tr.row-has-error td.row-num::after {
+  content: ' !';
+}
+
+/* Excel-like compact mode for upload preview */
+.voter-grid.excel-compact td,
+.voter-grid.excel-compact th {
+  padding: 0;
+}
+.voter-grid.excel-compact .cell-input {
+  padding: 6px 8px;
+  font-size: 12.5px;
+  min-width: 100px;
+}
+.voter-grid.excel-compact .cell-input.short {
+  min-width: 64px;
+}
+.voter-grid.excel-compact th {
+  padding: 6px 10px;
+  font-size: 11px;
+}
+.voter-grid.excel-compact td.row-num,
+.voter-grid.excel-compact th.row-num {
+  font-size: 11px;
+  width: 36px;
+  min-width: 36px;
+}
+
+/* Errors banner above preview grid */
+.errors-banner {
+  border: 1px solid var(--danger);
+  background: var(--danger-soft);
+  color: var(--danger);
+  border-radius: var(--r-md);
+  padding: 12px 14px;
+  margin-bottom: 12px;
+  font-size: 13px;
+}
+.errors-banner-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-weight: 700;
+}
+.errors-banner ul {
+  margin: 8px 0 0;
+  padding-left: 20px;
+  font-weight: 500;
+  color: var(--text);
+}
+.errors-banner li {
+  margin: 2px 0;
+  font-variant-numeric: tabular-nums;
+}
+.errors-banner li code {
+  background: rgba(255, 255, 255, 0.6);
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 12px;
+}
+
 /* ─── Validation list ─── */
 .validation-list {
   display: flex;

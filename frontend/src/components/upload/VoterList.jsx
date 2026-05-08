@@ -106,7 +106,7 @@ export default function VoterList({ refreshKey, onError }) {
         </div>
 
         <div className="grid-wrap">
-          <table className="voter-grid">
+          <table className="voter-grid excel-compact">
             <thead>
               <tr>
                 <th className="row-num">#</th>

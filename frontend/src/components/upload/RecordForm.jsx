@@ -187,12 +187,13 @@ export default function RecordForm({ onSubmit }) {
 
   function renderCell(row, col, ri, ci) {
     const ek = `${row.id}-${col.key}`;
-    const hasError = !!errors[ek];
-    const cellClass = 'value' + (hasError ? ' error' : '');
+    const errMsg = errors[ek];
+    const hasError = !!errMsg;
+    const cellClass = 'value' + (hasError ? ' cell-error' : '');
 
     if (col.type === 'select') {
       return (
-        <td key={col.key} className={cellClass}>
+        <td key={col.key} className={cellClass} data-error={errMsg || undefined}>
           <select
             className={`cell-input cell-select ${col.short ? 'short' : col.long ? 'long' : ''}`}
             value={row[col.key]}
@@ -211,7 +212,7 @@ export default function RecordForm({ onSubmit }) {
     }
 
     return (
-      <td key={col.key} className={cellClass}>
+      <td key={col.key} className={cellClass} data-error={errMsg || undefined}>
         <input
           type={col.type}
           className={`cell-input ${col.short ? 'short' : col.long ? 'long' : ''}`}
@@ -272,7 +273,7 @@ export default function RecordForm({ onSubmit }) {
         </div>
 
         <div className="grid-wrap">
-          <table className="voter-grid" data-grid-id={gridId} {...gridProps}>
+          <table className="voter-grid excel-compact" data-grid-id={gridId} {...gridProps}>
             <thead>
               <tr>
                 <th className="row-num">#</th>
@@ -285,8 +286,10 @@ export default function RecordForm({ onSubmit }) {
               </tr>
             </thead>
             <tbody>
-              {rows.map((row, i) => (
-                <tr key={row.id}>
+              {rows.map((row, i) => {
+                const rowHasError = Object.keys(errors).some((k) => k.startsWith(`${row.id}-`));
+                return (
+                <tr key={row.id} className={rowHasError ? 'row-has-error' : ''}>
                   <td className="row-num">{i + 1}</td>
                   {COLUMNS.map((col, j) => renderCell(row, col, i, j))}
                   <td className="actions-col">
@@ -300,7 +303,8 @@ export default function RecordForm({ onSubmit }) {
                     </button>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>

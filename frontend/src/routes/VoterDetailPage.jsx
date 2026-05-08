@@ -17,9 +17,9 @@ import StatGroup from '../components/ui/StatGroup.jsx';
 import { api } from '../lib/api.js';
 
 const TABS = [
+  { key: 'voters', label: 'Voters', Icon: FileSpreadsheetIcon },
   { key: 'add', label: 'Add Voter', Icon: PlusIcon },
   { key: 'upload', label: 'Upload File', Icon: UploadIcon },
-  { key: 'voters', label: 'Voters', Icon: FileSpreadsheetIcon },
   { key: 'history', label: 'History', Icon: ClockIcon },
 ];
 
@@ -28,7 +28,7 @@ function nowTime() {
 }
 
 export default function VoterDetailPage() {
-  const [tab, setTab] = useState('add');
+  const [tab, setTab] = useState('voters');
   const [history, setHistory] = useState([]);
   const [historyQuery, setHistoryQuery] = useState('');
   const [preview, setPreview] = useState(null); // { file, kind, rows, headers }
