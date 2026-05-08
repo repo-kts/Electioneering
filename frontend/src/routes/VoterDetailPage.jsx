@@ -5,7 +5,7 @@ import HistoryTable from '../components/upload/HistoryTable.jsx';
 import Dropzone from '../components/upload/Dropzone.jsx';
 import UploadPreview from '../components/upload/UploadPreview.jsx';
 import VoterList from '../components/upload/VoterList.jsx';
-import SessionCard from '../components/upload/SessionCard.jsx';
+import FormatCard from '../components/upload/FormatCard.jsx';
 import ValidationCard from '../components/upload/ValidationCard.jsx';
 import { useToast } from '../context/ToastContext.jsx';
 import { ClockIcon, PlusIcon, UploadIcon, FileSpreadsheetIcon } from '../components/ui/Icon.jsx';
@@ -30,6 +30,7 @@ function nowTime() {
 export default function VoterDetailPage() {
   const [tab, setTab] = useState('add');
   const [history, setHistory] = useState([]);
+  const [historyQuery, setHistoryQuery] = useState('');
   const [preview, setPreview] = useState(null); // { file, kind, rows, headers }
   const [voterRefresh, setVoterRefresh] = useState(0);
   const { show } = useToast();
@@ -149,7 +150,7 @@ export default function VoterDetailPage() {
       {tab === 'upload' && (
         <>
           {!preview && (
-            <div className="two-col">
+            <>
               <Card>
                 <Card.Head
                   title="Upload Excel / CSV file"
@@ -159,8 +160,10 @@ export default function VoterDetailPage() {
                   <Dropzone onFileAccepted={handleFileAccepted} />
                 </Card.Body>
               </Card>
-              <SessionCard />
-            </div>
+              <div style={{ marginTop: 16 }}>
+                <FormatCard kind="voter" />
+              </div>
+            </>
           )}
           {preview && (
             <UploadPreview
@@ -180,7 +183,43 @@ export default function VoterDetailPage() {
         />
       )}
 
-      {tab === 'history' && <HistoryTable rows={history} />}
+      {tab === 'history' && (() => {
+        const q = historyQuery.toLowerCase();
+        const filtered = history.filter((h) =>
+          !q ||
+          h.file?.toLowerCase().includes(q) ||
+          h.source?.toLowerCase().includes(q) ||
+          h.constituency?.toLowerCase().includes(q),
+        );
+        return (
+          <>
+            <div
+              className="grid-toolbar"
+              style={{
+                gap: 8,
+                flexWrap: 'wrap',
+                marginBottom: 12,
+                alignItems: 'center',
+              }}
+            >
+              <input
+                type="text"
+                placeholder="Search history (file / source / constituency)…"
+                value={historyQuery}
+                onChange={(e) => setHistoryQuery(e.target.value)}
+                style={{ padding: 8, minWidth: 280 }}
+              />
+              {historyQuery && (
+                <Button onClick={() => setHistoryQuery('')}>Clear</Button>
+              )}
+              <span className="row-count" style={{ marginLeft: 'auto' }}>
+                {filtered.length} / {history.length}
+              </span>
+            </div>
+            <HistoryTable rows={filtered} />
+          </>
+        );
+      })()}
     </div>
   );
 }
