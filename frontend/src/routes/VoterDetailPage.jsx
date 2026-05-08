@@ -4,10 +4,11 @@ import RecordForm from '../components/upload/RecordForm.jsx';
 import HistoryTable from '../components/upload/HistoryTable.jsx';
 import Dropzone from '../components/upload/Dropzone.jsx';
 import UploadPreview from '../components/upload/UploadPreview.jsx';
+import VoterList from '../components/upload/VoterList.jsx';
 import SessionCard from '../components/upload/SessionCard.jsx';
 import ValidationCard from '../components/upload/ValidationCard.jsx';
 import { useToast } from '../context/ToastContext.jsx';
-import { ClockIcon, PlusIcon, UploadIcon } from '../components/ui/Icon.jsx';
+import { ClockIcon, PlusIcon, UploadIcon, FileSpreadsheetIcon } from '../components/ui/Icon.jsx';
 import Button from '../components/ui/Button.jsx';
 import Card from '../components/ui/Card.jsx';
 import Tabs from '../components/ui/Tabs.jsx';
@@ -18,6 +19,7 @@ import { api } from '../lib/api.js';
 const TABS = [
   { key: 'add', label: 'Add Voter', Icon: PlusIcon },
   { key: 'upload', label: 'Upload File', Icon: UploadIcon },
+  { key: 'voters', label: 'Voters', Icon: FileSpreadsheetIcon },
   { key: 'history', label: 'History', Icon: ClockIcon },
 ];
 
@@ -29,6 +31,7 @@ export default function VoterDetailPage() {
   const [tab, setTab] = useState('add');
   const [history, setHistory] = useState([]);
   const [preview, setPreview] = useState(null); // { file, kind, rows, headers }
+  const [voterRefresh, setVoterRefresh] = useState(0);
   const { show } = useToast();
 
   async function refreshHistory() {
@@ -80,7 +83,8 @@ export default function VoterDetailPage() {
       show(`${res.inserted} of ${res.requested} voter${res.requested === 1 ? '' : 's'} saved`);
       reset?.();
       refreshHistory();
-      setTab('history');
+      setVoterRefresh((n) => n + 1);
+      setTab('voters');
     } catch (e) {
       show(e.message || 'Save failed', 'error');
     }
@@ -102,10 +106,17 @@ export default function VoterDetailPage() {
         source: 'Excel/CSV upload',
         rows,
       });
-      show(`${res.inserted} voters imported`);
+      const parts = [`${res.inserted} imported`];
+      if (res.duplicates) parts.push(`${res.duplicates} duplicates`);
+      if (res.skipped) parts.push(`${res.skipped} skipped`);
+      show(parts.join(' · '), res.skipped ? 'warn' : 'success');
+      if (res.errors?.length) {
+        console.warn('upload errors', res.errors);
+      }
       setPreview(null);
       refreshHistory();
-      setTab('history');
+      setVoterRefresh((n) => n + 1);
+      setTab('voters');
     } catch (e) {
       show(e.message || 'Commit failed', 'error');
     }
@@ -160,6 +171,13 @@ export default function VoterDetailPage() {
             />
           )}
         </>
+      )}
+
+      {tab === 'voters' && (
+        <VoterList
+          refreshKey={voterRefresh}
+          onError={(msg) => show(msg, 'error')}
+        />
       )}
 
       {tab === 'history' && <HistoryTable rows={history} />}

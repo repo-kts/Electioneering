@@ -10,13 +10,23 @@ export interface ParseResult {
 }
 
 const CSV_EXT = /\.csv$/i;
+const TSV_EXT = /\.tsv$/i;
 
 export function parseFileBuffer(buffer: Buffer, filename: string): ParseResult {
-  if (CSV_EXT.test(filename)) return parseCsv(buffer);
-  return parseXlsx(buffer);
+  try {
+    if (CSV_EXT.test(filename)) return parseDelimited(buffer, ',');
+    if (TSV_EXT.test(filename)) return parseDelimited(buffer, '\t');
+    return parseXlsx(buffer);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Failed to parse file';
+    const e = new Error(`Could not parse ${filename}: ${msg}`);
+    (e as Error & { status?: number }).status = 400;
+    throw e;
+  }
 }
 
 function parseXlsx(buffer: Buffer): ParseResult {
+  // xlsx supports xlsx/xlsm/xlsb/xls/ods/fods/csv/txt natively
   const wb = XLSX.read(buffer, { type: 'buffer', cellDates: true });
   const firstSheet = wb.SheetNames[0];
   if (!firstSheet) return { headers: [], rows: [], totalRows: 0 };
@@ -30,14 +40,18 @@ function parseXlsx(buffer: Buffer): ParseResult {
   return { headers, rows: json, totalRows: json.length };
 }
 
-function parseCsv(buffer: Buffer): ParseResult {
-  const text = buffer.toString('utf8');
+function parseDelimited(buffer: Buffer, delimiter: string): ParseResult {
+  const text = buffer.toString('utf8').replace(/^﻿/, ''); // strip BOM
   const result = Papa.parse<ParsedRow>(text, {
     header: true,
     skipEmptyLines: 'greedy',
     dynamicTyping: false,
+    delimiter,
+    transformHeader: (h) => h.trim(),
   });
-  const rows = result.data;
+  const rows = result.data.filter((r) =>
+    Object.values(r).some((v) => String(v ?? '').trim() !== ''),
+  );
   const headers = result.meta.fields ?? (rows.length ? Object.keys(rows[0]) : []);
   return { headers, rows, totalRows: rows.length };
 }

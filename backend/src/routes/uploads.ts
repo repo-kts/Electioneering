@@ -15,9 +15,9 @@ const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 25 * 1024 * 1024 }, // 25 MB
   fileFilter: (_req, file, cb) => {
-    const ok = /\.(xlsx|xls|csv)$/i.test(file.originalname);
+    const ok = /\.(xlsx|xlsm|xlsb|xls|csv|tsv|ods|fods)$/i.test(file.originalname);
     if (!ok) {
-      cb(new Error('Only .xlsx/.xls/.csv allowed'));
+      cb(new Error('Allowed: .xlsx .xlsm .xlsb .xls .csv .tsv .ods .fods'));
       return;
     }
     cb(null, true);
@@ -68,23 +68,62 @@ const voterCommitSchema = z.object({
   rows: z.array(z.record(z.string(), z.any())),
 });
 
+const EPIC_RE = /^[A-Z]{3}\d{7}$/;
+const MOBILE_RE = /^[6-9]\d{9}$/;
+
 router.post(
   '/voters/commit',
   asyncHandler(async (req, res) => {
     const { fileName, source, rows } = voterCommitSchema.parse(req.body);
 
-    const cleaned = rows
-      .map((r) => ({
-        firstName: String(r.firstName ?? '').trim().toUpperCase(),
-        lastName: String(r.lastName ?? '').trim().toUpperCase(),
+    const cleaned: Array<{
+      firstName: string; lastName: string; relFirstName: string; relLastName: string;
+      age: number; gender: 'Male' | 'Female' | 'Other'; epic: string; mobile: string | null;
+      state: string; parlNo: string; parlName: string; assemblyNo: string; assemblyName: string;
+      pollingStationName: string; partNumber: string; partName: string | null;
+      partSerial: string; pollingDate: Date | null;
+    }> = [];
+    const errors: Array<{ row: number; message: string }> = [];
+
+    rows.forEach((r, i) => {
+      const epic = String(r.epic ?? '').trim().toUpperCase();
+      const mobile = r.mobile ? String(r.mobile).trim() : '';
+      if (!String(r.firstName ?? '').trim()) {
+        errors.push({ row: i + 1, message: 'firstName required' });
+        return;
+      }
+      if (!String(r.lastName ?? '').trim()) {
+        errors.push({ row: i + 1, message: 'lastName required' });
+        return;
+      }
+      if (!EPIC_RE.test(epic)) {
+        errors.push({ row: i + 1, message: `EPIC bad format (${epic || 'empty'})` });
+        return;
+      }
+      if (mobile && !MOBILE_RE.test(mobile)) {
+        errors.push({ row: i + 1, message: `mobile bad (${mobile})` });
+        return;
+      }
+      const age = Number(r.age);
+      if (!Number.isFinite(age) || age < 18 || age > 120) {
+        errors.push({ row: i + 1, message: `age invalid (${r.age})` });
+        return;
+      }
+      const gender = (['Male', 'Female', 'Other'] as const).includes(r.gender)
+        ? (r.gender as 'Male' | 'Female' | 'Other')
+        : 'Other';
+      let pollingDate: Date | null = null;
+      if (r.pollingDate) {
+        const d = new Date(r.pollingDate);
+        pollingDate = Number.isFinite(d.getTime()) ? d : null;
+      }
+      cleaned.push({
+        firstName: String(r.firstName).trim().toUpperCase(),
+        lastName: String(r.lastName).trim().toUpperCase(),
         relFirstName: String(r.relFirstName ?? '').trim().toUpperCase(),
         relLastName: String(r.relLastName ?? '').trim().toUpperCase(),
-        age: Number(r.age),
-        gender: (['Male', 'Female', 'Other'] as const).includes(r.gender)
-          ? (r.gender as 'Male' | 'Female' | 'Other')
-          : 'Other',
-        epic: String(r.epic ?? '').trim().toUpperCase(),
-        mobile: r.mobile ? String(r.mobile).trim() : null,
+        age, gender, epic,
+        mobile: mobile || null,
         state: String(r.state ?? '').trim(),
         parlNo: String(r.parlNo ?? '').trim(),
         parlName: String(r.parlName ?? '').trim(),
@@ -94,9 +133,9 @@ router.post(
         partNumber: String(r.partNumber ?? '').trim(),
         partName: r.partName ? String(r.partName).trim() : null,
         partSerial: String(r.partSerial ?? '').trim(),
-        pollingDate: r.pollingDate ? new Date(r.pollingDate) : null,
-      }))
-      .filter((r) => r.firstName && r.lastName && r.epic);
+        pollingDate,
+      });
+    });
 
     const result = await prisma.voter.createMany({
       data: cleaned,
@@ -109,11 +148,19 @@ router.post(
         source,
         kind: 'voter',
         records: result.count,
-        status: 'validated',
+        status: errors.length === 0 ? 'validated' : 'failed',
+        errorMsg: errors.length ? `${errors.length} rows skipped` : null,
       },
     });
 
-    res.status(201).json({ inserted: result.count, requested: rows.length, history });
+    res.status(201).json({
+      inserted: result.count,
+      requested: rows.length,
+      skipped: rows.length - cleaned.length,
+      duplicates: cleaned.length - result.count,
+      errors,
+      history,
+    });
   }),
 );
 

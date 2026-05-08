@@ -3,7 +3,6 @@ import { CheckIcon, CloseIcon, PlusIcon } from '../ui/Icon.jsx';
 import Button from '../ui/Button.jsx';
 import Card from '../ui/Card.jsx';
 import {
-  DUMMY_VOTERS,
   EPIC_PATTERN,
   GENDER_OPTIONS,
   INDIAN_STATES,
@@ -29,7 +28,7 @@ const COLUMNS = [
   { key: 'parlName', label: 'Parl. Constituency', type: 'text', required: true, placeholder: 'Nalanda' },
   { key: 'assemblyNo', label: 'Asm. No', type: 'number', required: true, placeholder: '172', short: true, min: 1 },
   { key: 'assemblyName', label: 'Asm. Constituency', type: 'text', required: true, placeholder: 'Biharsharif' },
-  { key: 'pollingStation', label: 'Polling Station', type: 'text', required: true, placeholder: 'Madarasa Ajijiya', long: true },
+  { key: 'pollingStationName', label: 'Polling Station', type: 'text', required: true, placeholder: 'Madarasa Ajijiya', long: true },
   { key: 'partNumber', label: 'Part No', type: 'number', required: true, placeholder: '381', short: true, min: 1 },
   { key: 'partName', label: 'Part Name', type: 'text', placeholder: 'Madarasa Ajijaya Dakshini Bhag', long: true },
   { key: 'partSerial', label: 'Part Serial', type: 'number', required: true, placeholder: '283', short: true, min: 1 },
@@ -45,12 +44,8 @@ function makeRow(seed = {}) {
   return r;
 }
 
-function seedRows() {
-  return DUMMY_VOTERS.map((v) => makeRow(v));
-}
-
 export default function RecordForm({ onSubmit }) {
-  const [rows, setRows] = useState(() => seedRows());
+  const [rows, setRows] = useState(() => [makeRow()]);
   const [errors, setErrors] = useState({}); // { 'rowId-key': msg }
 
   function updateCell(id, key, value) {
@@ -120,16 +115,13 @@ export default function RecordForm({ onSubmit }) {
       voters: usable.map((r) => {
         const out = {};
         COLUMNS.forEach((c) => {
-          let v = r[c.key];
-          if (c.key === 'pollingStation') return; // legacy
+          const v = r[c.key];
           if (c.key === 'pollingDate') {
-            out.pollingDate = v ? v : undefined;
+            out.pollingDate = v || undefined;
             return;
           }
           out[c.key] = v;
         });
-        // backend uses pollingStationName
-        out.pollingStationName = r.pollingStation;
         return out;
       }),
       record: {
