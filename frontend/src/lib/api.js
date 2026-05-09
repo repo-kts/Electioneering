@@ -109,6 +109,8 @@ export const api = {
     request(`/api/analytics/recompute?electionId=${electionId}&link=1`, { method: 'POST' }),
   boothLeaning: (electionId) =>
     request(`/api/analytics/booth-leaning?electionId=${electionId}`),
+  analyticsOverview: (electionId) =>
+    request(`/api/analytics/overview${electionId ? '?electionId=' + electionId : ''}`),
 
   // ─── Cohorts ───────────────────────────────────────────────
   listCohorts: () => request('/api/cohorts'),
