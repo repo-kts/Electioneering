@@ -4,6 +4,7 @@ import HomePage from './routes/HomePage.jsx';
 import VoterDetailPage from './routes/VoterDetailPage.jsx';
 import Form20Page from './routes/Form20Page.jsx';
 import AnalyticsPage from './routes/AnalyticsPage.jsx';
+import SegmentPage from './routes/SegmentPage.jsx';
 
 export default function App() {
   return (
@@ -14,6 +15,7 @@ export default function App() {
         <Route path="/voter-detail" element={<VoterDetailPage />} />
         <Route path="/form-20" element={<Form20Page />} />
         <Route path="/analytics" element={<AnalyticsPage />} />
+        <Route path="/segment" element={<SegmentPage />} />
       </Routes>
     </>
   );

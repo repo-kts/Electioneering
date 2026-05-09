@@ -111,8 +111,19 @@ const VOTER_HEADER_MAP: Record<string, string> = {
   partserial: 'partSerial',
   'part serial': 'partSerial',
   'part serial number': 'partSerial',
-  pollingdate: 'pollingDate',
-  'polling date': 'pollingDate',
+  // Segmentation
+  community: 'community',
+  caste: 'community',
+  'sub-caste': 'community',
+  jati: 'community',
+  religion: 'religion',
+  dharm: 'religion',
+  occupation: 'occupation',
+  job: 'occupation',
+  profession: 'occupation',
+  language: 'language',
+  bhasha: 'language',
+  'mother tongue': 'language',
 };
 
 export function normalizeVoterRows(rows: ParsedRow[]): ParsedRow[] {

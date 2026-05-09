@@ -27,6 +27,15 @@ const TILES = [
     statLabel: 'polling stations',
   },
   {
+    to: '/segment',
+    title: 'Segment voters',
+    desc: 'Filter voters by community, religion, occupation, age, polling station, predicted leaning. Save cohorts. Export CSV.',
+    icon: <BarChartIcon />,
+    color: 'purple',
+    stat: 'New',
+    statLabel: 'analytics',
+  },
+  {
     to: '/analytics',
     title: 'Analytics',
     desc: 'Live KPIs, party vote share, turnout, demographics, and a constituency outlook map.',

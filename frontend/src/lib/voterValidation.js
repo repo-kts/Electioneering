@@ -54,11 +54,7 @@ export function validateVoterRow(row) {
     errors.mobile = '10 digits starting 6-9';
   }
 
-  const pd = s('pollingDate');
-  if (pd) {
-    const d = new Date(pd);
-    if (!Number.isFinite(d.getTime())) errors.pollingDate = 'invalid date';
-  }
+  // community / religion / occupation / language are optional free text — no checks
 
   return errors;
 }

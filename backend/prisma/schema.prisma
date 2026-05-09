@@ -1,5 +1,5 @@
 // Electioneering — Prisma schema
-// Postgres-backed. Models mirror frontend forms (Voter Info, Form 20).
+// Postgres-backed. Voter is primary entity; Form 20 feeds inference.
 
 generator client {
   provider = "prisma-client-js"
@@ -36,14 +36,16 @@ model Election {
   assemblyNo      String
   assemblyName    String
   electionType    String   @default("Assembly Election")
+  electionYear    Int?
   totalElectors   Int?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
   candidates      Candidate[]
   pollingStations PollingStation[]
+  turnouts        VoterTurnout[]
 
-  @@unique([assemblyNo, assemblyName])
+  @@unique([assemblyNo, assemblyName, electionYear])
   @@index([state])
 }
 
@@ -64,19 +66,20 @@ model Candidate {
 
 // ─── Polling Station ────────────────────────────────────────────────────
 model PollingStation {
-  id           Int      @id @default(autoincrement())
-  electionId   Int
-  election     Election @relation(fields: [electionId], references: [id], onDelete: Cascade)
-  serial       Int      // PS # in Form 20 (1..N)
-  name         String?  // e.g. "Madarasa Ajijiya"
-  rejectedVotes Int     @default(0)
-  notaVotes    Int      @default(0)
-  tenderedVotes Int     @default(0)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id            Int      @id @default(autoincrement())
+  electionId    Int
+  election      Election @relation(fields: [electionId], references: [id], onDelete: Cascade)
+  serial        Int      // PS # in Form 20 (1..N)
+  name          String?
+  rejectedVotes Int      @default(0)
+  notaVotes     Int      @default(0)
+  tenderedVotes Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
-  voteResults  VoteResult[]
-  voters       Voter[]
+  voteResults   VoteResult[]
+  voters        Voter[]
+  households    Household[]
 
   @@unique([electionId, serial])
   @@index([electionId])
@@ -96,36 +99,102 @@ model VoteResult {
   @@index([candidateId])
 }
 
-// ─── Voter (matches Voter Information form + mobile) ────────────────────
-model Voter {
-  id             Int      @id @default(autoincrement())
-  firstName      String
-  lastName       String
-  relFirstName   String
-  relLastName    String
-  age            Int
-  gender         Gender
-  epic           String   @unique // EPIC No, e.g. TGK3378866
-  mobile         String?  // optional, 10-digit Indian mobile
-  state          String
-  parlNo         String
-  parlName       String
-  assemblyNo     String
-  assemblyName   String
-  pollingStationName String
-  partNumber     String
-  partName       String?
-  partSerial     String
-  pollingDate    DateTime?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-
+// ─── Household (voters often share one) ─────────────────────────────────
+model Household {
+  id               Int             @id @default(autoincrement())
+  headName         String?
+  address          String?
+  partNumber       String?
   pollingStationId Int?
   pollingStation   PollingStation? @relation(fields: [pollingStationId], references: [id])
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  voters           Voter[]
+
+  @@index([partNumber])
+  @@index([pollingStationId])
+}
+
+// ─── Voter ──────────────────────────────────────────────────────────────
+model Voter {
+  id                 Int       @id @default(autoincrement())
+  firstName          String
+  lastName           String
+  relFirstName       String
+  relLastName        String
+  age                Int
+  gender             Gender
+  epic               String    @unique // EPIC No, e.g. TGK3378866
+  mobile             String?
+
+  // Geography
+  state              String
+  parlNo             String
+  parlName           String
+  assemblyNo         String
+  assemblyName       String
+  pollingStationName String
+  partNumber         String
+  partName           String?
+  partSerial         String
+
+  // Segmentation attributes
+  community          String?   // caste / sub-caste tag (open-ended)
+  religion           String?
+  occupation         String?
+  language           String?
+
+  // Statistical inference output (recomputed from Form 20)
+  // shape: { partyA: 0.6, partyB: 0.3, ... }  votes summing ≤ 1
+  predictedLeaning   Json?
+  predictedAt        DateTime?
+
+  pollingStationId   Int?
+  pollingStation     PollingStation? @relation(fields: [pollingStationId], references: [id])
+  householdId        Int?
+  household          Household?       @relation(fields: [householdId], references: [id])
+
+  turnouts           VoterTurnout[]
+
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
   @@index([assemblyNo, assemblyName])
   @@index([state])
   @@index([epic])
+  @@index([community])
+  @@index([religion])
+  @@index([occupation])
+  @@index([householdId])
+}
+
+// ─── VoterTurnout (per voter × election) ────────────────────────────────
+model VoterTurnout {
+  id         Int      @id @default(autoincrement())
+  voterId    Int
+  voter      Voter    @relation(fields: [voterId], references: [id], onDelete: Cascade)
+  electionId Int
+  election   Election @relation(fields: [electionId], references: [id], onDelete: Cascade)
+  voted      Boolean  @default(false)
+  polledAt   DateTime?
+  createdAt  DateTime @default(now())
+
+  @@unique([voterId, electionId])
+  @@index([electionId])
+}
+
+// ─── Cohort (saved filter) ──────────────────────────────────────────────
+model Cohort {
+  id          Int      @id @default(autoincrement())
+  name        String
+  description String?
+  // serialized filter spec — see services/segmentation.ts
+  // shape example: { state, assemblyNo, age: { min, max }, gender, community, religion, occupation, leaningTo, polledIn?: [electionIds] }
+  criteria    Json
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([createdAt])
 }
 
 // ─── Upload history (audit trail for file uploads) ──────────────────────

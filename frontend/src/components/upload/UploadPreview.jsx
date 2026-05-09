@@ -38,7 +38,10 @@ const VOTER_COLUMNS = [
   { key: 'partNumber', label: 'Part No', type: 'text', required: true, short: true },
   { key: 'partName', label: 'Part Name', type: 'text', long: true },
   { key: 'partSerial', label: 'Part Serial', type: 'text', required: true, short: true },
-  { key: 'pollingDate', label: 'Polling Date', type: 'date' },
+  { key: 'community', label: 'Community', type: 'text' },
+  { key: 'religion', label: 'Religion', type: 'text', short: true },
+  { key: 'occupation', label: 'Occupation', type: 'text' },
+  { key: 'language', label: 'Language', type: 'text', short: true },
 ];
 
 function flattenErrors(rows, max = 8) {

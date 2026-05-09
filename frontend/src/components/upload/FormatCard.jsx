@@ -20,7 +20,10 @@ const VOTER_FIELDS = [
   ['partNumber', 'text *', '381'],
   ['partName', 'text', 'Madarasa Ajijaya Dakshini Bhag'],
   ['partSerial', 'text *', '283'],
-  ['pollingDate', 'date YYYY-MM-DD', '2026-04-15'],
+  ['community', 'text (caste / sub-caste tag)', 'Kayastha'],
+  ['religion', 'text', 'Hindu'],
+  ['occupation', 'text', 'Teacher'],
+  ['language', 'text', 'Hindi'],
 ];
 
 const FORM20_FIELDS = [
