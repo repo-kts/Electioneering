@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react';
 import { NavLink, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext.jsx';
 
@@ -24,12 +25,40 @@ function initials(name) {
     .toUpperCase();
 }
 
+function ChevDown() {
+  return (
+    <svg className="chev" viewBox="0 0 10 6" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M1 1L5 5L9 1" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 export default function Header() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef(null);
   const items = FULL_NAV.filter((n) => !user || n.roles.includes(user.role));
 
+  // Close on outside click / Escape
+  useEffect(() => {
+    if (!open) return;
+    function handleDoc(e) {
+      if (!wrapRef.current?.contains(e.target)) setOpen(false);
+    }
+    function handleKey(e) {
+      if (e.key === 'Escape') setOpen(false);
+    }
+    document.addEventListener('mousedown', handleDoc);
+    document.addEventListener('keydown', handleKey);
+    return () => {
+      document.removeEventListener('mousedown', handleDoc);
+      document.removeEventListener('keydown', handleKey);
+    };
+  }, [open]);
+
   function handleLogout() {
+    setOpen(false);
     logout();
     navigate('/login', { replace: true });
   }
@@ -52,21 +81,38 @@ export default function Header() {
         )}
         <div className="header-spacer" />
         {user ? (
-          <div className="user" style={{ gap: 12 }}>
-            <div className="user-meta">
-              <div className="user-name">{user.username}</div>
-              <span className="user-role">{ROLE_LABEL[user.role] ?? user.role}</span>
-            </div>
-            <div className="avatar">{initials(user.username)}</div>
+          <div className="user-menu-wrap" ref={wrapRef}>
             <button
               type="button"
-              onClick={handleLogout}
-              className="btn btn-sm"
-              style={{ marginLeft: 4 }}
-              title="Sign out"
+              className={`user-trigger ${open ? 'open' : ''}`}
+              onClick={() => setOpen((v) => !v)}
+              aria-haspopup="menu"
+              aria-expanded={open}
             >
-              Logout
+              <div className="user-meta">
+                <div className="user-name">{user.username}</div>
+                <span className="user-role">{ROLE_LABEL[user.role] ?? user.role}</span>
+              </div>
+              <div className="avatar">{initials(user.username)}</div>
+              <ChevDown />
             </button>
+            {open && (
+              <div className="user-menu" role="menu">
+                <div className="user-menu-head">
+                  <div className="name">{user.username}</div>
+                  <span className={`role-tag role-${user.role}`}>
+                    {ROLE_LABEL[user.role] ?? user.role}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  className="user-menu-item danger"
+                  onClick={handleLogout}
+                >
+                  Sign out
+                </button>
+              </div>
+            )}
           </div>
         ) : (
           <Link to="/login" className="btn btn-sm">Sign in</Link>

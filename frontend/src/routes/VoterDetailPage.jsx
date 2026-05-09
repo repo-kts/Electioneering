@@ -213,7 +213,8 @@ export default function VoterDetailPage() {
                 placeholder="Search history (file / source / constituency)…"
                 value={historyQuery}
                 onChange={(e) => setHistoryQuery(e.target.value)}
-                style={{ padding: 8, minWidth: 280 }}
+                className="field"
+                style={{ minWidth: 280 }}
               />
               {historyQuery && <Button onClick={() => setHistoryQuery('')}>Clear</Button>}
               <span className="row-count" style={{ marginLeft: 'auto' }}>

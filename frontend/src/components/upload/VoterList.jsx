@@ -80,21 +80,24 @@ export default function VoterList({ onError, canDelete = true }) {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && apply()}
-            style={{ padding: 6, minWidth: 220 }}
+            className="field"
+            style={{ minWidth: 220 }}
           />
           <input
             type="text"
             placeholder="State"
             value={state}
             onChange={(e) => setState(e.target.value)}
-            style={{ padding: 6, width: 140 }}
+            className="field"
+            style={{ width: 140 }}
           />
           <input
             type="text"
             placeholder="Assembly No"
             value={assemblyNo}
             onChange={(e) => setAssemblyNo(e.target.value)}
-            style={{ padding: 6, width: 120 }}
+            className="field"
+            style={{ width: 120 }}
           />
           <Button onClick={apply} disabled={list.isFetching}>
             {list.isFetching ? 'Loading…' : 'Apply'}

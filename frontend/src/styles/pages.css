@@ -1094,3 +1094,143 @@ table.results td.right {
   font-size: 12px;
   color: var(--text-3);
 }
+
+/* ─── Form field — themed input/select ─────────────────────────── */
+.field, select.field, input.field, textarea.field {
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--text);
+  outline: none;
+  transition: border-color var(--t-fast), box-shadow var(--t-fast), background var(--t-fast);
+  min-height: 34px;
+  box-sizing: border-box;
+}
+.field:hover {
+  border-color: var(--border-strong, #cbd5e1);
+}
+.field:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-ring);
+}
+.field::placeholder {
+  color: var(--text-3);
+}
+.field-sm {
+  padding: 6px 8px;
+  font-size: 12px;
+  min-height: 28px;
+}
+select.field {
+  cursor: pointer;
+  padding-right: 28px;
+  appearance: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1L5 5L9 1' fill='none' stroke='%2364748B' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+}
+
+/* ─── User menu (Header dropdown) ───────────────────────────────── */
+.user-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 12px 4px 14px;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  box-shadow: var(--shadow-xs);
+  cursor: pointer;
+  transition: background var(--t-fast), border-color var(--t-fast);
+  font-family: inherit;
+}
+.user-trigger:hover {
+  background: var(--surface-2);
+  border-color: var(--border-strong, #cbd5e1);
+}
+.user-trigger.open {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-ring);
+}
+.user-trigger .chev {
+  width: 10px;
+  height: 10px;
+  color: var(--text-3);
+  transition: transform var(--t-fast);
+}
+.user-trigger.open .chev {
+  transform: rotate(180deg);
+}
+.user-menu-wrap {
+  position: relative;
+}
+.user-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 220px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.12);
+  padding: 8px;
+  z-index: 100;
+  animation: qq-fade-in 0.12s ease-out;
+}
+@keyframes qq-fade-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.user-menu-head {
+  padding: 8px 10px 10px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 6px;
+}
+.user-menu-head .name {
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--text);
+}
+.user-menu-head .role-tag {
+  display: inline-block;
+  margin-top: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  background: var(--primary-soft);
+  color: var(--primary);
+  padding: 2px 8px;
+  border-radius: var(--r-pill);
+}
+.user-menu-head .role-tag.role-data_operator {
+  background: #fef3c7;
+  color: #b45309;
+}
+.user-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  background: transparent;
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--text);
+  text-align: left;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+}
+.user-menu-item:hover {
+  background: var(--surface-2);
+}
+.user-menu-item.danger {
+  color: var(--danger);
+}
+.user-menu-item.danger:hover {
+  background: var(--danger-soft);
+}
