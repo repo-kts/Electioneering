@@ -1,4 +1,6 @@
+import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import {
   ArrowRightIcon,
   BarChartIcon,
@@ -7,6 +9,7 @@ import {
 } from '../components/ui/Icon.jsx';
 import StatGroup from '../components/ui/StatGroup.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
+import { api } from '../lib/api.js';
 
 const TILES = [
   {
@@ -51,16 +54,47 @@ const TILES = [
   },
 ];
 
-const STATS = [
-  { value: '1,284', label: 'Submitted today' },
-  { value: '37', label: 'Pending', tone: 'warning' },
-  { value: '2', label: 'Failed', tone: 'danger' },
-];
+function isToday(iso) {
+  const d = new Date(iso);
+  const now = new Date();
+  return (
+    d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth() &&
+    d.getDate() === now.getDate()
+  );
+}
 
 export default function HomePage() {
   const { user } = useAuth();
   const visible = TILES.filter((t) => !user || t.roles.includes(user.role));
   const roleLabel = user?.role === 'admin' ? 'Admin' : 'Data Operator';
+
+  // Live stats from upload history (TanStack — auto-cached, refetches on
+  // mutation invalidations from the upload pages).
+  const historyQ = useQuery({
+    queryKey: ['uploads', 'history'],
+    queryFn: () => api.uploadHistory(),
+    enabled: !!user,
+  });
+  const stats = useMemo(() => {
+    const items = historyQ.data?.items ?? [];
+    let submittedToday = 0;
+    let processing = 0;
+    let failed = 0;
+    let totalRecords = 0;
+    for (const h of items) {
+      if (h.status === 'processing') processing += 1;
+      else if (h.status === 'failed') failed += 1;
+      else if (isToday(h.createdAt)) submittedToday += (h.records ?? 0);
+      totalRecords += h.records ?? 0;
+    }
+    return [
+      { value: submittedToday.toLocaleString(), label: 'Records added today' },
+      { value: processing, label: 'Pending', tone: 'warning' },
+      { value: failed, label: 'Failed', tone: 'danger' },
+      { value: totalRecords.toLocaleString(), label: 'Total records ingested' },
+    ];
+  }, [historyQ.data]);
   return (
     <div className="shell">
       <div className="welcome">
@@ -74,7 +108,7 @@ export default function HomePage() {
       </div>
 
       <div style={{ marginBottom: 24 }}>
-        <StatGroup items={STATS} />
+        <StatGroup items={stats} />
       </div>
 
       <div className="home-grid">
