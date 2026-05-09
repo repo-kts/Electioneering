@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Card from '../ui/Card.jsx';
 import Button from '../ui/Button.jsx';
+import { ErrorState, SkeletonRows, Spinner } from '../ui/Loader.jsx';
 import { api } from '../../lib/api.js';
 
-// Stable color from a candidate name
 function colorFor(name) {
   if (!name) return '#94a3b8';
   let h = 0;
@@ -13,41 +14,31 @@ function colorFor(name) {
 
 export default function BoothHeatmap({ elections = [] }) {
   const [electionId, setElectionId] = useState(elections[0]?.id ?? null);
-  const [data, setData] = useState(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState(null);
+  const qc = useQueryClient();
 
-  useEffect(() => {
-    if (!electionId) return;
-    setBusy(true);
-    setError(null);
-    api
-      .boothLeaning(electionId)
-      .then(setData)
-      .catch((e) => setError(e.message))
-      .finally(() => setBusy(false));
-  }, [electionId]);
+  const heatmap = useQuery({
+    queryKey: ['analytics', 'boothLeaning', electionId],
+    queryFn: () => api.boothLeaning(electionId),
+    enabled: !!electionId,
+  });
 
-  async function recompute() {
-    if (!electionId) return;
-    setBusy(true);
-    try {
-      await api.recomputeLeaning(electionId);
-      const fresh = await api.boothLeaning(electionId);
-      setData(fresh);
-    } catch (e) {
-      setError(e.message);
-    } finally {
-      setBusy(false);
-    }
-  }
+  const recompute = useMutation({
+    mutationFn: () => api.recomputeLeaning(electionId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['analytics', 'boothLeaning', electionId] });
+      qc.invalidateQueries({ queryKey: ['analytics', 'overview'] });
+      qc.invalidateQueries({ queryKey: ['voters'] });
+    },
+  });
 
   const allCandidates = useMemo(() => {
-    if (!data?.items) return [];
+    if (!heatmap.data?.items) return [];
     const set = new Set();
-    for (const ps of data.items) Object.keys(ps.byCandidate ?? {}).forEach((c) => set.add(c));
+    for (const ps of heatmap.data.items) {
+      Object.keys(ps.byCandidate ?? {}).forEach((c) => set.add(c));
+    }
     return Array.from(set);
-  }, [data]);
+  }, [heatmap.data]);
 
   return (
     <Card>
@@ -70,16 +61,36 @@ export default function BoothHeatmap({ elections = [] }) {
               </option>
             ))}
           </select>
-          <Button onClick={recompute} disabled={!electionId || busy}>
-            {busy ? 'Working…' : 'Recompute'}
+          <Button
+            onClick={() => recompute.mutate()}
+            disabled={!electionId || recompute.isPending || heatmap.isFetching}
+          >
+            {recompute.isPending ? 'Recomputing…' : 'Recompute'}
           </Button>
-          {error && <span style={{ color: 'var(--danger)', fontSize: 12 }}>{error}</span>}
+          {heatmap.isFetching && !heatmap.isPending && (
+            <span className="qq-inline-busy"><Spinner size={12} /> refreshing…</span>
+          )}
+          {recompute.isError && (
+            <span style={{ color: 'var(--danger)', fontSize: 12 }}>{recompute.error.message}</span>
+          )}
         </div>
 
-        {data?.items?.length > 0 && (
+        {!electionId && <div className="grid-empty">Select an election to view the heatmap.</div>}
+
+        {electionId && heatmap.isPending && <SkeletonRows rows={4} cols={4} rowHeight={70} />}
+
+        {heatmap.isError && (
+          <ErrorState
+            error={heatmap.error}
+            onRetry={() => heatmap.refetch()}
+            title="Couldn't load booth leanings"
+          />
+        )}
+
+        {heatmap.data?.items?.length > 0 && (
           <>
             <div className="booth-grid">
-              {data.items.map((ps) => {
+              {heatmap.data.items.map((ps) => {
                 const color = colorFor(ps.leader);
                 return (
                   <div
@@ -115,7 +126,7 @@ export default function BoothHeatmap({ elections = [] }) {
           </>
         )}
 
-        {data && data.items?.length === 0 && (
+        {heatmap.data && heatmap.data.items?.length === 0 && (
           <div className="grid-empty">No polling stations for this election.</div>
         )}
       </Card.Body>

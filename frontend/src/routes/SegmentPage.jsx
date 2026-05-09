@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import PageHead from '../components/ui/PageHead.jsx';
 import Button from '../components/ui/Button.jsx';
 import Tabs from '../components/ui/Tabs.jsx';
+import { ErrorState, Spinner } from '../components/ui/Loader.jsx';
 import { useToast } from '../context/ToastContext.jsx';
 import FilterPanel from '../components/segment/FilterPanel.jsx';
 import AggregatesPanel from '../components/segment/AggregatesPanel.jsx';
@@ -22,67 +24,63 @@ const EMPTY = { take: 200, skip: 0 };
 export default function SegmentPage() {
   const [tab, setTab] = useState('segment');
   const [criteria, setCriteria] = useState(EMPTY);
-  const [items, setItems] = useState([]);
-  const [total, setTotal] = useState(0);
-  const [aggregates, setAggregates] = useState(null);
-  const [busy, setBusy] = useState(false);
-  const [elections, setElections] = useState([]);
-  const [cohortsKey, setCohortsKey] = useState(0);
   const { show } = useToast();
+  const qc = useQueryClient();
 
-  useEffect(() => {
-    api.listElections().then((r) => setElections(r.items)).catch(() => {});
-    runSegment(criteria);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const electionsQ = useQuery({
+    queryKey: ['elections'],
+    queryFn: () => api.listElections(),
+  });
 
-  async function runSegment(c) {
-    setBusy(true);
-    try {
-      const r = await api.segment(c);
-      setItems(r.items);
-      setTotal(r.total);
-      setAggregates(r.aggregates);
-    } catch (e) {
-      show(e.message || 'Segment failed', 'error');
-    } finally {
-      setBusy(false);
-    }
-  }
+  const segmentQ = useQuery({
+    queryKey: ['voters', 'segment', criteria],
+    queryFn: () => api.segment(criteria),
+    placeholderData: (prev) => prev,
+  });
 
-  async function handleSaveCohort() {
+  const saveCohort = useMutation({
+    mutationFn: (data) => api.createCohort(data),
+    onSuccess: (cohort) => {
+      qc.invalidateQueries({ queryKey: ['cohorts'] });
+      show(`Cohort "${cohort.name}" saved`);
+    },
+    onError: (e) => show(e.message || 'Save failed', 'error'),
+  });
+
+  const exportMut = useMutation({
+    mutationFn: async (c) => {
+      const token = localStorage.getItem('auth_token');
+      const r = await fetch(`${API_BASE}/api/cohorts/preview-export`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify(c),
+      });
+      if (!r.ok) {
+        const err = new Error(`${r.status} export failed`);
+        err.status = r.status;
+        throw err;
+      }
+      return r.blob();
+    },
+    onSuccess: (blob) => {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'voters_export.csv';
+      a.click();
+      URL.revokeObjectURL(url);
+    },
+    onError: (e) => show(e.message || 'Export failed', 'error'),
+  });
+
+  function handleSaveCohort() {
     const name = window.prompt('Cohort name?');
     if (!name) return;
     const description = window.prompt('Description (optional)?', '') || undefined;
-    try {
-      await api.createCohort({ name, description, criteria });
-      show(`Cohort "${name}" saved`);
-      setCohortsKey((n) => n + 1);
-    } catch (e) {
-      show(e.message || 'Save failed', 'error');
-    }
-  }
-
-  function handleExport() {
-    // POST CSV download via fetch + blob
-    fetch(`${API_BASE}/api/cohorts/preview-export`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(criteria),
-    })
-      .then((r) => {
-        if (!r.ok) throw new Error('export failed');
-        return r.blob();
-      })
-      .then((blob) => {
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'voters_export.csv';
-        a.click();
-        URL.revokeObjectURL(url);
-      })
-      .catch((e) => show(e.message || 'Export failed', 'error'));
+    saveCohort.mutate({ name, description, criteria });
   }
 
   return (
@@ -104,34 +102,57 @@ export default function SegmentPage() {
           <div className="seg-side">
             <FilterPanel
               value={criteria}
-              elections={elections}
+              elections={electionsQ.data?.items ?? []}
               onChange={setCriteria}
-              onApply={() => runSegment(criteria)}
-              onReset={() => {
-                setCriteria(EMPTY);
-                runSegment(EMPTY);
-              }}
+              onApply={() => segmentQ.refetch()}
+              onReset={() => setCriteria(EMPTY)}
               onSaveCohort={handleSaveCohort}
-              onExport={handleExport}
+              onExport={() => exportMut.mutate(criteria)}
             />
+            {(saveCohort.isPending || exportMut.isPending) && (
+              <div className="qq-inline-busy" style={{ marginTop: 8 }}>
+                <Spinner size={12} />
+                {saveCohort.isPending ? 'saving cohort…' : 'preparing export…'}
+              </div>
+            )}
           </div>
           <div className="seg-main">
-            <AggregatesPanel aggregates={aggregates} total={total} />
+            {segmentQ.isError && (
+              <ErrorState
+                error={segmentQ.error}
+                onRetry={() => segmentQ.refetch()}
+                title="Couldn't run segment"
+              />
+            )}
+            <AggregatesPanel
+              aggregates={segmentQ.data?.aggregates}
+              total={segmentQ.data?.total ?? 0}
+            />
             <div style={{ marginTop: 16 }}>
-              <ResultsTable items={items} total={total} busy={busy} />
+              <ResultsTable
+                items={segmentQ.data?.items ?? []}
+                total={segmentQ.data?.total ?? 0}
+                busy={segmentQ.isFetching}
+              />
             </div>
           </div>
         </div>
       )}
 
-      {tab === 'heatmap' && <BoothHeatmap elections={elections} />}
+      {tab === 'heatmap' && (
+        <>
+          {electionsQ.isError ? (
+            <ErrorState error={electionsQ.error} onRetry={() => electionsQ.refetch()} title="Couldn't load elections" />
+          ) : (
+            <BoothHeatmap elections={electionsQ.data?.items ?? []} />
+          )}
+        </>
+      )}
 
       {tab === 'cohorts' && (
         <CohortsList
-          refreshKey={cohortsKey}
           onLoad={(c) => {
             setCriteria(c.criteria || EMPTY);
-            runSegment(c.criteria || EMPTY);
             setTab('segment');
             show(`Loaded "${c.name}"`);
           }}

@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useMutation } from '@tanstack/react-query';
 import Card from '../components/ui/Card.jsx';
 import Button from '../components/ui/Button.jsx';
+import { Spinner } from '../components/ui/Loader.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 
 export default function LoginPage() {
@@ -11,21 +13,17 @@ export default function LoginPage() {
   const next = params.get('next') || '/';
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState(null);
 
-  async function handleSubmit(e) {
+  const loginM = useMutation({
+    mutationFn: ({ u, p }) => login(u.trim(), p),
+    onSuccess: () => navigate(next, { replace: true }),
+  });
+  const busy = loginM.isPending;
+  const error = loginM.error;
+
+  function handleSubmit(e) {
     e.preventDefault();
-    setBusy(true);
-    setError(null);
-    try {
-      await login(username.trim(), password);
-      navigate(next, { replace: true });
-    } catch (err) {
-      setError(err.message || 'Login failed');
-    } finally {
-      setBusy(false);
-    }
+    loginM.mutate({ u: username, p: password });
   }
 
   return (
@@ -63,9 +61,9 @@ export default function LoginPage() {
               />
             </label>
             {error && (
-              <div style={{ color: 'var(--danger)', fontSize: 13 }}>{error}</div>
+              <div style={{ color: 'var(--danger)', fontSize: 13 }}>{error.message || 'Login failed'}</div>
             )}
-            <Button type="submit" variant="primary" disabled={busy}>
+            <Button type="submit" variant="primary" disabled={busy} leadingIcon={busy ? <Spinner size={12} /> : undefined}>
               {busy ? 'Signing in…' : 'Sign in'}
             </Button>
             <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 8 }}>

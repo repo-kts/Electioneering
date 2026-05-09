@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import {
   BarChart, Bar,
   PieChart, Pie, Cell,
@@ -10,8 +11,8 @@ import PageHead from '../components/ui/PageHead.jsx';
 import Button from '../components/ui/Button.jsx';
 import Card from '../components/ui/Card.jsx';
 import { RetryIcon } from '../components/ui/Icon.jsx';
+import { Spinner, ErrorState, SkeletonRows } from '../components/ui/Loader.jsx';
 import { api } from '../lib/api.js';
-import { useToast } from '../context/ToastContext.jsx';
 
 // Stable color from a string (candidate / community / etc.)
 function colorFor(s) {
@@ -32,32 +33,19 @@ function num(n) {
 
 export default function AnalyticsPage() {
   const [electionId, setElectionId] = useState(null);
-  const [data, setData] = useState(null);
-  const [busy, setBusy] = useState(false);
-  const { show } = useToast();
-
-  async function load(id) {
-    setBusy(true);
-    try {
-      const r = await api.analyticsOverview(id);
-      setData(r);
-      if (!id && r.election?.id) setElectionId(r.election.id);
-    } catch (e) {
-      show(e.message || 'Failed to load analytics', 'error');
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  useEffect(() => {
-    load(electionId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [electionId]);
-
+  const overview = useQuery({
+    queryKey: ['analytics', 'overview', electionId],
+    queryFn: () => api.analyticsOverview(electionId),
+    placeholderData: (prev) => prev, // keep showing previous data while refetching
+  });
+  const data = overview.data;
   const election = data?.election;
   const voters = data?.voters;
   const elections = data?.electionsList ?? [];
   const turnoutHistory = data?.turnoutHistory ?? [];
+
+  // Effective picker value: explicit state > backend-resolved election > none
+  const pickerValue = electionId ?? overview.data?.election?.id ?? '';
 
   const candidateBars = useMemo(() => {
     if (!election?.candidates) return [];
@@ -89,26 +77,53 @@ export default function AnalyticsPage() {
     <div className="shell">
       <PageHead
         title="Analytics"
-        badge={<span className="live-pill">Live</span>}
+        badge={
+          overview.isFetching ? (
+            <span className="live-pill"><Spinner size={10} /> Refreshing</span>
+          ) : (
+            <span className="live-pill">Live</span>
+          )
+        }
         subtitle="Real numbers from voter records and Form 20. Pick an election to switch the scope."
         actions={
           <>
             <Link to="/segment" style={{ textDecoration: 'none' }}>
               <Button>Open Segment</Button>
             </Link>
-            <Button variant="primary" leadingIcon={<RetryIcon />} onClick={() => load(electionId)} disabled={busy}>
-              {busy ? 'Loading…' : 'Refresh'}
+            <Button
+              variant="primary"
+              leadingIcon={<RetryIcon />}
+              onClick={() => overview.refetch()}
+              disabled={overview.isFetching}
+            >
+              {overview.isFetching ? 'Loading…' : 'Refresh'}
             </Button>
           </>
         }
       />
+
+      {overview.isError && (
+        <ErrorState
+          error={overview.error}
+          onRetry={() => overview.refetch()}
+          title="Couldn't load analytics"
+        />
+      )}
+
+      {overview.isPending && !data && (
+        <Card>
+          <Card.Body>
+            <SkeletonRows rows={6} cols={6} />
+          </Card.Body>
+        </Card>
+      )}
 
       <Card>
         <Card.Body>
           <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
             <label style={{ fontSize: 12, color: 'var(--text-2)' }}>Election:</label>
             <select
-              value={electionId ?? ''}
+              value={pickerValue}
               onChange={(e) => setElectionId(e.target.value ? Number(e.target.value) : null)}
               style={{ padding: 8 }}
             >
