@@ -32,7 +32,7 @@ const TILES = [
   {
     to: '/segment',
     title: 'Segment voters',
-    desc: 'Filter voters by community, religion, occupation, age, polling station, predicted leaning. Save cohorts. Export CSV.',
+    desc: 'Filter voters by community, occupation, age, polling station, predicted leaning. Save cohorts. Export CSV.',
     icon: <BarChartIcon />,
     color: 'purple',
     stat: 'New',

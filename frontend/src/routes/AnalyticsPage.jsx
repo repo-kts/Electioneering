@@ -220,11 +220,11 @@ export default function AnalyticsPage() {
       <div style={{ marginTop: 16 }}>
         <div className="chart-row">
           <DistroCard title="Community" data={voters?.byCommunity} />
-          <DistroCard title="Religion" data={voters?.byReligion} />
+          <DistroCard title="Age bucket" data={voters?.byAgeBucket} />
         </div>
         <div className="chart-row" style={{ marginTop: 16 }}>
-          <DistroCard title="Age bucket" data={voters?.byAgeBucket} />
           <DistroCard title="Gender" data={voters?.byGender} />
+          <DistroCard title="Polling station" data={voters?.byPollingStation} />
         </div>
         <div className="chart-row" style={{ marginTop: 16 }}>
           <DistroCard title="Occupation" data={voters?.byOccupation} />

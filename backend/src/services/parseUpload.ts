@@ -116,8 +116,6 @@ const VOTER_HEADER_MAP: Record<string, string> = {
   caste: 'community',
   'sub-caste': 'community',
   jati: 'community',
-  religion: 'religion',
-  dharm: 'religion',
   occupation: 'occupation',
   job: 'occupation',
   profession: 'occupation',

@@ -28,7 +28,6 @@ export interface VoterClean {
   partSerial: string;
   // segmentation (optional)
   community: string | null;
-  religion: string | null;
   occupation: string | null;
   language: string | null;
 }
@@ -108,7 +107,6 @@ export function validateVoter(raw: Record<string, unknown>): VoterValidation {
 
   // Segmentation — all optional, free-text
   const community = s('community') || null;
-  const religion = s('religion') || null;
   const occupation = s('occupation') || null;
   const language = s('language') || null;
 
@@ -136,7 +134,6 @@ export function validateVoter(raw: Record<string, unknown>): VoterValidation {
           partName,
           partSerial,
           community,
-          religion,
           occupation,
           language,
         }

@@ -2,13 +2,12 @@ import Card from '../ui/Card.jsx';
 
 /**
  * AggregatesPanel — compact bar-chart distributions across the result set.
- * Renders multiple stacked groups (community / religion / age / etc.).
+ * Renders multiple stacked groups (community / age / etc.).
  */
 export default function AggregatesPanel({ aggregates, total }) {
   if (!aggregates) return null;
   const groups = [
     { title: 'Community', items: aggregates.byCommunity },
-    { title: 'Religion', items: aggregates.byReligion },
     { title: 'Age', items: aggregates.byAgeBucket },
     { title: 'Gender', items: aggregates.byGender },
     { title: 'Occupation', items: aggregates.byOccupation },

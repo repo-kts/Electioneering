@@ -21,7 +21,6 @@ const VOTER_FIELDS = [
   ['partName', 'text', 'Madarasa Ajijaya Dakshini Bhag'],
   ['partSerial', 'text *', '283'],
   ['community', 'text (caste / sub-caste tag)', 'Kayastha'],
-  ['religion', 'text', 'Hindu'],
   ['occupation', 'text', 'Teacher'],
   ['language', 'text', 'Hindi'],
 ];

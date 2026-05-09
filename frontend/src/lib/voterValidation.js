@@ -54,7 +54,7 @@ export function validateVoterRow(row) {
     errors.mobile = '10 digits starting 6-9';
   }
 
-  // community / religion / occupation / language are optional free text — no checks
+  // community / occupation / language are optional free text — no checks
 
   return errors;
 }

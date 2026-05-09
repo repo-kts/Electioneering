@@ -67,7 +67,7 @@ export default function SegmentPage() {
     <div className="shell">
       <PageHead
         title="Voter segmentation"
-        subtitle="Slice the voter file by community, religion, occupation, age, polling station, predicted leaning. Save filters as cohorts. Export CSV."
+        subtitle="Slice the voter file by community, occupation, age, polling station, predicted leaning. Save filters as cohorts. Export CSV."
         actions={
           <Link to="/" style={{ textDecoration: 'none' }}>
             <Button>← Home</Button>

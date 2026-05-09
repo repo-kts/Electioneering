@@ -158,7 +158,6 @@ model Voter {
 
   // Segmentation attributes
   community          String?   // caste / sub-caste tag (open-ended)
-  religion           String?
   occupation         String?
   language           String?
 
@@ -181,7 +180,6 @@ model Voter {
   @@index([state])
   @@index([epic])
   @@index([community])
-  @@index([religion])
   @@index([occupation])
   @@index([householdId])
 }

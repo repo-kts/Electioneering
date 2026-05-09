@@ -39,7 +39,6 @@ const VOTER_COLUMNS = [
   { key: 'partName', label: 'Part Name', type: 'text', long: true },
   { key: 'partSerial', label: 'Part Serial', type: 'text', required: true, short: true },
   { key: 'community', label: 'Community', type: 'text' },
-  { key: 'religion', label: 'Religion', type: 'text', short: true },
   { key: 'occupation', label: 'Occupation', type: 'text' },
   { key: 'language', label: 'Language', type: 'text', short: true },
 ];

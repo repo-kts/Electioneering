@@ -22,7 +22,7 @@ const EXPORT_HEADERS = [
   'age', 'gender', 'epic', 'mobile',
   'state', 'parlNo', 'parlName', 'assemblyNo', 'assemblyName',
   'pollingStationName', 'partNumber', 'partName', 'partSerial',
-  'community', 'religion', 'occupation', 'language',
+  'community', 'occupation', 'language',
   'predictedLeader', 'predictedLeaderShare',
 ];
 
@@ -40,7 +40,7 @@ interface VoterRow {
   assemblyNo: string; assemblyName: string;
   pollingStationName: string; partNumber: string; partName: string | null;
   partSerial: string;
-  community: string | null; religion: string | null;
+  community: string | null;
   occupation: string | null; language: string | null;
   predictedLeaning?: unknown;
 }
@@ -52,7 +52,7 @@ function rowToCsv(v: VoterRow): string {
     String(v.age), v.gender, v.epic, v.mobile ?? '',
     v.state, v.parlNo, v.parlName, v.assemblyNo, v.assemblyName,
     v.pollingStationName, v.partNumber, v.partName ?? '', v.partSerial,
-    v.community ?? '', v.religion ?? '', v.occupation ?? '', v.language ?? '',
+    v.community ?? '', v.occupation ?? '', v.language ?? '',
     lean?.leader ?? '', lean?.leaderShare != null ? lean.leaderShare.toFixed(3) : '',
   ];
   return cells.map((c) => csvEscape(String(c))).join(',');
