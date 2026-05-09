@@ -47,3 +47,37 @@ npm run dev                   # http://localhost:4000
 1. `POST /api/uploads/preview` with the file → frontend shows preview table.
 2. User edits / confirms.
 3. Frontend calls `/voters/commit` or `/form20/commit` with cleaned rows.
+
+## Deploy to Vercel
+
+The backend ships as a single serverless function. `api/index.ts` mounts the
+Express app via `getApp()` from `src/app.ts`; everything else (`/api/*`,
+`/health`, `/`) is rewritten to it via `vercel.json`.
+
+1. **Vercel project**
+   - Import the repo on Vercel.
+   - Set **Root Directory** = `backend`.
+   - Framework preset = **Other**.
+   - Build command = `npm run vercel-build` (runs `prisma generate`).
+   - Install command = `npm install`.
+   - Output directory = (leave blank).
+
+2. **Environment variables** (Project Settings → Environment Variables)
+   - `DATABASE_URL` — your Neon pooler URL with `?sslmode=require`. For
+     serverless add `&pgbouncer=true&connect_timeout=10` if connections leak.
+   - `CORS_ORIGIN` — the frontend origin (e.g. `https://your-frontend.vercel.app`).
+     Comma-separated for multiple. Leave unset to reflect any origin.
+
+3. **Migrate the database once** (locally, against Neon):
+   ```bash
+   DATABASE_URL='<neon url>' npx prisma migrate deploy
+   DATABASE_URL='<neon url>' npx tsx prisma/seed.ts   # optional
+   ```
+
+4. **Body size limit** — Vercel hobby caps request body at ~4.5 MB; pro at
+   ~50 MB. Multer's own 25 MB cap stays in `routes/uploads.ts` — adjust both
+   if you need to upload bigger spreadsheets.
+
+5. **Cold starts** — Prisma Client engines weigh ~30 MB. The
+   `rhel-openssl-3.0.x` binary target is set in `schema.prisma` so Vercel's
+   AWS Lambda runtime picks the right engine.
