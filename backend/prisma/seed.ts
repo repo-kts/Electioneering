@@ -1,6 +1,27 @@
-import { PrismaClient, Gender } from '@prisma/client';
+import { PrismaClient, Gender, Role } from '@prisma/client';
+import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
+
+async function seedUsers() {
+  const defaults = [
+    { username: 'admin', password: process.env.SEED_ADMIN_PW || 'admin123', role: Role.admin },
+    {
+      username: 'operator',
+      password: process.env.SEED_OPERATOR_PW || 'operator123',
+      role: Role.data_operator,
+    },
+  ];
+  for (const u of defaults) {
+    const passwordHash = await bcrypt.hash(u.password, 10);
+    await prisma.user.upsert({
+      where: { username: u.username },
+      update: { role: u.role, active: true },
+      create: { username: u.username, passwordHash, role: u.role },
+    });
+    console.log(`[seed] user "${u.username}" → ${u.role}`);
+  }
+}
 
 // ─── Form 20 (Biharsharif 172, year 2025) ──────────────────────────
 const FORM20_CANDIDATES = [
@@ -119,6 +140,7 @@ function makeVoter(i: number) {
 
 async function main() {
   console.log('[seed] starting...');
+  await seedUsers();
 
   // ─── Election (2025) ──────────────────────────────────────────
   const e2025 =

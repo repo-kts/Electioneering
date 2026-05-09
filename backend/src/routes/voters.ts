@@ -8,6 +8,7 @@ import {
   passesLeaningFilter,
   aggregate,
 } from '../services/segmentation.js';
+import { requireAdmin } from '../middleware/auth.js';
 
 const router = Router();
 
@@ -76,9 +77,10 @@ router.get(
   }),
 );
 
-// POST /api/voters/segment  → flexible filter + aggregates
+// POST /api/voters/segment  → flexible filter + aggregates (admin only)
 router.post(
   '/segment',
+  requireAdmin,
   asyncHandler(async (req, res) => {
     const c = segmentSchema.parse(req.body ?? {});
     const where = buildVoterWhere(c);
@@ -146,9 +148,10 @@ router.put(
   }),
 );
 
-// DELETE /api/voters/:id
+// DELETE /api/voters/:id (admin only)
 router.delete(
   '/:id',
+  requireAdmin,
   asyncHandler(async (req, res) => {
     const id = Number(req.params.id);
     await prisma.voter.delete({ where: { id } });

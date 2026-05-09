@@ -1,13 +1,31 @@
 // Tiny fetch wrapper for the Electioneering backend API.
 // Base URL via Vite env (VITE_API_URL), defaults to local backend.
+// Attaches Authorization Bearer token from localStorage; bounces to /login
+// on 401 (except for the login/me endpoints themselves).
 
 const BASE = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
+const NO_REDIRECT_PATHS = new Set(['/api/auth/login', '/api/auth/me']);
+
+function getAuthToken() {
+  try {
+    return localStorage.getItem('auth_token');
+  } catch {
+    return null;
+  }
+}
+
 async function request(path, { method = 'GET', body, headers = {}, signal } = {}) {
   const isForm = body instanceof FormData;
+  const token = getAuthToken();
+  const finalHeaders = {
+    ...(isForm ? {} : { 'Content-Type': 'application/json' }),
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...headers,
+  };
   const res = await fetch(`${BASE}${path}`, {
     method,
-    headers: isForm ? headers : { 'Content-Type': 'application/json', ...headers },
+    headers: finalHeaders,
     body: isForm ? body : body == null ? undefined : JSON.stringify(body),
     signal,
   });
@@ -19,6 +37,17 @@ async function request(path, { method = 'GET', body, headers = {}, signal } = {}
     } catch {
       detail = await res.text();
     }
+    if (res.status === 401 && !NO_REDIRECT_PATHS.has(path)) {
+      try {
+        localStorage.removeItem('auth_token');
+      } catch {
+        /* ignore */
+      }
+      if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
+        const next = encodeURIComponent(window.location.pathname + window.location.search);
+        window.location.href = `/login?next=${next}`;
+      }
+    }
     const err = new Error(`${res.status} ${res.statusText}${detail ? ' — ' + detail : ''}`);
     err.status = res.status;
     throw err;
@@ -28,6 +57,16 @@ async function request(path, { method = 'GET', body, headers = {}, signal } = {}
 }
 
 export const api = {
+  // ─── Auth ───────────────────────────────────────────────────
+  login: (username, password) =>
+    request('/api/auth/login', { method: 'POST', body: { username, password } }),
+  me: () => request('/api/auth/me'),
+  listUsers: () => request('/api/auth/users'),
+  createUser: (data) => request('/api/auth/users', { method: 'POST', body: data }),
+  updateUser: (id, data) =>
+    request(`/api/auth/users/${id}`, { method: 'PUT', body: data }),
+  deleteUser: (id) => request(`/api/auth/users/${id}`, { method: 'DELETE' }),
+
   // ─── Voters ─────────────────────────────────────────────────
   listVoters: (params = {}) => {
     const q = new URLSearchParams(params).toString();
