@@ -5,5 +5,5 @@ import { getApp } from './app.js';
 const PORT = Number(process.env.PORT) || 4000;
 const app = getApp();
 app.listen(PORT, () => {
-  console.log(`[backend] listening on http://localhost:${PORT}`);
+    console.log(`[backend] listening on http://localhost:${PORT}`);
 });

@@ -52,7 +52,7 @@ export default function BoothHeatmap({ elections = [] }) {
           <select
             value={electionId ?? ''}
             onChange={(e) => setElectionId(e.target.value ? Number(e.target.value) : null)}
-            style={{ padding: 6 }}
+            className="field field-sm"
           >
             <option value="">— pick —</option>
             {elections.map((e) => (

@@ -125,7 +125,7 @@ export default function AnalyticsPage() {
             <select
               value={pickerValue}
               onChange={(e) => setElectionId(e.target.value ? Number(e.target.value) : null)}
-              style={{ padding: 8 }}
+              className="field"
             >
               {elections.length === 0 && <option value="">— no elections —</option>}
               {elections.map((e) => (

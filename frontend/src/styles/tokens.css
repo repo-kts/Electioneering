@@ -86,7 +86,7 @@
   --t-slow: 280ms;
 
   /* Layout */
-  --shell-max: 1280px;
+  --shell-max: 100%;
   --shell-pad-x: 32px;
   --header-h: 60px;
 
