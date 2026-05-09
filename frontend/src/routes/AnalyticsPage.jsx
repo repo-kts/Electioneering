@@ -44,6 +44,15 @@ export default function AnalyticsPage() {
   const elections = data?.electionsList ?? [];
   const turnoutHistory = data?.turnoutHistory ?? [];
 
+  const effectiveElectionId = electionId ?? election?.id ?? null;
+
+  const outlook = useQuery({
+    queryKey: ['analytics', 'boothLeaning', effectiveElectionId],
+    queryFn: () => api.boothLeaning(effectiveElectionId),
+    enabled: !!effectiveElectionId,
+    placeholderData: (prev) => prev,
+  });
+
   // Effective picker value: explicit state > backend-resolved election > none
   const pickerValue = electionId ?? overview.data?.election?.id ?? '';
 
@@ -216,6 +225,13 @@ export default function AnalyticsPage() {
         </div>
       )}
 
+      {/* Constituency outlook — booth-level leader heatmap */}
+      {effectiveElectionId && (
+        <div style={{ marginTop: 16 }}>
+          <ConstituencyOutlook query={outlook} />
+        </div>
+      )}
+
       {/* Demographics — 4 charts */}
       <div style={{ marginTop: 16 }}>
         <div className="chart-row">
@@ -244,6 +260,119 @@ function Kpi({ label, value, sub }) {
         <div style={{ marginTop: 6, fontSize: 12, color: 'var(--text-3)' }}>{sub}</div>
       )}
     </div>
+  );
+}
+
+function ConstituencyOutlook({ query }) {
+  const items = query.data?.items ?? [];
+  const counts = useMemo(() => {
+    const m = new Map();
+    let totalValid = 0;
+    let tight = 0;
+    for (const ps of items) {
+      if (ps.leader) m.set(ps.leader, (m.get(ps.leader) ?? 0) + 1);
+      totalValid += ps.totalValid ?? 0;
+      if (ps.totalValid > 0 && (ps.leaderShare ?? 0) > 0 && (ps.leaderShare ?? 0) < 0.5) tight += 1;
+    }
+    return {
+      byLeader: Array.from(m.entries())
+        .map(([name, count]) => ({ name, count }))
+        .sort((a, b) => b.count - a.count),
+      totalValid,
+      tight,
+      stations: items.length,
+      reported: items.filter((ps) => (ps.totalValid ?? 0) > 0).length,
+    };
+  }, [items]);
+
+  return (
+    <Card>
+      <Card.Head
+        title="Constituency outlook"
+        subtitle={`${counts.stations} polling stations · ${counts.reported} with Form 20 data · hover any cell for details`}
+        actions={<span className="chart-tag">{counts.stations} PS</span>}
+      />
+      <Card.Body>
+        {query.isPending && <SkeletonRows rows={4} cols={6} rowHeight={32} />}
+        {query.isError && (
+          <ErrorState error={query.error} onRetry={() => query.refetch()} title="Couldn't load outlook" />
+        )}
+        {query.data && (
+          <div className="map-grid-wrap">
+            <div className="map-grid">
+              {items.map((ps) => {
+                const color = colorFor(ps.leader);
+                const reported = (ps.totalValid ?? 0) > 0;
+                const t = Math.max(0, Math.min(1, ((ps.leaderShare ?? 0) - 0.35) / 0.4));
+                const opacity = reported ? 0.45 + t * 0.55 : 0.18;
+                return (
+                  <div
+                    key={ps.id}
+                    className="cell"
+                    style={{ background: color, opacity }}
+                  >
+                    PS-{ps.serial}
+                    <div className="cell-tooltip">
+                      <strong>PS-{ps.serial}{ps.name ? ` · ${ps.name}` : ''}</strong>
+                      {reported ? (
+                        <>
+                          {ps.leader ?? '—'} leading ·{' '}
+                          <span className="pct-line">
+                            {((ps.leaderShare ?? 0) * 100).toFixed(1)}%
+                          </span>
+                          <br />
+                          {(ps.totalValid ?? 0).toLocaleString()} valid · {ps.registeredVoters} voters mapped
+                        </>
+                      ) : (
+                        <>No Form 20 data yet</>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="map-legend">
+              <h4>Lead by candidate</h4>
+              {counts.byLeader.map((b) => (
+                <div key={b.name} className="map-legend-item">
+                  <div className="map-legend-swatch" style={{ background: colorFor(b.name) }} />
+                  <div className="map-legend-name">{b.name}</div>
+                  <div className="map-legend-count">{b.count} PS</div>
+                </div>
+              ))}
+              {counts.byLeader.length === 0 && (
+                <div className="grid-empty" style={{ padding: 8 }}>No reported booths.</div>
+              )}
+              <div className="map-legend-divider" />
+              <h4 style={{ marginBottom: 8 }}>Margin shading</h4>
+              <div style={{ display: 'flex', gap: 3, height: 12, marginBottom: 6 }}>
+                <div style={{ flex: 1, background: '#475569', opacity: 0.35, borderRadius: 3 }} />
+                <div style={{ flex: 1, background: '#475569', opacity: 0.55, borderRadius: 3 }} />
+                <div style={{ flex: 1, background: '#475569', opacity: 0.75, borderRadius: 3 }} />
+                <div style={{ flex: 1, background: '#475569', opacity: 1, borderRadius: 3 }} />
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--text-3)' }}>
+                <span>Tight</span>
+                <span>Safe</span>
+              </div>
+              <div className="map-legend-divider" />
+              <div className="map-legend-row">
+                <span>Total stations</span><strong>{num(counts.stations)}</strong>
+              </div>
+              <div className="map-legend-row">
+                <span>Reported</span><strong>{num(counts.reported)}</strong>
+              </div>
+              <div className="map-legend-row">
+                <span>Tight (&lt; 50% lead)</span><strong>{num(counts.tight)}</strong>
+              </div>
+              <div className="map-legend-row">
+                <span>Total valid votes</span><strong>{num(counts.totalValid)}</strong>
+              </div>
+            </div>
+          </div>
+        )}
+      </Card.Body>
+    </Card>
   );
 }
 
