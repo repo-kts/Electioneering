@@ -62,6 +62,29 @@ export const api = {
   commitForm20: (payload) =>
     request('/api/uploads/form20/commit', { method: 'POST', body: payload }),
   uploadHistory: () => request('/api/uploads/history'),
+
+  // ─── Segmentation + analytics ──────────────────────────────
+  segment: (criteria) =>
+    request('/api/voters/segment', { method: 'POST', body: criteria }),
+  recomputeLeaning: (electionId) =>
+    request(`/api/analytics/recompute?electionId=${electionId}&link=1`, { method: 'POST' }),
+  boothLeaning: (electionId) =>
+    request(`/api/analytics/booth-leaning?electionId=${electionId}`),
+
+  // ─── Cohorts ───────────────────────────────────────────────
+  listCohorts: () => request('/api/cohorts'),
+  getCohort: (id) => request(`/api/cohorts/${id}`),
+  createCohort: (data) => request('/api/cohorts', { method: 'POST', body: data }),
+  updateCohort: (id, data) =>
+    request(`/api/cohorts/${id}`, { method: 'PUT', body: data }),
+  deleteCohort: (id) => request(`/api/cohorts/${id}`, { method: 'DELETE' }),
+  cohortVoters: (id) => request(`/api/cohorts/${id}/voters`),
+};
+
+// Direct download URLs (use as href / window.open)
+export const downloadUrls = {
+  cohortExport: (id) => `${BASE}/api/cohorts/${id}/export`,
+  segmentExport: () => `${BASE}/api/cohorts/preview-export`, // POST
 };
 
 export { BASE as API_BASE };

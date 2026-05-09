@@ -2,6 +2,12 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { asyncHandler } from '../lib/asyncHandler.js';
+import {
+  segmentSchema,
+  buildVoterWhere,
+  passesLeaningFilter,
+  aggregate,
+} from '../services/segmentation.js';
 
 const router = Router();
 
@@ -31,10 +37,10 @@ const voterSchema = z.object({
   partNumber: z.string().trim().min(1),
   partName: z.string().trim().optional().or(z.literal('').transform(() => undefined)),
   partSerial: z.string().trim().min(1),
-  pollingDate: z
-    .string()
-    .optional()
-    .transform((v) => (v && v.length ? new Date(v) : undefined)),
+  community: z.string().trim().optional().or(z.literal('').transform(() => undefined)),
+  religion: z.string().trim().optional().or(z.literal('').transform(() => undefined)),
+  occupation: z.string().trim().optional().or(z.literal('').transform(() => undefined)),
+  language: z.string().trim().optional().or(z.literal('').transform(() => undefined)),
 });
 
 const bulkSchema = z.object({
@@ -67,6 +73,28 @@ router.get(
       prisma.voter.count({ where }),
     ]);
     res.json({ items, total });
+  }),
+);
+
+// POST /api/voters/segment  → flexible filter + aggregates
+router.post(
+  '/segment',
+  asyncHandler(async (req, res) => {
+    const c = segmentSchema.parse(req.body ?? {});
+    const where = buildVoterWhere(c);
+    // Pull a generous slice; predicted-leaning filter applied in JS.
+    // For huge datasets, push down via raw SQL later.
+    const candidate = await prisma.voter.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      take: c.take + c.skip + 500, // headroom for leaning filter
+      skip: 0,
+    });
+    const filtered = candidate.filter((v) => passesLeaningFilter(v, c));
+    const total = filtered.length;
+    const items = filtered.slice(c.skip, c.skip + c.take);
+    const aggregates = aggregate(filtered);
+    res.json({ items, total, aggregates, criteria: c });
   }),
 );
 

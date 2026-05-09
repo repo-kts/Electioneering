@@ -33,7 +33,10 @@ const COLUMNS = [
   { key: 'partNumber', label: 'Part No', type: 'number', required: true, placeholder: '381', short: true, min: 1 },
   { key: 'partName', label: 'Part Name', type: 'text', placeholder: 'Madarasa Ajijaya Dakshini Bhag', long: true },
   { key: 'partSerial', label: 'Part Serial', type: 'number', required: true, placeholder: '283', short: true, min: 1 },
-  { key: 'pollingDate', label: 'Polling Date', type: 'date' },
+  { key: 'community', label: 'Community / Caste', type: 'text', placeholder: 'Kayastha' },
+  { key: 'religion', label: 'Religion', type: 'text', placeholder: 'Hindu', short: true },
+  { key: 'occupation', label: 'Occupation', type: 'text', placeholder: 'Teacher' },
+  { key: 'language', label: 'Language', type: 'text', placeholder: 'Hindi', short: true },
 ];
 
 let nextId = 1;
@@ -152,12 +155,7 @@ export default function RecordForm({ onSubmit }) {
       voters: usable.map((r) => {
         const out = {};
         COLUMNS.forEach((c) => {
-          const v = r[c.key];
-          if (c.key === 'pollingDate') {
-            out.pollingDate = v || undefined;
-            return;
-          }
-          out[c.key] = v;
+          out[c.key] = r[c.key];
         });
         return out;
       }),

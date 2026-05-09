@@ -26,7 +26,11 @@ export interface VoterClean {
   partNumber: string;
   partName: string | null;
   partSerial: string;
-  pollingDate: Date | null;
+  // segmentation (optional)
+  community: string | null;
+  religion: string | null;
+  occupation: string | null;
+  language: string | null;
 }
 
 export interface VoterValidation {
@@ -102,13 +106,11 @@ export function validateVoter(raw: Record<string, unknown>): VoterValidation {
   required('partSerial', partSerial);
   const partName = s('partName') || null;
 
-  let pollingDate: Date | null = null;
-  const pdRaw = s('pollingDate');
-  if (pdRaw) {
-    const d = new Date(pdRaw);
-    if (Number.isFinite(d.getTime())) pollingDate = d;
-    else errors.pollingDate = 'invalid date';
-  }
+  // Segmentation — all optional, free-text
+  const community = s('community') || null;
+  const religion = s('religion') || null;
+  const occupation = s('occupation') || null;
+  const language = s('language') || null;
 
   const ok = Object.keys(errors).length === 0;
   return {
@@ -133,7 +135,10 @@ export function validateVoter(raw: Record<string, unknown>): VoterValidation {
           partNumber,
           partName,
           partSerial,
-          pollingDate,
+          community,
+          religion,
+          occupation,
+          language,
         }
       : null,
   };

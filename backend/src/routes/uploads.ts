@@ -9,6 +9,10 @@ import {
   normalizeForm20,
 } from '../services/parseUpload.js';
 import { validateVoter, type VoterClean } from '../services/voterValidation.js';
+import {
+  recomputePredictedLeaning,
+  linkVotersToPollingStations,
+} from '../services/inference.js';
 
 const router = Router();
 
@@ -133,6 +137,7 @@ const form20CommitSchema = z.object({
   assemblyNo: z.string(),
   assemblyName: z.string(),
   electionType: z.string().default('Assembly Election'),
+  electionYear: z.coerce.number().int().min(1950).max(2100).optional(),
   totalElectors: z.coerce.number().int().nonnegative().optional(),
   candidates: z.array(z.string().trim().min(1)).min(1),
   rows: z.array(
@@ -152,32 +157,29 @@ router.post(
   asyncHandler(async (req, res) => {
     const body = form20CommitSchema.parse(req.body);
 
+    const electionYear = body.electionYear ?? new Date().getFullYear();
     const result = await prisma.$transaction(async (tx) => {
-      // upsert election by (assemblyNo, assemblyName)
-      const election = await tx.election.upsert({
+      // upsert election by (assemblyNo, assemblyName, electionYear)
+      const existing = await tx.election.findFirst({
         where: {
-          assemblyNo_assemblyName: {
-            assemblyNo: body.assemblyNo,
-            assemblyName: body.assemblyName,
-          },
-        },
-        update: {
-          state: body.state,
-          parlNo: body.parlNo,
-          parlName: body.parlName,
-          electionType: body.electionType,
-          totalElectors: body.totalElectors,
-        },
-        create: {
-          state: body.state,
-          parlNo: body.parlNo,
-          parlName: body.parlName,
           assemblyNo: body.assemblyNo,
           assemblyName: body.assemblyName,
-          electionType: body.electionType,
-          totalElectors: body.totalElectors,
+          electionYear,
         },
       });
+      const electionData = {
+        state: body.state,
+        parlNo: body.parlNo,
+        parlName: body.parlName,
+        assemblyNo: body.assemblyNo,
+        assemblyName: body.assemblyName,
+        electionType: body.electionType,
+        electionYear,
+        totalElectors: body.totalElectors,
+      };
+      const election = existing
+        ? await tx.election.update({ where: { id: existing.id }, data: electionData })
+        : await tx.election.create({ data: electionData });
 
       // wipe and recreate candidates + polling stations
       await tx.pollingStation.deleteMany({ where: { electionId: election.id } });
@@ -228,7 +230,22 @@ router.post(
       },
     });
 
-    res.status(201).json({ electionId: result.id, polling: body.rows.length, history });
+    // Auto-link voters to PS by name then recompute predicted leaning
+    let inference = { linked: 0, stations: 0, votersUpdated: 0 };
+    try {
+      const linked = await linkVotersToPollingStations(result.id);
+      const r = await recomputePredictedLeaning(result.id);
+      inference = { linked, ...r };
+    } catch (err) {
+      console.error('[inference] recompute failed', err);
+    }
+
+    res.status(201).json({
+      electionId: result.id,
+      polling: body.rows.length,
+      history,
+      inference,
+    });
   }),
 );
 

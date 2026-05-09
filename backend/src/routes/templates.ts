@@ -21,7 +21,10 @@ const VOTER_HEADERS = [
   'partNumber',
   'partName',
   'partSerial',
-  'pollingDate',
+  'community',
+  'religion',
+  'occupation',
+  'language',
 ];
 
 const VOTER_SAMPLE: Record<string, string | number> = {
@@ -42,7 +45,10 @@ const VOTER_SAMPLE: Record<string, string | number> = {
   partNumber: '381',
   partName: 'Madarasa Ajijaya Dakshini Bhag',
   partSerial: '283',
-  pollingDate: '2026-04-15',
+  community: 'Kayastha',
+  religion: 'Hindu',
+  occupation: 'Student',
+  language: 'Hindi',
 };
 
 function csvEscape(s: string): string {

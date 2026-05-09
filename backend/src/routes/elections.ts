@@ -2,6 +2,10 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { asyncHandler } from '../lib/asyncHandler.js';
+import {
+  recomputePredictedLeaning,
+  linkVotersToPollingStations,
+} from '../services/inference.js';
 
 const router = Router();
 
@@ -198,6 +202,14 @@ router.put(
         }
       }
     });
+
+    // Auto-link voters then recompute predicted leaning
+    try {
+      await linkVotersToPollingStations(electionId);
+      await recomputePredictedLeaning(electionId);
+    } catch (err) {
+      console.error('[inference] recompute failed', err);
+    }
 
     const fresh = await prisma.election.findUnique({
       where: { id: electionId },
