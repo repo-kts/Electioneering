@@ -29,6 +29,22 @@ enum UploadKind {
   form20
 }
 
+enum Role {
+  admin
+  data_operator
+}
+
+// ─── User (auth) ─────────────────────────────────────────────────────────
+model User {
+  id           Int      @id @default(autoincrement())
+  username     String   @unique
+  passwordHash String
+  role         Role
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
 // ─── Election (per assembly constituency / contest) ─────────────────────
 model Election {
   id              Int      @id @default(autoincrement())

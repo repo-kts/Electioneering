@@ -1,16 +1,22 @@
-import { NavLink, Link } from 'react-router-dom';
-import { session } from '../../data/history.js';
+import { NavLink, Link, useNavigate } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext.jsx';
 
-const NAV = [
-  { to: '/', label: 'Home', end: true },
-  { to: '/voter-detail', label: 'Voter Detail' },
-  { to: '/form-20', label: 'Form 20' },
-  { to: '/analytics', label: 'Analytics' },
+const FULL_NAV = [
+  { to: '/', label: 'Home', end: true, roles: ['admin', 'data_operator'] },
+  { to: '/voter-detail', label: 'Voter Detail', roles: ['admin', 'data_operator'] },
+  { to: '/form-20', label: 'Form 20', roles: ['admin', 'data_operator'] },
+  { to: '/segment', label: 'Segment', roles: ['admin'] },
+  { to: '/analytics', label: 'Analytics', roles: ['admin'] },
 ];
+
+const ROLE_LABEL = {
+  admin: 'Admin',
+  data_operator: 'Data Operator',
+};
 
 function initials(name) {
   return name
-    .split(/\s+/)
+    .split(/[\s_]+/)
     .filter(Boolean)
     .slice(0, 2)
     .map((s) => s[0])
@@ -19,6 +25,15 @@ function initials(name) {
 }
 
 export default function Header() {
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+  const items = FULL_NAV.filter((n) => !user || n.roles.includes(user.role));
+
+  function handleLogout() {
+    logout();
+    navigate('/login', { replace: true });
+  }
+
   return (
     <header className="header">
       <div className="header-inner">
@@ -26,21 +41,36 @@ export default function Header() {
           <div className="logo-mark">E</div>
           <span>Electioneering</span>
         </Link>
-        <nav className="nav">
-          {NAV.map((n) => (
-            <NavLink key={n.to} to={n.to} end={n.end}>
-              {n.label}
-            </NavLink>
-          ))}
-        </nav>
+        {user && (
+          <nav className="nav">
+            {items.map((n) => (
+              <NavLink key={n.to} to={n.to} end={n.end}>
+                {n.label}
+              </NavLink>
+            ))}
+          </nav>
+        )}
         <div className="header-spacer" />
-        <div className="user">
-          <div className="user-meta">
-            <div className="user-name">{session.user}</div>
-            <span className="user-role">{session.role}</span>
+        {user ? (
+          <div className="user" style={{ gap: 12 }}>
+            <div className="user-meta">
+              <div className="user-name">{user.username}</div>
+              <span className="user-role">{ROLE_LABEL[user.role] ?? user.role}</span>
+            </div>
+            <div className="avatar">{initials(user.username)}</div>
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="btn btn-sm"
+              style={{ marginLeft: 4 }}
+              title="Sign out"
+            >
+              Logout
+            </button>
           </div>
-          <div className="avatar">{initials(session.user)}</div>
-        </div>
+        ) : (
+          <Link to="/login" className="btn btn-sm">Sign in</Link>
+        )}
       </div>
     </header>
   );

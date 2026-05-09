@@ -6,6 +6,7 @@ import {
   recomputePredictedLeaning,
   linkVotersToPollingStations,
 } from '../services/inference.js';
+import { requireAdmin } from '../middleware/auth.js';
 
 const router = Router();
 
@@ -75,9 +76,10 @@ router.put(
   }),
 );
 
-// DELETE /api/elections/:id
+// DELETE /api/elections/:id (admin only)
 router.delete(
   '/:id',
+  requireAdmin,
   asyncHandler(async (req, res) => {
     const id = Number(req.params.id);
     await prisma.election.delete({ where: { id } });

@@ -9,6 +9,8 @@ import uploadsRouter from './routes/uploads.js';
 import templatesRouter from './routes/templates.js';
 import analyticsRouter from './routes/analytics.js';
 import cohortsRouter from './routes/cohorts.js';
+import authRouter from './routes/auth.js';
+import { requireAuth, requireAdmin } from './middleware/auth.js';
 import { errorHandler } from './middleware/error.js';
 
 export function createApp(): Express {
@@ -28,12 +30,18 @@ export function createApp(): Express {
     res.json({ ok: true, ts: new Date().toISOString() });
   });
 
-  app.use('/api/voters', votersRouter);
-  app.use('/api/elections', electionsRouter);
-  app.use('/api/uploads', uploadsRouter);
+  // Public — auth + template downloads (no PII, just format scaffolds)
+  app.use('/api/auth', authRouter);
   app.use('/api/templates', templatesRouter);
-  app.use('/api/analytics', analyticsRouter);
-  app.use('/api/cohorts', cohortsRouter);
+
+  // Both roles (admin + data_operator) — data entry workflow
+  app.use('/api/voters', requireAuth, votersRouter);
+  app.use('/api/elections', requireAuth, electionsRouter);
+  app.use('/api/uploads', requireAuth, uploadsRouter);
+
+  // Admin-only — analytics / cohorts (segmentation insight)
+  app.use('/api/analytics', requireAuth, requireAdmin, analyticsRouter);
+  app.use('/api/cohorts', requireAuth, requireAdmin, cohortsRouter);
 
   app.use(errorHandler);
 

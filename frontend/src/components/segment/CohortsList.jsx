@@ -1,33 +1,29 @@
-import { useEffect, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Card from '../ui/Card.jsx';
 import Button from '../ui/Button.jsx';
 import { CloseIcon } from '../ui/Icon.jsx';
-import { api, downloadUrls } from '../../lib/api.js';
+import { ErrorState, SkeletonRows, Spinner } from '../ui/Loader.jsx';
+import { api, downloadBlob } from '../../lib/api.js';
 
-export default function CohortsList({ refreshKey, onLoad, onError }) {
-  const [items, setItems] = useState([]);
+export default function CohortsList({ onLoad, onError }) {
+  const qc = useQueryClient();
+  const list = useQuery({
+    queryKey: ['cohorts'],
+    queryFn: () => api.listCohorts(),
+  });
+  const del = useMutation({
+    mutationFn: (id) => api.deleteCohort(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['cohorts'] }),
+    onError: (e) => onError?.(e.message || 'Delete failed'),
+  });
+  const exportMut = useMutation({
+    mutationFn: ({ id, slug }) => downloadBlob(`/api/cohorts/${id}/export`, `${slug}.csv`),
+    onError: (e) => onError?.(e.message || 'Export failed'),
+  });
 
-  async function load() {
-    try {
-      const r = await api.listCohorts();
-      setItems(r.items);
-    } catch (e) {
-      onError?.(e.message || 'Failed to load cohorts');
-    }
-  }
-  useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [refreshKey]);
-
-  async function handleDelete(id) {
+  function handleDelete(id) {
     if (!window.confirm('Delete this cohort?')) return;
-    try {
-      await api.deleteCohort(id);
-      load();
-    } catch (e) {
-      onError?.(e.message || 'Delete failed');
-    }
+    del.mutate(id);
   }
 
   return (
@@ -37,34 +33,54 @@ export default function CohortsList({ refreshKey, onLoad, onError }) {
         subtitle="Click Load to apply a saved filter, Export to download CSV."
       />
       <Card.Body>
-        {items.length === 0 && (
+        {list.isPending && <SkeletonRows rows={3} cols={3} rowHeight={50} />}
+        {list.isError && (
+          <ErrorState error={list.error} onRetry={() => list.refetch()} title="Couldn't load cohorts" />
+        )}
+        {list.data && list.data.items.length === 0 && (
           <div className="grid-empty">No cohorts yet. Save the current filter to add one.</div>
         )}
-        <div className="cohorts-list">
-          {items.map((c) => (
-            <div key={c.id} className="cohort-item">
-              <div className="cohort-name">{c.name}</div>
-              {c.description && <div className="cohort-desc">{c.description}</div>}
-              <div className="cohort-criteria">
-                <code>{JSON.stringify(c.criteria)}</code>
+        {list.data?.items?.length > 0 && (
+          <div className="cohorts-list">
+            {list.data.items.map((c) => (
+              <div key={c.id} className="cohort-item">
+                <div className="cohort-name">{c.name}</div>
+                {c.description && <div className="cohort-desc">{c.description}</div>}
+                <div className="cohort-criteria">
+                  <code>{JSON.stringify(c.criteria)}</code>
+                </div>
+                <div className="cohort-actions">
+                  <Button onClick={() => onLoad?.(c)}>Load</Button>
+                  <Button
+                    onClick={() =>
+                      exportMut.mutate({
+                        id: c.id,
+                        slug: (c.name || 'cohort').toLowerCase().replace(/[^a-z0-9]+/g, '_'),
+                      })
+                    }
+                    disabled={exportMut.isPending}
+                  >
+                    {exportMut.isPending ? 'Exporting…' : 'Export CSV'}
+                  </Button>
+                  <button
+                    type="button"
+                    className="row-delete"
+                    title="Delete"
+                    onClick={() => handleDelete(c.id)}
+                    disabled={del.isPending}
+                  >
+                    <CloseIcon />
+                  </button>
+                </div>
               </div>
-              <div className="cohort-actions">
-                <Button onClick={() => onLoad?.(c)}>Load</Button>
-                <a className="btn" href={downloadUrls.cohortExport(c.id)}>
-                  Export CSV
-                </a>
-                <button
-                  type="button"
-                  className="row-delete"
-                  title="Delete"
-                  onClick={() => handleDelete(c.id)}
-                >
-                  <CloseIcon />
-                </button>
+            ))}
+            {del.isPending && (
+              <div className="qq-inline-busy">
+                <Spinner size={12} /> deleting…
               </div>
-            </div>
-          ))}
-        </div>
+            )}
+          </div>
+        )}
       </Card.Body>
     </Card>
   );

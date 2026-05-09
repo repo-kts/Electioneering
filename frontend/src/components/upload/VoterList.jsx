@@ -1,7 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Card from '../ui/Card.jsx';
 import Button from '../ui/Button.jsx';
 import { CloseIcon } from '../ui/Icon.jsx';
+import { ErrorState, SkeletonRows, Spinner } from '../ui/Loader.jsx';
 import { api } from '../../lib/api.js';
 
 const COLS = [
@@ -23,46 +25,46 @@ const COLS = [
   { key: 'partSerial', label: 'Part Sl', short: true },
 ];
 
-export default function VoterList({ refreshKey, onError }) {
-  const [items, setItems] = useState([]);
-  const [total, setTotal] = useState(0);
+export default function VoterList({ onError, canDelete = true }) {
   const [search, setSearch] = useState('');
   const [state, setState] = useState('');
   const [assemblyNo, setAssemblyNo] = useState('');
-  const [loading, setLoading] = useState(false);
+  // committedFilters drives the query. Apply button copies inputs into them.
+  const [filters, setFilters] = useState({});
+  const qc = useQueryClient();
 
-  async function load() {
-    setLoading(true);
-    try {
-      const params = { take: '200' };
-      if (search.trim()) params.search = search.trim();
-      if (state.trim()) params.state = state.trim();
-      if (assemblyNo.trim()) params.assemblyNo = assemblyNo.trim();
-      const res = await api.listVoters(params);
-      setItems(res.items);
-      setTotal(res.total);
-    } catch (e) {
-      onError?.(e.message || 'Failed to load voters');
-    } finally {
-      setLoading(false);
-    }
+  const list = useQuery({
+    queryKey: ['voters', 'list', filters],
+    queryFn: () => api.listVoters({ take: '200', ...filters }),
+    placeholderData: (prev) => prev,
+  });
+
+  const del = useMutation({
+    mutationFn: (id) => api.deleteVoter(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['voters', 'list'] }),
+    onError: (e) => onError?.(e.message || 'Delete failed'),
+  });
+
+  function apply() {
+    const next = {};
+    if (search.trim()) next.search = search.trim();
+    if (state.trim()) next.state = state.trim();
+    if (assemblyNo.trim()) next.assemblyNo = assemblyNo.trim();
+    setFilters(next);
   }
-
-  useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [refreshKey]);
-
-  async function handleDelete(id) {
+  function clear() {
+    setSearch('');
+    setState('');
+    setAssemblyNo('');
+    setFilters({});
+  }
+  function handleDelete(id) {
     if (!window.confirm('Delete this voter?')) return;
-    try {
-      await api.deleteVoter(id);
-      setItems((xs) => xs.filter((x) => x.id !== id));
-      setTotal((t) => t - 1);
-    } catch (e) {
-      onError?.(e.message || 'Delete failed');
-    }
+    del.mutate(id);
   }
+
+  const items = list.data?.items ?? [];
+  const total = list.data?.total ?? 0;
 
   return (
     <Card>
@@ -77,7 +79,7 @@ export default function VoterList({ refreshKey, onError }) {
             placeholder="Search name / EPIC / mobile"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && load()}
+            onKeyDown={(e) => e.key === 'Enter' && apply()}
             style={{ padding: 6, minWidth: 220 }}
           />
           <input
@@ -94,63 +96,71 @@ export default function VoterList({ refreshKey, onError }) {
             onChange={(e) => setAssemblyNo(e.target.value)}
             style={{ padding: 6, width: 120 }}
           />
-          <Button onClick={load} disabled={loading}>
-            {loading ? 'Loading…' : 'Apply'}
+          <Button onClick={apply} disabled={list.isFetching}>
+            {list.isFetching ? 'Loading…' : 'Apply'}
           </Button>
-          <Button
-            onClick={() => {
-              setSearch('');
-              setState('');
-              setAssemblyNo('');
-              setTimeout(load, 0);
-            }}
-          >
-            Clear
-          </Button>
+          <Button onClick={clear}>Clear</Button>
+          {list.isFetching && (
+            <span className="qq-inline-busy"><Spinner size={12} /> refreshing…</span>
+          )}
         </div>
 
-        <div className="grid-wrap">
-          <table className="voter-grid excel-compact">
-            <thead>
-              <tr>
-                <th className="row-num">#</th>
-                {COLS.map((c) => (
-                  <th key={c.key}>{c.label}</th>
-                ))}
-                <th className="actions-col" />
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((v, i) => (
-                <tr key={v.id}>
-                  <td className="row-num">{i + 1}</td>
-                  {COLS.map((c) => (
-                    <td key={c.key} className="value">
-                      <span style={{ padding: '0 8px' }}>{v[c.key] ?? ''}</span>
-                    </td>
-                  ))}
-                  <td className="actions-col">
-                    <button
-                      type="button"
-                      className="row-delete"
-                      title="Delete voter"
-                      onClick={() => handleDelete(v.id)}
-                    >
-                      <CloseIcon />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-              {items.length === 0 && !loading && (
+        {list.isPending && <SkeletonRows rows={6} cols={6} rowHeight={26} />}
+        {list.isError && (
+          <ErrorState
+            error={list.error}
+            onRetry={() => list.refetch()}
+            title="Couldn't load voters"
+          />
+        )}
+
+        {list.data && (
+          <div className="grid-wrap">
+            <table className="voter-grid excel-compact">
+              <thead>
                 <tr>
-                  <td colSpan={COLS.length + 2} style={{ padding: 16, color: 'var(--text-2)' }}>
-                    No voters found.
-                  </td>
+                  <th className="row-num">#</th>
+                  {COLS.map((c) => (
+                    <th key={c.key}>{c.label}</th>
+                  ))}
+                  {canDelete && <th className="actions-col" />}
                 </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {items.map((v, i) => (
+                  <tr key={v.id}>
+                    <td className="row-num">{i + 1}</td>
+                    {COLS.map((c) => (
+                      <td key={c.key} className="value">
+                        <span style={{ padding: '0 8px' }}>{v[c.key] ?? ''}</span>
+                      </td>
+                    ))}
+                    {canDelete && (
+                      <td className="actions-col">
+                        <button
+                          type="button"
+                          className="row-delete"
+                          title="Delete voter"
+                          onClick={() => handleDelete(v.id)}
+                          disabled={del.isPending}
+                        >
+                          <CloseIcon />
+                        </button>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+                {items.length === 0 && (
+                  <tr>
+                    <td colSpan={COLS.length + (canDelete ? 2 : 1)} style={{ padding: 16, color: 'var(--text-2)' }}>
+                      No voters found.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
       </Card.Body>
     </Card>
   );

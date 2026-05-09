@@ -1,13 +1,31 @@
 // Tiny fetch wrapper for the Electioneering backend API.
 // Base URL via Vite env (VITE_API_URL), defaults to local backend.
+// Attaches Authorization Bearer token from localStorage; bounces to /login
+// on 401 (except for the login/me endpoints themselves).
 
 const BASE = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
+const NO_REDIRECT_PATHS = new Set(['/api/auth/login', '/api/auth/me']);
+
+function getAuthToken() {
+  try {
+    return localStorage.getItem('auth_token');
+  } catch {
+    return null;
+  }
+}
+
 async function request(path, { method = 'GET', body, headers = {}, signal } = {}) {
   const isForm = body instanceof FormData;
+  const token = getAuthToken();
+  const finalHeaders = {
+    ...(isForm ? {} : { 'Content-Type': 'application/json' }),
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...headers,
+  };
   const res = await fetch(`${BASE}${path}`, {
     method,
-    headers: isForm ? headers : { 'Content-Type': 'application/json', ...headers },
+    headers: finalHeaders,
     body: isForm ? body : body == null ? undefined : JSON.stringify(body),
     signal,
   });
@@ -19,6 +37,17 @@ async function request(path, { method = 'GET', body, headers = {}, signal } = {}
     } catch {
       detail = await res.text();
     }
+    if (res.status === 401 && !NO_REDIRECT_PATHS.has(path)) {
+      try {
+        localStorage.removeItem('auth_token');
+      } catch {
+        /* ignore */
+      }
+      if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
+        const next = encodeURIComponent(window.location.pathname + window.location.search);
+        window.location.href = `/login?next=${next}`;
+      }
+    }
     const err = new Error(`${res.status} ${res.statusText}${detail ? ' — ' + detail : ''}`);
     err.status = res.status;
     throw err;
@@ -28,6 +57,16 @@ async function request(path, { method = 'GET', body, headers = {}, signal } = {}
 }
 
 export const api = {
+  // ─── Auth ───────────────────────────────────────────────────
+  login: (username, password) =>
+    request('/api/auth/login', { method: 'POST', body: { username, password } }),
+  me: () => request('/api/auth/me'),
+  listUsers: () => request('/api/auth/users'),
+  createUser: (data) => request('/api/auth/users', { method: 'POST', body: data }),
+  updateUser: (id, data) =>
+    request(`/api/auth/users/${id}`, { method: 'PUT', body: data }),
+  deleteUser: (id) => request(`/api/auth/users/${id}`, { method: 'DELETE' }),
+
   // ─── Voters ─────────────────────────────────────────────────
   listVoters: (params = {}) => {
     const q = new URLSearchParams(params).toString();
@@ -70,6 +109,8 @@ export const api = {
     request(`/api/analytics/recompute?electionId=${electionId}&link=1`, { method: 'POST' }),
   boothLeaning: (electionId) =>
     request(`/api/analytics/booth-leaning?electionId=${electionId}`),
+  analyticsOverview: (electionId) =>
+    request(`/api/analytics/overview${electionId ? '?electionId=' + electionId : ''}`),
 
   // ─── Cohorts ───────────────────────────────────────────────
   listCohorts: () => request('/api/cohorts'),
@@ -81,10 +122,65 @@ export const api = {
   cohortVoters: (id) => request(`/api/cohorts/${id}/voters`),
 };
 
-// Direct download URLs (use as href / window.open)
+// Direct download URLs (use as href / window.open) — only for PUBLIC endpoints
+// (no Authorization header is sent by the browser for plain anchors).
 export const downloadUrls = {
-  cohortExport: (id) => `${BASE}/api/cohorts/${id}/export`,
-  segmentExport: () => `${BASE}/api/cohorts/preview-export`, // POST
+  voterTemplate: (sample = false, format = '') => {
+    const p = new URLSearchParams();
+    if (format) p.set('format', format);
+    if (sample) p.set('sample', '1');
+    const qs = p.toString();
+    return `${BASE}/api/templates/voter${qs ? '?' + qs : ''}`;
+  },
+  form20Template: (sample = false, format = '') => {
+    const p = new URLSearchParams();
+    if (format) p.set('format', format);
+    if (sample) p.set('sample', '1');
+    const qs = p.toString();
+    return `${BASE}/api/templates/form20${qs ? '?' + qs : ''}`;
+  },
 };
+
+// Authenticated blob download. Triggers browser save with the given filename.
+export async function downloadBlob(path, filename, { method = 'GET', body } = {}) {
+  const token = (() => {
+    try { return localStorage.getItem('auth_token'); } catch { return null; }
+  })();
+  const isForm = body instanceof FormData;
+  const res = await fetch(`${BASE}${path}`, {
+    method,
+    headers: {
+      ...(isForm ? {} : body != null ? { 'Content-Type': 'application/json' } : {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: isForm ? body : body == null ? undefined : JSON.stringify(body),
+  });
+  if (!res.ok) {
+    let detail = '';
+    try {
+      const j = await res.json();
+      detail = j.message || j.error || JSON.stringify(j);
+    } catch {
+      detail = await res.text();
+    }
+    const err = new Error(`${res.status} ${res.statusText}${detail ? ' — ' + detail : ''}`);
+    err.status = res.status;
+    throw err;
+  }
+  const blob = await res.blob();
+  // try Content-Disposition for filename
+  const cd = res.headers.get('Content-Disposition') || '';
+  const m = /filename="?([^"]+)"?/.exec(cd);
+  const finalName = m?.[1] || filename;
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = finalName;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+  return blob;
+}
 
 export { BASE as API_BASE };

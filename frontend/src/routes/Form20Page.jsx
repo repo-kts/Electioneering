@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Form20 from '../components/upload/Form20.jsx';
 import HistoryTable from '../components/upload/HistoryTable.jsx';
 import Dropzone from '../components/upload/Dropzone.jsx';
@@ -17,6 +18,7 @@ import Card from '../components/ui/Card.jsx';
 import Tabs from '../components/ui/Tabs.jsx';
 import PageHead from '../components/ui/PageHead.jsx';
 import StatGroup from '../components/ui/StatGroup.jsx';
+import { ErrorState, SkeletonRows, Spinner } from '../components/ui/Loader.jsx';
 import { api } from '../lib/api.js';
 
 const TABS = [
@@ -25,10 +27,12 @@ const TABS = [
   { key: 'history', label: 'History', Icon: ClockIcon },
 ];
 
+function fmtTime(iso) {
+  return new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+}
+
 export default function Form20Page() {
   const [tab, setTab] = useState('form20');
-  const [history, setHistory] = useState([]);
-  const [elections, setElections] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
   const [preview, setPreview] = useState(null);
   const [historyQuery, setHistoryQuery] = useState('');
@@ -37,41 +41,64 @@ export default function Form20Page() {
     electionType: 'Assembly Election', totalElectors: '',
   });
   const { show } = useToast();
+  const qc = useQueryClient();
 
-  async function refreshElections() {
-    try {
-      const r = await api.listElections();
-      setElections(r.items);
-      if (!selectedId && r.items.length) setSelectedId(r.items[0].id);
-    } catch (e) {
-      console.error(e);
-    }
-  }
+  const electionsQ = useQuery({
+    queryKey: ['elections'],
+    queryFn: () => api.listElections(),
+  });
+  const historyQ = useQuery({
+    queryKey: ['uploads', 'history'],
+    queryFn: () => api.uploadHistory(),
+    select: (raw) =>
+      raw.items.map((h) => ({
+        id: h.id,
+        time: fmtTime(h.createdAt),
+        file: h.fileName,
+        source: h.source,
+        records: h.records,
+        constituency: h.constituency || '—',
+        status: h.status,
+      })),
+  });
 
-  async function refreshHistory() {
-    try {
-      const r = await api.uploadHistory();
-      setHistory(
-        r.items.map((h) => ({
-          id: h.id,
-          time: new Date(h.createdAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
-          file: h.fileName,
-          source: h.source,
-          records: h.records,
-          constituency: h.constituency || '—',
-          status: h.status,
-        })),
-      );
-    } catch (e) {
-      console.error(e);
-    }
-  }
+  const previewM = useMutation({
+    mutationFn: (file) => api.previewUpload(file, 'form20'),
+    onSuccess: (data, file) => setPreview({ file: file.name, kind: 'form20', ...data }),
+    onError: (e) => show(e.message || 'Upload failed', 'error'),
+  });
 
-  useEffect(() => {
-    refreshElections();
-    refreshHistory();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const commitM = useMutation({
+    mutationFn: (rows) => {
+      if (!previewHeader.assemblyNo || !previewHeader.assemblyName || !previewHeader.state) {
+        const err = new Error('Fill State, Assembly No and Assembly Name to commit');
+        err.status = 400;
+        throw err;
+      }
+      return api.commitForm20({
+        fileName: preview.file,
+        source: 'Form 20 Excel/CSV upload',
+        ...previewHeader,
+        totalElectors: previewHeader.totalElectors ? Number(previewHeader.totalElectors) : undefined,
+        candidates: preview.candidates,
+        rows,
+      });
+    },
+    onSuccess: (res) => {
+      show(`Form 20 saved · election #${res.electionId}`);
+      setPreview(null);
+      setSelectedId(res.electionId);
+      qc.invalidateQueries({ queryKey: ['elections'] });
+      qc.invalidateQueries({ queryKey: ['uploads', 'history'] });
+      qc.invalidateQueries({ queryKey: ['analytics'] });
+      setTab('form20');
+    },
+    onError: (e) => show(e.message || 'Commit failed', 'error'),
+  });
+
+  const elections = electionsQ.data?.items ?? [];
+  const history = historyQ.data ?? [];
+  const effectiveElectionId = selectedId ?? elections[0]?.id ?? null;
 
   const stats = useMemo(() => {
     const counts = { validated: 0, processing: 0, failed: 0 };
@@ -93,44 +120,10 @@ export default function Form20Page() {
       return;
     }
     show('Form 20 saved');
-    refreshElections();
-    refreshHistory();
+    qc.invalidateQueries({ queryKey: ['elections'] });
+    qc.invalidateQueries({ queryKey: ['uploads', 'history'] });
+    qc.invalidateQueries({ queryKey: ['analytics'] });
     setTab('history');
-  }
-
-  async function handleFileAccepted(file) {
-    try {
-      const res = await api.previewUpload(file, 'form20');
-      setPreview({ file: file.name, kind: 'form20', ...res });
-    } catch (e) {
-      show(e.message || 'Upload failed', 'error');
-    }
-  }
-
-  async function handleCommitForm20(rows) {
-    if (!previewHeader.assemblyNo || !previewHeader.assemblyName || !previewHeader.state) {
-      show('Fill State, Assembly No and Assembly Name to commit', 'error');
-      throw new Error('header missing');
-    }
-    try {
-      const res = await api.commitForm20({
-        fileName: preview.file,
-        source: 'Form 20 Excel/CSV upload',
-        ...previewHeader,
-        totalElectors: previewHeader.totalElectors ? Number(previewHeader.totalElectors) : undefined,
-        candidates: preview.candidates,
-        rows,
-      });
-      show(`Form 20 saved · election #${res.electionId}`);
-      setPreview(null);
-      setSelectedId(res.electionId);
-      refreshElections();
-      refreshHistory();
-      setTab('form20');
-    } catch (e) {
-      show(e.message || 'Commit failed', 'error');
-      throw e;
-    }
   }
 
   return (
@@ -153,21 +146,30 @@ export default function Form20Page() {
           <Card>
             <Card.Head title="Election" subtitle="Pick an existing election or create a new one below." />
             <Card.Body>
-              <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-                <select
-                  value={selectedId ?? ''}
-                  onChange={(e) => setSelectedId(e.target.value ? Number(e.target.value) : null)}
-                  style={{ padding: 8 }}
-                >
-                  <option value="">— New election —</option>
-                  {elections.map((e) => (
-                    <option key={e.id} value={e.id}>
-                      {e.assemblyNo}-{e.assemblyName} ({e.state})
-                    </option>
-                  ))}
-                </select>
-                <Button onClick={() => setSelectedId(null)}>+ New Election</Button>
-              </div>
+              {electionsQ.isPending && <SkeletonRows rows={1} cols={2} rowHeight={32} />}
+              {electionsQ.isError && (
+                <ErrorState error={electionsQ.error} onRetry={() => electionsQ.refetch()} title="Couldn't load elections" />
+              )}
+              {electionsQ.data && (
+                <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <select
+                    value={selectedId ?? ''}
+                    onChange={(e) => setSelectedId(e.target.value ? Number(e.target.value) : null)}
+                    style={{ padding: 8 }}
+                  >
+                    <option value="">— New election —</option>
+                    {elections.map((e) => (
+                      <option key={e.id} value={e.id}>
+                        {e.assemblyNo}-{e.assemblyName} ({e.state})
+                      </option>
+                    ))}
+                  </select>
+                  <Button onClick={() => setSelectedId(null)}>+ New Election</Button>
+                  {electionsQ.isFetching && (
+                    <span className="qq-inline-busy"><Spinner size={12} /> refreshing…</span>
+                  )}
+                </div>
+              )}
             </Card.Body>
           </Card>
           <div style={{ marginTop: 16 }}>
@@ -194,7 +196,17 @@ export default function Form20Page() {
                   subtitle="Drop your Form 20 sheet — candidate columns are detected automatically. You'll set the election header before saving."
                 />
                 <Card.Body>
-                  <Dropzone onFileAccepted={handleFileAccepted} />
+                  <Dropzone onFileAccepted={(f) => previewM.mutate(f)} />
+                  {previewM.isPending && (
+                    <div className="qq-inline-busy" style={{ marginTop: 8 }}>
+                      <Spinner size={12} /> parsing file…
+                    </div>
+                  )}
+                  {previewM.isError && (
+                    <div style={{ marginTop: 12 }}>
+                      <ErrorState error={previewM.error} onRetry={() => previewM.reset()} title="Couldn't parse file" />
+                    </div>
+                  )}
                 </Card.Body>
               </Card>
               <div style={{ marginTop: 16 }}>
@@ -207,7 +219,7 @@ export default function Form20Page() {
               kind="form20"
               data={preview}
               onCancel={() => setPreview(null)}
-              onCommit={handleCommitForm20}
+              onCommit={(rows) => commitM.mutateAsync(rows)}
               headerExtras={
                 <div className="form20-header" style={{ marginBottom: 12 }}>
                   {[
@@ -245,10 +257,7 @@ export default function Form20Page() {
         );
         return (
           <>
-            <div
-              className="grid-toolbar"
-              style={{ gap: 8, flexWrap: 'wrap', marginBottom: 12, alignItems: 'center' }}
-            >
+            <div className="grid-toolbar" style={{ gap: 8, flexWrap: 'wrap', marginBottom: 12, alignItems: 'center' }}>
               <input
                 type="text"
                 placeholder="Search history (file / source / constituency)…"
@@ -259,9 +268,22 @@ export default function Form20Page() {
               {historyQuery && <Button onClick={() => setHistoryQuery('')}>Clear</Button>}
               <span className="row-count" style={{ marginLeft: 'auto' }}>
                 {filtered.length} / {history.length}
+                {historyQ.isFetching && (
+                  <span className="qq-inline-busy" style={{ marginLeft: 8 }}>
+                    <Spinner size={10} />
+                  </span>
+                )}
               </span>
             </div>
-            <HistoryTable rows={filtered} />
+            {historyQ.isPending && <SkeletonRows rows={5} cols={5} rowHeight={32} />}
+            {historyQ.isError && (
+              <ErrorState
+                error={historyQ.error}
+                onRetry={() => historyQ.refetch()}
+                title="Couldn't load history"
+              />
+            )}
+            {historyQ.data && <HistoryTable rows={filtered} />}
           </>
         );
       })()}
