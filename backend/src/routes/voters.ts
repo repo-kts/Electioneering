@@ -39,7 +39,6 @@ const voterSchema = z.object({
   partName: z.string().trim().optional().or(z.literal('').transform(() => undefined)),
   partSerial: z.string().trim().min(1),
   community: z.string().trim().optional().or(z.literal('').transform(() => undefined)),
-  religion: z.string().trim().optional().or(z.literal('').transform(() => undefined)),
   occupation: z.string().trim().optional().or(z.literal('').transform(() => undefined)),
   language: z.string().trim().optional().or(z.literal('').transform(() => undefined)),
 });

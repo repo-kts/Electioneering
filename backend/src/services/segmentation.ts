@@ -16,7 +16,6 @@ export const segmentSchema = z.object({
   pollingStationId: z.coerce.number().int().optional(),
   // demographics
   community: z.union([z.string(), z.array(z.string())]).optional(),
-  religion: z.union([z.string(), z.array(z.string())]).optional(),
   occupation: z.union([z.string(), z.array(z.string())]).optional(),
   language: z.union([z.string(), z.array(z.string())]).optional(),
   gender: z.enum(['Male', 'Female', 'Other']).optional(),
@@ -59,8 +58,6 @@ export function buildVoterWhere(c: SegmentCriteria): Prisma.VoterWhereInput {
 
   const community = multi(c.community);
   if (community) where.community = { in: community, mode: 'insensitive' };
-  const religion = multi(c.religion);
-  if (religion) where.religion = { in: religion, mode: 'insensitive' };
   const occupation = multi(c.occupation);
   if (occupation) where.occupation = { in: occupation, mode: 'insensitive' };
   const language = multi(c.language);
@@ -128,7 +125,6 @@ export function passesLeaningFilter(
 
 export interface SegmentAggregates {
   byCommunity: Array<{ key: string; count: number }>;
-  byReligion: Array<{ key: string; count: number }>;
   byOccupation: Array<{ key: string; count: number }>;
   byLanguage: Array<{ key: string; count: number }>;
   byGender: Array<{ key: string; count: number }>;
@@ -158,7 +154,6 @@ function toArray(m: Map<string, number>) {
 export function aggregate(
   voters: Array<{
     community: string | null;
-    religion: string | null;
     occupation: string | null;
     language: string | null;
     gender: string;
@@ -168,7 +163,6 @@ export function aggregate(
   }>,
 ): SegmentAggregates {
   const community = new Map<string, number>();
-  const religion = new Map<string, number>();
   const occupation = new Map<string, number>();
   const language = new Map<string, number>();
   const gender = new Map<string, number>();
@@ -177,7 +171,6 @@ export function aggregate(
   const leader = new Map<string, number>();
   for (const v of voters) {
     bumpMap(community, v.community);
-    bumpMap(religion, v.religion);
     bumpMap(occupation, v.occupation);
     bumpMap(language, v.language);
     bumpMap(gender, v.gender);
@@ -189,7 +182,6 @@ export function aggregate(
   }
   return {
     byCommunity: toArray(community),
-    byReligion: toArray(religion),
     byOccupation: toArray(occupation),
     byLanguage: toArray(language),
     byGender: toArray(gender),

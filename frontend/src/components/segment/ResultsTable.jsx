@@ -8,7 +8,6 @@ const COLS = [
   { key: 'epic', label: 'EPIC' },
   { key: 'mobile', label: 'Mobile' },
   { key: 'community', label: 'Community' },
-  { key: 'religion', label: 'Religion', short: true },
   { key: 'occupation', label: 'Occupation' },
   { key: 'pollingStationName', label: 'Polling Stn' },
   { key: 'partNumber', label: 'Part', short: true },

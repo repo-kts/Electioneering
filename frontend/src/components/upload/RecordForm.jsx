@@ -34,7 +34,6 @@ const COLUMNS = [
   { key: 'partName', label: 'Part Name', type: 'text', placeholder: 'Madarasa Ajijaya Dakshini Bhag', long: true },
   { key: 'partSerial', label: 'Part Serial', type: 'number', required: true, placeholder: '283', short: true, min: 1 },
   { key: 'community', label: 'Community / Caste', type: 'text', placeholder: 'Kayastha' },
-  { key: 'religion', label: 'Religion', type: 'text', placeholder: 'Hindu', short: true },
   { key: 'occupation', label: 'Occupation', type: 'text', placeholder: 'Teacher' },
   { key: 'language', label: 'Language', type: 'text', placeholder: 'Hindi', short: true },
 ];

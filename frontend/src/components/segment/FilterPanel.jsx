@@ -149,17 +149,6 @@ export default function FilterPanel({
               }}
             />
           </FilterRow>
-          <FilterRow label="Religion">
-            <input
-              type="text"
-              placeholder="Hindu, Muslim"
-              value={Array.isArray(v.religion) ? v.religion.join(', ') : v.religion ?? ''}
-              onChange={(e) => {
-                const arr = e.target.value.split(',').map((s) => s.trim()).filter(Boolean);
-                set('religion', arr.length === 0 ? undefined : arr.length === 1 ? arr[0] : arr);
-              }}
-            />
-          </FilterRow>
           <FilterRow label="Occupation">
             <input
               type="text"

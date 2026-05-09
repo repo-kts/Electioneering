@@ -70,7 +70,6 @@ const COMMUNITIES = [
   'Ravidas',
   'Vaishya',
 ];
-const RELIGIONS = ['Hindu', 'Hindu', 'Hindu', 'Muslim'];
 const LANGUAGES = ['Hindi', 'Bhojpuri', 'Magahi', 'Urdu'];
 const OCCUPATIONS = [
   'Farmer',
@@ -132,7 +131,6 @@ function makeVoter(i: number) {
     partName: `Part of PS-${psSerial}`,
     partSerial: `${i + 1}`,
     community: pick(COMMUNITIES, i),
-    religion: pick(RELIGIONS, i),
     occupation: pick(OCCUPATIONS, i + 2),
     language: pick(LANGUAGES, i + 1),
   };
@@ -269,7 +267,7 @@ async function main() {
       assemblyNo: '64', assemblyName: 'Karawal Nagar',
       pollingStationName: 'Government School Block A', partNumber: '142',
       partName: 'Karawal Nagar Block A', partSerial: '47',
-      community: 'Brahmin', religion: 'Hindu', occupation: 'Teacher', language: 'Hindi',
+      community: 'Brahmin', occupation: 'Teacher', language: 'Hindi',
     },
     {
       firstName: 'ARJUN', lastName: 'PATEL', relFirstName: 'KIRAN', relLastName: 'PATEL',
@@ -278,7 +276,7 @@ async function main() {
       assemblyNo: '33', assemblyName: 'Sabarmati',
       pollingStationName: 'Municipal Primary School', partNumber: '98',
       partName: 'Sabarmati North Ward', partSerial: '215',
-      community: 'Patel', religion: 'Hindu', occupation: 'Business', language: 'Gujarati',
+      community: 'Patel', occupation: 'Business', language: 'Gujarati',
     },
   ];
   for (const v of DEMO_OUTSIDE) {
