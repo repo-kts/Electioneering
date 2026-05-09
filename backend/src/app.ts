@@ -30,14 +30,14 @@ export function createApp(): Express {
     res.json({ ok: true, ts: new Date().toISOString() });
   });
 
-  // Public — auth itself
+  // Public — auth + template downloads (no PII, just format scaffolds)
   app.use('/api/auth', authRouter);
+  app.use('/api/templates', templatesRouter);
 
   // Both roles (admin + data_operator) — data entry workflow
   app.use('/api/voters', requireAuth, votersRouter);
   app.use('/api/elections', requireAuth, electionsRouter);
   app.use('/api/uploads', requireAuth, uploadsRouter);
-  app.use('/api/templates', requireAuth, templatesRouter);
 
   // Admin-only — analytics / cohorts (segmentation insight)
   app.use('/api/analytics', requireAuth, requireAdmin, analyticsRouter);

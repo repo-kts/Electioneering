@@ -122,10 +122,65 @@ export const api = {
   cohortVoters: (id) => request(`/api/cohorts/${id}/voters`),
 };
 
-// Direct download URLs (use as href / window.open)
+// Direct download URLs (use as href / window.open) — only for PUBLIC endpoints
+// (no Authorization header is sent by the browser for plain anchors).
 export const downloadUrls = {
-  cohortExport: (id) => `${BASE}/api/cohorts/${id}/export`,
-  segmentExport: () => `${BASE}/api/cohorts/preview-export`, // POST
+  voterTemplate: (sample = false, format = '') => {
+    const p = new URLSearchParams();
+    if (format) p.set('format', format);
+    if (sample) p.set('sample', '1');
+    const qs = p.toString();
+    return `${BASE}/api/templates/voter${qs ? '?' + qs : ''}`;
+  },
+  form20Template: (sample = false, format = '') => {
+    const p = new URLSearchParams();
+    if (format) p.set('format', format);
+    if (sample) p.set('sample', '1');
+    const qs = p.toString();
+    return `${BASE}/api/templates/form20${qs ? '?' + qs : ''}`;
+  },
 };
+
+// Authenticated blob download. Triggers browser save with the given filename.
+export async function downloadBlob(path, filename, { method = 'GET', body } = {}) {
+  const token = (() => {
+    try { return localStorage.getItem('auth_token'); } catch { return null; }
+  })();
+  const isForm = body instanceof FormData;
+  const res = await fetch(`${BASE}${path}`, {
+    method,
+    headers: {
+      ...(isForm ? {} : body != null ? { 'Content-Type': 'application/json' } : {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: isForm ? body : body == null ? undefined : JSON.stringify(body),
+  });
+  if (!res.ok) {
+    let detail = '';
+    try {
+      const j = await res.json();
+      detail = j.message || j.error || JSON.stringify(j);
+    } catch {
+      detail = await res.text();
+    }
+    const err = new Error(`${res.status} ${res.statusText}${detail ? ' — ' + detail : ''}`);
+    err.status = res.status;
+    throw err;
+  }
+  const blob = await res.blob();
+  // try Content-Disposition for filename
+  const cd = res.headers.get('Content-Disposition') || '';
+  const m = /filename="?([^"]+)"?/.exec(cd);
+  const finalName = m?.[1] || filename;
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = finalName;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+  return blob;
+}
 
 export { BASE as API_BASE };

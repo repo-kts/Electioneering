@@ -3,7 +3,7 @@ import Card from '../ui/Card.jsx';
 import Button from '../ui/Button.jsx';
 import { CloseIcon } from '../ui/Icon.jsx';
 import { ErrorState, SkeletonRows, Spinner } from '../ui/Loader.jsx';
-import { api, downloadUrls } from '../../lib/api.js';
+import { api, downloadBlob } from '../../lib/api.js';
 
 export default function CohortsList({ onLoad, onError }) {
   const qc = useQueryClient();
@@ -15,6 +15,10 @@ export default function CohortsList({ onLoad, onError }) {
     mutationFn: (id) => api.deleteCohort(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['cohorts'] }),
     onError: (e) => onError?.(e.message || 'Delete failed'),
+  });
+  const exportMut = useMutation({
+    mutationFn: ({ id, slug }) => downloadBlob(`/api/cohorts/${id}/export`, `${slug}.csv`),
+    onError: (e) => onError?.(e.message || 'Export failed'),
   });
 
   function handleDelete(id) {
@@ -47,9 +51,17 @@ export default function CohortsList({ onLoad, onError }) {
                 </div>
                 <div className="cohort-actions">
                   <Button onClick={() => onLoad?.(c)}>Load</Button>
-                  <a className="btn" href={downloadUrls.cohortExport(c.id)}>
-                    Export CSV
-                  </a>
+                  <Button
+                    onClick={() =>
+                      exportMut.mutate({
+                        id: c.id,
+                        slug: (c.name || 'cohort').toLowerCase().replace(/[^a-z0-9]+/g, '_'),
+                      })
+                    }
+                    disabled={exportMut.isPending}
+                  >
+                    {exportMut.isPending ? 'Exporting…' : 'Export CSV'}
+                  </Button>
                   <button
                     type="button"
                     className="row-delete"

@@ -11,7 +11,7 @@ import AggregatesPanel from '../components/segment/AggregatesPanel.jsx';
 import ResultsTable from '../components/segment/ResultsTable.jsx';
 import BoothHeatmap from '../components/segment/BoothHeatmap.jsx';
 import CohortsList from '../components/segment/CohortsList.jsx';
-import { api, API_BASE } from '../lib/api.js';
+import { api, downloadBlob } from '../lib/api.js';
 
 const TABS = [
   { key: 'segment', label: 'Segment' },
@@ -48,31 +48,11 @@ export default function SegmentPage() {
   });
 
   const exportMut = useMutation({
-    mutationFn: async (c) => {
-      const token = localStorage.getItem('auth_token');
-      const r = await fetch(`${API_BASE}/api/cohorts/preview-export`, {
+    mutationFn: (c) =>
+      downloadBlob('/api/cohorts/preview-export', 'voters_export.csv', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify(c),
-      });
-      if (!r.ok) {
-        const err = new Error(`${r.status} export failed`);
-        err.status = r.status;
-        throw err;
-      }
-      return r.blob();
-    },
-    onSuccess: (blob) => {
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'voters_export.csv';
-      a.click();
-      URL.revokeObjectURL(url);
-    },
+        body: c,
+      }),
     onError: (e) => show(e.message || 'Export failed', 'error'),
   });
 
