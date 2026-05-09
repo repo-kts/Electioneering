@@ -4,10 +4,11 @@ import RecordForm from '../components/upload/RecordForm.jsx';
 import HistoryTable from '../components/upload/HistoryTable.jsx';
 import Dropzone from '../components/upload/Dropzone.jsx';
 import UploadPreview from '../components/upload/UploadPreview.jsx';
-import SessionCard from '../components/upload/SessionCard.jsx';
+import VoterList from '../components/upload/VoterList.jsx';
+import FormatCard from '../components/upload/FormatCard.jsx';
 import ValidationCard from '../components/upload/ValidationCard.jsx';
 import { useToast } from '../context/ToastContext.jsx';
-import { ClockIcon, PlusIcon, UploadIcon } from '../components/ui/Icon.jsx';
+import { ClockIcon, PlusIcon, UploadIcon, FileSpreadsheetIcon } from '../components/ui/Icon.jsx';
 import Button from '../components/ui/Button.jsx';
 import Card from '../components/ui/Card.jsx';
 import Tabs from '../components/ui/Tabs.jsx';
@@ -16,6 +17,7 @@ import StatGroup from '../components/ui/StatGroup.jsx';
 import { api } from '../lib/api.js';
 
 const TABS = [
+  { key: 'voters', label: 'Voters', Icon: FileSpreadsheetIcon },
   { key: 'add', label: 'Add Voter', Icon: PlusIcon },
   { key: 'upload', label: 'Upload File', Icon: UploadIcon },
   { key: 'history', label: 'History', Icon: ClockIcon },
@@ -26,9 +28,11 @@ function nowTime() {
 }
 
 export default function VoterDetailPage() {
-  const [tab, setTab] = useState('add');
+  const [tab, setTab] = useState('voters');
   const [history, setHistory] = useState([]);
+  const [historyQuery, setHistoryQuery] = useState('');
   const [preview, setPreview] = useState(null); // { file, kind, rows, headers }
+  const [voterRefresh, setVoterRefresh] = useState(0);
   const { show } = useToast();
 
   async function refreshHistory() {
@@ -80,7 +84,8 @@ export default function VoterDetailPage() {
       show(`${res.inserted} of ${res.requested} voter${res.requested === 1 ? '' : 's'} saved`);
       reset?.();
       refreshHistory();
-      setTab('history');
+      setVoterRefresh((n) => n + 1);
+      setTab('voters');
     } catch (e) {
       show(e.message || 'Save failed', 'error');
     }
@@ -102,10 +107,17 @@ export default function VoterDetailPage() {
         source: 'Excel/CSV upload',
         rows,
       });
-      show(`${res.inserted} voters imported`);
+      const parts = [`${res.inserted} imported`];
+      if (res.duplicates) parts.push(`${res.duplicates} duplicates`);
+      if (res.skipped) parts.push(`${res.skipped} skipped`);
+      show(parts.join(' · '), res.skipped ? 'warn' : 'success');
+      if (res.errors?.length) {
+        console.warn('upload errors', res.errors);
+      }
       setPreview(null);
       refreshHistory();
-      setTab('history');
+      setVoterRefresh((n) => n + 1);
+      setTab('voters');
     } catch (e) {
       show(e.message || 'Commit failed', 'error');
     }
@@ -138,7 +150,7 @@ export default function VoterDetailPage() {
       {tab === 'upload' && (
         <>
           {!preview && (
-            <div className="two-col">
+            <>
               <Card>
                 <Card.Head
                   title="Upload Excel / CSV file"
@@ -148,8 +160,10 @@ export default function VoterDetailPage() {
                   <Dropzone onFileAccepted={handleFileAccepted} />
                 </Card.Body>
               </Card>
-              <SessionCard />
-            </div>
+              <div style={{ marginTop: 16 }}>
+                <FormatCard kind="voter" />
+              </div>
+            </>
           )}
           {preview && (
             <UploadPreview
@@ -162,7 +176,50 @@ export default function VoterDetailPage() {
         </>
       )}
 
-      {tab === 'history' && <HistoryTable rows={history} />}
+      {tab === 'voters' && (
+        <VoterList
+          refreshKey={voterRefresh}
+          onError={(msg) => show(msg, 'error')}
+        />
+      )}
+
+      {tab === 'history' && (() => {
+        const q = historyQuery.toLowerCase();
+        const filtered = history.filter((h) =>
+          !q ||
+          h.file?.toLowerCase().includes(q) ||
+          h.source?.toLowerCase().includes(q) ||
+          h.constituency?.toLowerCase().includes(q),
+        );
+        return (
+          <>
+            <div
+              className="grid-toolbar"
+              style={{
+                gap: 8,
+                flexWrap: 'wrap',
+                marginBottom: 12,
+                alignItems: 'center',
+              }}
+            >
+              <input
+                type="text"
+                placeholder="Search history (file / source / constituency)…"
+                value={historyQuery}
+                onChange={(e) => setHistoryQuery(e.target.value)}
+                style={{ padding: 8, minWidth: 280 }}
+              />
+              {historyQuery && (
+                <Button onClick={() => setHistoryQuery('')}>Clear</Button>
+              )}
+              <span className="row-count" style={{ marginLeft: 'auto' }}>
+                {filtered.length} / {history.length}
+              </span>
+            </div>
+            <HistoryTable rows={filtered} />
+          </>
+        );
+      })()}
     </div>
   );
 }

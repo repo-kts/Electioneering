@@ -10,13 +10,23 @@ export interface ParseResult {
 }
 
 const CSV_EXT = /\.csv$/i;
+const TSV_EXT = /\.tsv$/i;
 
 export function parseFileBuffer(buffer: Buffer, filename: string): ParseResult {
-  if (CSV_EXT.test(filename)) return parseCsv(buffer);
-  return parseXlsx(buffer);
+  try {
+    if (CSV_EXT.test(filename)) return parseDelimited(buffer, ',');
+    if (TSV_EXT.test(filename)) return parseDelimited(buffer, '\t');
+    return parseXlsx(buffer);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Failed to parse file';
+    const e = new Error(`Could not parse ${filename}: ${msg}`);
+    (e as Error & { status?: number }).status = 400;
+    throw e;
+  }
 }
 
 function parseXlsx(buffer: Buffer): ParseResult {
+  // xlsx supports xlsx/xlsm/xlsb/xls/ods/fods/csv/txt natively
   const wb = XLSX.read(buffer, { type: 'buffer', cellDates: true });
   const firstSheet = wb.SheetNames[0];
   if (!firstSheet) return { headers: [], rows: [], totalRows: 0 };
@@ -30,14 +40,18 @@ function parseXlsx(buffer: Buffer): ParseResult {
   return { headers, rows: json, totalRows: json.length };
 }
 
-function parseCsv(buffer: Buffer): ParseResult {
-  const text = buffer.toString('utf8');
+function parseDelimited(buffer: Buffer, delimiter: string): ParseResult {
+  const text = buffer.toString('utf8').replace(/^﻿/, ''); // strip BOM
   const result = Papa.parse<ParsedRow>(text, {
     header: true,
     skipEmptyLines: 'greedy',
     dynamicTyping: false,
+    delimiter,
+    transformHeader: (h) => h.trim(),
   });
-  const rows = result.data;
+  const rows = result.data.filter((r) =>
+    Object.values(r).some((v) => String(v ?? '').trim() !== ''),
+  );
   const headers = result.meta.fields ?? (rows.length ? Object.keys(rows[0]) : []);
   return { headers, rows, totalRows: rows.length };
 }
@@ -152,7 +166,10 @@ export interface Form20Preview {
     notaVotes: number;
     tenderedVotes: number;
     total: number;
+    __errors: Record<string, string>;
   }>;
+  errorCount: number;
+  validCount: number;
 }
 
 const num = (v: unknown): number => {
@@ -192,15 +209,54 @@ export function normalizeForm20(parsed: ParseResult): Form20Preview {
   if (validKey) reserved.add(validKey);
   const cleanedCandidates = candidateCols.filter((c) => !reserved.has(c));
 
+  const NONNEG_INT = /^\d+$/;
+  const checkNonneg = (raw: unknown): string | null => {
+    const s = String(raw ?? '').replace(/,/g, '').trim();
+    if (s === '') return null; // blank treated as 0
+    return NONNEG_INT.test(s) ? null : `must be nonneg integer (got "${s}")`;
+  };
+  const checkPos = (raw: unknown): string | null => {
+    const s = String(raw ?? '').replace(/,/g, '').trim();
+    if (s === '') return 'required';
+    if (!NONNEG_INT.test(s)) return `must be positive integer (got "${s}")`;
+    if (Number(s) < 1) return 'must be ≥ 1';
+    return null;
+  };
+
   const rows = parsed.rows.map((r, i) => {
-    const serial = num(serialKey ? r[serialKey] : r.serial) || i + 1;
+    const errs: Record<string, string> = {};
+    const serialRaw = serialKey ? r[serialKey] : r.serial;
+    const serialErr = checkPos(serialRaw);
+    if (serialErr) errs.serial = serialErr;
+    const serial = num(serialRaw) || i + 1;
+
     const votes: Record<string, number> = {};
-    for (const c of cleanedCandidates) votes[c] = num(r[c]);
+    for (const c of cleanedCandidates) {
+      const e = checkNonneg(r[c]);
+      if (e) errs[c] = e;
+      votes[c] = num(r[c]);
+    }
     const validSum = Object.values(votes).reduce((a, b) => a + b, 0);
-    const rejectedVotes = num(rejectedKey ? r[rejectedKey] : 0);
-    const notaVotes = num(notaKey ? r[notaKey] : 0);
-    const tenderedVotes = num(tenderedKey ? r[tenderedKey] : 0);
-    const total = totalKey ? num(r[totalKey]) : validSum + rejectedVotes + notaVotes;
+    const rejectedRaw = rejectedKey ? r[rejectedKey] : 0;
+    const notaRaw = notaKey ? r[notaKey] : 0;
+    const tenderedRaw = tenderedKey ? r[tenderedKey] : 0;
+    const totalRaw = totalKey ? r[totalKey] : null;
+    const re = checkNonneg(rejectedRaw);
+    if (re) errs.rejectedVotes = re;
+    const ne = checkNonneg(notaRaw);
+    if (ne) errs.notaVotes = ne;
+    const te = checkNonneg(tenderedRaw);
+    if (te) errs.tenderedVotes = te;
+    if (totalKey) {
+      const tte = checkNonneg(totalRaw);
+      if (tte) errs.total = tte;
+    }
+
+    const rejectedVotes = num(rejectedRaw);
+    const notaVotes = num(notaRaw);
+    const tenderedVotes = num(tenderedRaw);
+    const total = totalKey ? num(totalRaw) : validSum + rejectedVotes + notaVotes;
+
     return {
       serial,
       name: psNameKey ? String(r[psNameKey] ?? '').trim() || undefined : undefined,
@@ -209,8 +265,16 @@ export function normalizeForm20(parsed: ParseResult): Form20Preview {
       notaVotes,
       tenderedVotes,
       total,
+      __errors: errs,
     };
   });
 
-  return { candidates: cleanedCandidates, rows };
+  const errorCount = rows.filter((r) => Object.keys(r.__errors).length > 0).length;
+
+  return {
+    candidates: cleanedCandidates,
+    rows,
+    errorCount,
+    validCount: rows.length - errorCount,
+  };
 }

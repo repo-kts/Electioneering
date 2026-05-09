@@ -4,6 +4,7 @@ import cors from 'cors';
 import votersRouter from './routes/voters.js';
 import electionsRouter from './routes/elections.js';
 import uploadsRouter from './routes/uploads.js';
+import templatesRouter from './routes/templates.js';
 import { errorHandler } from './middleware/error.js';
 
 const app = express();
@@ -24,6 +25,7 @@ app.get('/health', (_req, res) => {
 app.use('/api/voters', votersRouter);
 app.use('/api/elections', electionsRouter);
 app.use('/api/uploads', uploadsRouter);
+app.use('/api/templates', templatesRouter);
 
 app.use(errorHandler);
 

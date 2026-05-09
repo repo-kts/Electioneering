@@ -45,7 +45,7 @@ export default function Dropzone({ onFileAccepted }) {
           ref={inputRef}
           type="file"
           hidden
-          accept=".xlsx,.xls,.csv"
+          accept=".xlsx,.xlsm,.xlsb,.xls,.csv,.tsv,.ods,.fods"
           onChange={(e) => {
             if (e.target.files?.length) handleFile(e.target.files[0]);
             e.target.value = '';
@@ -58,7 +58,8 @@ export default function Dropzone({ onFileAccepted }) {
           Drop your file here, or <strong>click to browse</strong>
         </div>
         <div className="drop-sub">
-          Supports Excel (.xlsx, .xls) and CSV files up to 25 MB
+          Supports Excel (.xlsx .xlsm .xlsb .xls), OpenDocument (.ods .fods),
+          CSV/TSV — up to 25 MB
         </div>
         <button
           type="button"
@@ -71,9 +72,13 @@ export default function Dropzone({ onFileAccepted }) {
           Choose File
         </button>
         <div className="drop-formats">
-          <span>Excel (.xlsx)</span>
-          <span>Excel (.xls)</span>
-          <span>CSV</span>
+          <span>.xlsx</span>
+          <span>.xlsm</span>
+          <span>.xlsb</span>
+          <span>.xls</span>
+          <span>.ods</span>
+          <span>.csv</span>
+          <span>.tsv</span>
         </div>
       </div>
 

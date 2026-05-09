@@ -1,13 +1,13 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { CheckIcon, CloseIcon, PlusIcon } from '../ui/Icon.jsx';
 import Button from '../ui/Button.jsx';
 import Card from '../ui/Card.jsx';
 import {
-  DUMMY_VOTERS,
   EPIC_PATTERN,
   GENDER_OPTIONS,
   INDIAN_STATES,
 } from '../../data/voterForm.js';
+import { useGridNav } from '../../lib/useGridNav.js';
 
 /**
  * Spreadsheet-style data entry. Each row is a voter record;
@@ -29,7 +29,7 @@ const COLUMNS = [
   { key: 'parlName', label: 'Parl. Constituency', type: 'text', required: true, placeholder: 'Nalanda' },
   { key: 'assemblyNo', label: 'Asm. No', type: 'number', required: true, placeholder: '172', short: true, min: 1 },
   { key: 'assemblyName', label: 'Asm. Constituency', type: 'text', required: true, placeholder: 'Biharsharif' },
-  { key: 'pollingStation', label: 'Polling Station', type: 'text', required: true, placeholder: 'Madarasa Ajijiya', long: true },
+  { key: 'pollingStationName', label: 'Polling Station', type: 'text', required: true, placeholder: 'Madarasa Ajijiya', long: true },
   { key: 'partNumber', label: 'Part No', type: 'number', required: true, placeholder: '381', short: true, min: 1 },
   { key: 'partName', label: 'Part Name', type: 'text', placeholder: 'Madarasa Ajijaya Dakshini Bhag', long: true },
   { key: 'partSerial', label: 'Part Serial', type: 'number', required: true, placeholder: '283', short: true, min: 1 },
@@ -45,13 +45,45 @@ function makeRow(seed = {}) {
   return r;
 }
 
-function seedRows() {
-  return DUMMY_VOTERS.map((v) => makeRow(v));
-}
-
 export default function RecordForm({ onSubmit }) {
-  const [rows, setRows] = useState(() => seedRows());
+  const [rows, setRows] = useState(() => [makeRow()]);
   const [errors, setErrors] = useState({}); // { 'rowId-key': msg }
+
+  // Excel-style multi-cell paste: write a TSV matrix into the grid,
+  // appending rows as needed. Honors uppercase + select option matching.
+  const onPasteMatrix = useCallback((startRow, startCol, matrix) => {
+    setRows((prev) => {
+      const next = [...prev];
+      matrix.forEach((line, di) => {
+        const r = startRow + di;
+        while (r >= next.length) next.push(makeRow());
+        const row = { ...next[r] };
+        line.forEach((rawVal, dj) => {
+          const c = startCol + dj;
+          if (c < 0 || c >= COLUMNS.length) return;
+          const col = COLUMNS[c];
+          let v = String(rawVal ?? '');
+          if (col.uppercase) v = v.toUpperCase();
+          if (col.type === 'select' && col.options) {
+            const trimmed = v.trim();
+            const m = col.options.find(
+              (o) => o.toLowerCase() === trimmed.toLowerCase(),
+            );
+            v = m ?? trimmed;
+          }
+          if (col.maxLength) v = v.slice(0, col.maxLength);
+          row[col.key] = v;
+        });
+        next[r] = row;
+      });
+      return next;
+    });
+  }, []);
+
+  const { gridId, gridProps } = useGridNav({
+    cols: COLUMNS.length,
+    onPasteMatrix,
+  });
 
   function updateCell(id, key, value) {
     setRows((prev) => prev.map((r) => (r.id === id ? { ...r, [key]: value } : r)));
@@ -120,16 +152,13 @@ export default function RecordForm({ onSubmit }) {
       voters: usable.map((r) => {
         const out = {};
         COLUMNS.forEach((c) => {
-          let v = r[c.key];
-          if (c.key === 'pollingStation') return; // legacy
+          const v = r[c.key];
           if (c.key === 'pollingDate') {
-            out.pollingDate = v ? v : undefined;
+            out.pollingDate = v || undefined;
             return;
           }
           out[c.key] = v;
         });
-        // backend uses pollingStationName
-        out.pollingStationName = r.pollingStation;
         return out;
       }),
       record: {
@@ -156,18 +185,21 @@ export default function RecordForm({ onSubmit }) {
   const filledCount = useMemo(() => rows.filter((r) => !isRowEmpty(r)).length, [rows]);
   const errorCount = Object.keys(errors).length;
 
-  function renderCell(row, col) {
+  function renderCell(row, col, ri, ci) {
     const ek = `${row.id}-${col.key}`;
-    const hasError = !!errors[ek];
-    const cellClass = 'value' + (hasError ? ' error' : '');
+    const errMsg = errors[ek];
+    const hasError = !!errMsg;
+    const cellClass = 'value' + (hasError ? ' cell-error' : '');
 
     if (col.type === 'select') {
       return (
-        <td key={col.key} className={cellClass}>
+        <td key={col.key} className={cellClass} data-error={errMsg || undefined}>
           <select
             className={`cell-input cell-select ${col.short ? 'short' : col.long ? 'long' : ''}`}
             value={row[col.key]}
             onChange={(e) => updateCell(row.id, col.key, e.target.value)}
+            data-row={ri}
+            data-col={ci}
             title={hasError ? errors[ek] : undefined}
           >
             <option value="">—</option>
@@ -180,7 +212,7 @@ export default function RecordForm({ onSubmit }) {
     }
 
     return (
-      <td key={col.key} className={cellClass}>
+      <td key={col.key} className={cellClass} data-error={errMsg || undefined}>
         <input
           type={col.type}
           className={`cell-input ${col.short ? 'short' : col.long ? 'long' : ''}`}
@@ -189,10 +221,21 @@ export default function RecordForm({ onSubmit }) {
           maxLength={col.maxLength}
           min={col.min}
           max={col.max}
+          data-row={ri}
+          data-col={ci}
           onChange={(e) => {
             let v = e.target.value;
             if (col.uppercase) v = v.toUpperCase();
             updateCell(row.id, col.key, v);
+          }}
+          onFocus={(e) => {
+            if (col.type !== 'date') {
+              try {
+                e.target.select();
+              } catch {
+                /* ignore */
+              }
+            }
           }}
           title={hasError ? errors[ek] : undefined}
         />
@@ -204,7 +247,7 @@ export default function RecordForm({ onSubmit }) {
     <Card>
       <Card.Head
         title="Voter Details"
-        subtitle='Add voter records like a spreadsheet. Click any cell to edit, "+ Add Row" to insert a new entry.'
+        subtitle="Spreadsheet entry: Tab / Enter / arrows to move between cells, paste a TSV block from Excel to fill many rows at once. Add Row appends a blank row."
       />
       <Card.Body>
         <div className="grid-toolbar">
@@ -230,7 +273,7 @@ export default function RecordForm({ onSubmit }) {
         </div>
 
         <div className="grid-wrap">
-          <table className="voter-grid">
+          <table className="voter-grid excel-compact" data-grid-id={gridId} {...gridProps}>
             <thead>
               <tr>
                 <th className="row-num">#</th>
@@ -243,10 +286,12 @@ export default function RecordForm({ onSubmit }) {
               </tr>
             </thead>
             <tbody>
-              {rows.map((row, i) => (
-                <tr key={row.id}>
+              {rows.map((row, i) => {
+                const rowHasError = Object.keys(errors).some((k) => k.startsWith(`${row.id}-`));
+                return (
+                <tr key={row.id} className={rowHasError ? 'row-has-error' : ''}>
                   <td className="row-num">{i + 1}</td>
-                  {COLUMNS.map((col) => renderCell(row, col))}
+                  {COLUMNS.map((col, j) => renderCell(row, col, i, j))}
                   <td className="actions-col">
                     <button
                       type="button"
@@ -258,7 +303,8 @@ export default function RecordForm({ onSubmit }) {
                     </button>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>

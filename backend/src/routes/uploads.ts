@@ -8,6 +8,7 @@ import {
   normalizeVoterRows,
   normalizeForm20,
 } from '../services/parseUpload.js';
+import { validateVoter, type VoterClean } from '../services/voterValidation.js';
 
 const router = Router();
 
@@ -15,9 +16,9 @@ const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 25 * 1024 * 1024 }, // 25 MB
   fileFilter: (_req, file, cb) => {
-    const ok = /\.(xlsx|xls|csv)$/i.test(file.originalname);
+    const ok = /\.(xlsx|xlsm|xlsb|xls|csv|tsv|ods|fods)$/i.test(file.originalname);
     if (!ok) {
-      cb(new Error('Only .xlsx/.xls/.csv allowed'));
+      cb(new Error('Allowed: .xlsx .xlsm .xlsb .xls .csv .tsv .ods .fods'));
       return;
     }
     cb(null, true);
@@ -49,14 +50,21 @@ router.post(
       return;
     }
 
-    const rows = normalizeVoterRows(parsed.rows);
+    const normalized = normalizeVoterRows(parsed.rows);
+    const annotated = normalized.map((r) => {
+      const v = validateVoter(r);
+      return { ...r, __errors: v.errors };
+    });
+    const errorCount = annotated.filter((r) => Object.keys(r.__errors).length > 0).length;
     res.json({
       kind: 'voter',
       fileName: req.file.originalname,
       size: req.file.size,
       headers: parsed.headers,
-      rows,
-      totalRows: rows.length,
+      rows: annotated,
+      totalRows: annotated.length,
+      validCount: annotated.length - errorCount,
+      errorCount,
     });
   }),
 );
@@ -73,30 +81,19 @@ router.post(
   asyncHandler(async (req, res) => {
     const { fileName, source, rows } = voterCommitSchema.parse(req.body);
 
-    const cleaned = rows
-      .map((r) => ({
-        firstName: String(r.firstName ?? '').trim().toUpperCase(),
-        lastName: String(r.lastName ?? '').trim().toUpperCase(),
-        relFirstName: String(r.relFirstName ?? '').trim().toUpperCase(),
-        relLastName: String(r.relLastName ?? '').trim().toUpperCase(),
-        age: Number(r.age),
-        gender: (['Male', 'Female', 'Other'] as const).includes(r.gender)
-          ? (r.gender as 'Male' | 'Female' | 'Other')
-          : 'Other',
-        epic: String(r.epic ?? '').trim().toUpperCase(),
-        mobile: r.mobile ? String(r.mobile).trim() : null,
-        state: String(r.state ?? '').trim(),
-        parlNo: String(r.parlNo ?? '').trim(),
-        parlName: String(r.parlName ?? '').trim(),
-        assemblyNo: String(r.assemblyNo ?? '').trim(),
-        assemblyName: String(r.assemblyName ?? '').trim(),
-        pollingStationName: String(r.pollingStationName ?? '').trim(),
-        partNumber: String(r.partNumber ?? '').trim(),
-        partName: r.partName ? String(r.partName).trim() : null,
-        partSerial: String(r.partSerial ?? '').trim(),
-        pollingDate: r.pollingDate ? new Date(r.pollingDate) : null,
-      }))
-      .filter((r) => r.firstName && r.lastName && r.epic);
+    const cleaned: VoterClean[] = [];
+    const errors: Array<{ row: number; field: string; message: string }> = [];
+
+    rows.forEach((r, i) => {
+      const v = validateVoter(r as Record<string, unknown>);
+      if (v.ok && v.value) {
+        cleaned.push(v.value);
+      } else {
+        for (const [field, msg] of Object.entries(v.errors)) {
+          errors.push({ row: i + 1, field, message: msg });
+        }
+      }
+    });
 
     const result = await prisma.voter.createMany({
       data: cleaned,
@@ -109,11 +106,19 @@ router.post(
         source,
         kind: 'voter',
         records: result.count,
-        status: 'validated',
+        status: errors.length === 0 ? 'validated' : 'failed',
+        errorMsg: errors.length ? `${errors.length} field error(s) across ${rows.length - cleaned.length} row(s)` : null,
       },
     });
 
-    res.status(201).json({ inserted: result.count, requested: rows.length, history });
+    res.status(201).json({
+      inserted: result.count,
+      requested: rows.length,
+      skipped: rows.length - cleaned.length,
+      duplicates: cleaned.length - result.count,
+      errors,
+      history,
+    });
   }),
 );
 

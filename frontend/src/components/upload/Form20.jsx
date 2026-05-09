@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { CheckIcon, CloseIcon, PlusIcon } from '../ui/Icon.jsx';
 import Button from '../ui/Button.jsx';
 import Card from '../ui/Card.jsx';
 import { api } from '../../lib/api.js';
+import { useGridNav } from '../../lib/useGridNav.js';
 
 /**
  * Form 20 — Detailed Result Sheet (per polling station).
@@ -183,6 +184,73 @@ export default function Form20({ electionId, onSubmit, onChangeElection }) {
     return rowValid(r) + (Number(r.rejectedVotes) || 0) + (Number(r.notaVotes) || 0);
   }
 
+  // colMap drives Excel-like paste targeting. Layout matches the rendered
+  // table exactly: 0 serial, 1 ps name, 2..N candidates, then Valid (RO),
+  // Rejected, NOTA, Total (RO), Tendered.
+  const colMap = useMemo(() => {
+    const m = [{ kind: 'serial' }, { kind: 'name' }];
+    candidates.forEach((c) => m.push({ kind: 'cand', id: c.id }));
+    m.push({ kind: 'valid', readonly: true });
+    m.push({ kind: 'rejectedVotes' });
+    m.push({ kind: 'notaVotes' });
+    m.push({ kind: 'total', readonly: true });
+    m.push({ kind: 'tenderedVotes' });
+    return m;
+  }, [candidates]);
+
+  const onPasteMatrix = useCallback(
+    (startRow, startCol, matrix) => {
+      const num = (v) => {
+        const n = Number(String(v ?? '').replace(/,/g, '').trim());
+        return Number.isFinite(n) ? n : 0;
+      };
+      setRows((prev) => {
+        const next = [...prev];
+        matrix.forEach((line, di) => {
+          const r = startRow + di;
+          while (r >= next.length) {
+            next.push({
+              id: -(Date.now() + Math.random()),
+              serial: next.length + 1,
+              name: '',
+              votes: {},
+              rejectedVotes: 0,
+              notaVotes: 0,
+              tenderedVotes: 0,
+            });
+          }
+          const row = { ...next[r], votes: { ...next[r].votes } };
+          line.forEach((rawVal, dj) => {
+            const c = startCol + dj;
+            const def = colMap[c];
+            if (!def || def.readonly) return;
+            if (def.kind === 'serial') {
+              row.serial = num(rawVal) || row.serial;
+            } else if (def.kind === 'name') {
+              row.name = String(rawVal ?? '').trim();
+            } else if (def.kind === 'cand') {
+              row.votes[def.id] = num(rawVal);
+            } else if (
+              def.kind === 'rejectedVotes' ||
+              def.kind === 'notaVotes' ||
+              def.kind === 'tenderedVotes'
+            ) {
+              row[def.kind] = num(rawVal);
+            }
+          });
+          next[r] = row;
+        });
+        return next;
+      });
+    },
+    [colMap],
+  );
+
+  const { gridId, gridProps } = useGridNav({
+    cols: colMap.length,
+    onPasteMatrix,
+  });
+
   async function handleSave() {
     if (!election) {
       setError('Create the election header first.');
@@ -226,7 +294,7 @@ export default function Form20({ electionId, onSubmit, onChangeElection }) {
     <Card>
       <Card.Head
         title="Form 20 — Detailed Result Sheet"
-        subtitle="Polling-station-wise vote count for each candidate. Add/remove candidates and rows freely; totals recalc live."
+        subtitle="Excel-style grid: Tab / Enter / arrows to move between cells, paste a TSV block from Excel to fill many polling stations at once. Totals recalc live."
       />
       <Card.Body>
         {error && <div className="form20-error" style={{ color: 'var(--danger)', marginBottom: 12 }}>{error}</div>}
@@ -306,7 +374,7 @@ export default function Form20({ electionId, onSubmit, onChangeElection }) {
         {election && candidates.length > 0 && (
           <>
             <div className="grid-wrap">
-              <table className="voter-grid form20-grid">
+              <table className="voter-grid form20-grid excel-compact" data-grid-id={gridId} {...gridProps}>
                 <thead>
                   <tr>
                     <th rowSpan="2" className="row-num">PS #</th>
@@ -347,7 +415,21 @@ export default function Form20({ electionId, onSubmit, onChangeElection }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map((row) => (
+                  {rows.map((row, ri) => {
+                    const candStart = 2;
+                    const validCol = candStart + candidates.length;
+                    const rejectedCol = validCol + 1;
+                    const notaCol = validCol + 2;
+                    const totalCol = validCol + 3;
+                    const tenderedCol = validCol + 4;
+                    const onFocusSelect = (e) => {
+                      try {
+                        e.target.select();
+                      } catch {
+                        /* ignore */
+                      }
+                    };
+                    return (
                     <tr key={row.id}>
                       <td className="row-num">
                         <input
@@ -355,6 +437,9 @@ export default function Form20({ electionId, onSubmit, onChangeElection }) {
                           min="1"
                           className="cell-input short"
                           value={row.serial}
+                          data-row={ri}
+                          data-col={0}
+                          onFocus={onFocusSelect}
                           onChange={(e) => updateCell(row.id, 'serial', e.target.value)}
                         />
                       </td>
@@ -363,37 +448,69 @@ export default function Form20({ electionId, onSubmit, onChangeElection }) {
                           type="text"
                           className="cell-input"
                           value={row.name}
+                          data-row={ri}
+                          data-col={1}
+                          onFocus={onFocusSelect}
                           onChange={(e) => updateCell(row.id, 'name', e.target.value)}
                         />
                       </td>
-                      {candidates.map((c) => (
+                      {candidates.map((c, ci) => (
                         <td key={c.id} className="value">
                           <input
                             type="number"
                             min="0"
                             className="cell-input short"
                             value={row.votes[c.id] ?? ''}
+                            data-row={ri}
+                            data-col={candStart + ci}
+                            onFocus={onFocusSelect}
                             onChange={(e) => updateCell(row.id, { candidateId: c.id }, e.target.value)}
                           />
                         </td>
                       ))}
                       <td className="value calc">
-                        <input type="number" className="cell-input short" value={rowValid(row)} readOnly />
+                        <input
+                          type="number"
+                          className="cell-input short"
+                          value={rowValid(row)}
+                          data-row={ri}
+                          data-col={validCol}
+                          readOnly
+                        />
                       </td>
-                      {SUMMARY_COLS.map((s) => (
-                        s.key === 'tenderedVotes' ? null :
-                        <td key={s.key} className="value">
-                          <input
-                            type="number"
-                            min="0"
-                            className="cell-input short"
-                            value={row[s.key]}
-                            onChange={(e) => updateCell(row.id, s.key, e.target.value)}
-                          />
-                        </td>
-                      ))}
+                      <td className="value">
+                        <input
+                          type="number"
+                          min="0"
+                          className="cell-input short"
+                          value={row.rejectedVotes}
+                          data-row={ri}
+                          data-col={rejectedCol}
+                          onFocus={onFocusSelect}
+                          onChange={(e) => updateCell(row.id, 'rejectedVotes', e.target.value)}
+                        />
+                      </td>
+                      <td className="value">
+                        <input
+                          type="number"
+                          min="0"
+                          className="cell-input short"
+                          value={row.notaVotes}
+                          data-row={ri}
+                          data-col={notaCol}
+                          onFocus={onFocusSelect}
+                          onChange={(e) => updateCell(row.id, 'notaVotes', e.target.value)}
+                        />
+                      </td>
                       <td className="value calc">
-                        <input type="number" className="cell-input short" value={rowTotal(row)} readOnly />
+                        <input
+                          type="number"
+                          className="cell-input short"
+                          value={rowTotal(row)}
+                          data-row={ri}
+                          data-col={totalCol}
+                          readOnly
+                        />
                       </td>
                       <td className="value">
                         <input
@@ -401,6 +518,9 @@ export default function Form20({ electionId, onSubmit, onChangeElection }) {
                           min="0"
                           className="cell-input short"
                           value={row.tenderedVotes}
+                          data-row={ri}
+                          data-col={tenderedCol}
+                          onFocus={onFocusSelect}
                           onChange={(e) => updateCell(row.id, 'tenderedVotes', e.target.value)}
                         />
                       </td>
@@ -415,7 +535,8 @@ export default function Form20({ electionId, onSubmit, onChangeElection }) {
                         </button>
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
 
                   {/* Totals row */}
                   <tr className="totals-row">

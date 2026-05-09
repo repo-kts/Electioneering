@@ -4,7 +4,7 @@ import Form20 from '../components/upload/Form20.jsx';
 import HistoryTable from '../components/upload/HistoryTable.jsx';
 import Dropzone from '../components/upload/Dropzone.jsx';
 import UploadPreview from '../components/upload/UploadPreview.jsx';
-import SessionCard from '../components/upload/SessionCard.jsx';
+import FormatCard from '../components/upload/FormatCard.jsx';
 import ValidationCard from '../components/upload/ValidationCard.jsx';
 import { useToast } from '../context/ToastContext.jsx';
 import {
@@ -31,6 +31,7 @@ export default function Form20Page() {
   const [elections, setElections] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
   const [preview, setPreview] = useState(null);
+  const [historyQuery, setHistoryQuery] = useState('');
   const [previewHeader, setPreviewHeader] = useState({
     state: '', parlNo: '', parlName: '', assemblyNo: '', assemblyName: '',
     electionType: 'Assembly Election', totalElectors: '',
@@ -186,18 +187,20 @@ export default function Form20Page() {
       {tab === 'upload' && (
         <>
           {!preview && (
-            <div className="two-col">
+            <>
               <Card>
                 <Card.Head
-                  title="Upload Form 20 Excel/CSV"
+                  title="Upload Form 20 sheet"
                   subtitle="Drop your Form 20 sheet — candidate columns are detected automatically. You'll set the election header before saving."
                 />
                 <Card.Body>
                   <Dropzone onFileAccepted={handleFileAccepted} />
                 </Card.Body>
               </Card>
-              <SessionCard />
-            </div>
+              <div style={{ marginTop: 16 }}>
+                <FormatCard kind="form20" />
+              </div>
+            </>
           )}
           {preview && (
             <UploadPreview
@@ -232,7 +235,36 @@ export default function Form20Page() {
         </>
       )}
 
-      {tab === 'history' && <HistoryTable rows={history} />}
+      {tab === 'history' && (() => {
+        const q = historyQuery.toLowerCase();
+        const filtered = history.filter((h) =>
+          !q ||
+          h.file?.toLowerCase().includes(q) ||
+          h.source?.toLowerCase().includes(q) ||
+          h.constituency?.toLowerCase().includes(q),
+        );
+        return (
+          <>
+            <div
+              className="grid-toolbar"
+              style={{ gap: 8, flexWrap: 'wrap', marginBottom: 12, alignItems: 'center' }}
+            >
+              <input
+                type="text"
+                placeholder="Search history (file / source / constituency)…"
+                value={historyQuery}
+                onChange={(e) => setHistoryQuery(e.target.value)}
+                style={{ padding: 8, minWidth: 280 }}
+              />
+              {historyQuery && <Button onClick={() => setHistoryQuery('')}>Clear</Button>}
+              <span className="row-count" style={{ marginLeft: 'auto' }}>
+                {filtered.length} / {history.length}
+              </span>
+            </div>
+            <HistoryTable rows={filtered} />
+          </>
+        );
+      })()}
     </div>
   );
 }
