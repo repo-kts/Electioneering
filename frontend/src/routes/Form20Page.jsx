@@ -127,20 +127,18 @@ export default function Form20Page() {
   }
 
   return (
-    <div className="shell">
+    <div>
       <PageHead
         title="Form 20"
         subtitle="Detailed Result Sheet — polling-station-wise vote counts. Candidates and rows are dynamic."
-        stats={<StatGroup items={stats} />}
-        actions={
-          <Link to="/" style={{ textDecoration: 'none' }}>
-            <Button>← Home</Button>
-          </Link>
-        }
       />
+      <div className="mb-5">
+        <StatGroup items={stats} />
+      </div>
 
       <Tabs tabs={tabsWithCount} active={tab} onChange={setTab} />
 
+      <div className="mt-5 space-y-4">
       {tab === 'form20' && (
         <>
           <Card>
@@ -151,11 +149,11 @@ export default function Form20Page() {
                 <ErrorState error={electionsQ.error} onRetry={() => electionsQ.refetch()} title="Couldn't load elections" />
               )}
               {electionsQ.data && (
-                <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+                <div className="flex flex-wrap items-center gap-3">
                   <select
                     value={selectedId ?? ''}
                     onChange={(e) => setSelectedId(e.target.value ? Number(e.target.value) : null)}
-                    className="field"
+                    className="w-auto"
                   >
                     <option value="">— New election —</option>
                     {elections.map((e) => (
@@ -166,7 +164,7 @@ export default function Form20Page() {
                   </select>
                   <Button onClick={() => setSelectedId(null)}>+ New Election</Button>
                   {electionsQ.isFetching && (
-                    <span className="qq-inline-busy"><Spinner size={12} /> refreshing…</span>
+                    <span className="flex items-center gap-1.5 text-xs text-slate-500"><Spinner size={12} /> refreshing…</span>
                   )}
                 </div>
               )}
@@ -198,7 +196,7 @@ export default function Form20Page() {
                 <Card.Body>
                   <Dropzone onFileAccepted={(f) => previewM.mutate(f)} />
                   {previewM.isPending && (
-                    <div className="qq-inline-busy" style={{ marginTop: 8 }}>
+                    <div className="mt-2 flex items-center gap-2 text-xs text-slate-500">
                       <Spinner size={12} /> parsing file…
                     </div>
                   )}
@@ -221,7 +219,7 @@ export default function Form20Page() {
               onCancel={() => setPreview(null)}
               onCommit={(rows) => commitM.mutateAsync(rows)}
               headerExtras={
-                <div className="form20-header" style={{ marginBottom: 12 }}>
+                <div className="mb-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
                   {[
                     ['state', 'State *'],
                     ['parlNo', 'Parl. No'],
@@ -231,14 +229,14 @@ export default function Form20Page() {
                     ['totalElectors', 'Total Electors'],
                     ['electionType', 'Election Type'],
                   ].map(([k, label]) => (
-                    <div key={k} className="form20-header-row">
-                      <label>{label}</label>
+                    <label key={k} className="flex flex-col gap-1">
+                      <span className="text-xs font-medium text-slate-500">{label}</span>
                       <input
                         type={k === 'totalElectors' ? 'number' : 'text'}
                         value={previewHeader[k] ?? ''}
                         onChange={(e) => setPreviewHeader({ ...previewHeader, [k]: e.target.value })}
                       />
-                    </div>
+                    </label>
                   ))}
                 </div>
               }
@@ -257,23 +255,18 @@ export default function Form20Page() {
         );
         return (
           <>
-            <div className="grid-toolbar" style={{ gap: 8, flexWrap: 'wrap', marginBottom: 12, alignItems: 'center' }}>
+            <div className="mb-3 flex flex-wrap items-center gap-2">
               <input
                 type="text"
                 placeholder="Search history (file / source / constituency)…"
                 value={historyQuery}
                 onChange={(e) => setHistoryQuery(e.target.value)}
-                className="field"
-                style={{ minWidth: 280 }}
+                className="min-w-[280px] flex-1"
               />
               {historyQuery && <Button onClick={() => setHistoryQuery('')}>Clear</Button>}
-              <span className="row-count" style={{ marginLeft: 'auto' }}>
+              <span className="ml-auto flex items-center gap-2 text-sm text-slate-500">
                 {filtered.length} / {history.length}
-                {historyQ.isFetching && (
-                  <span className="qq-inline-busy" style={{ marginLeft: 8 }}>
-                    <Spinner size={10} />
-                  </span>
-                )}
+                {historyQ.isFetching && <Spinner size={10} />}
               </span>
             </div>
             {historyQ.isPending && <SkeletonRows rows={5} cols={5} rowHeight={32} />}
@@ -288,6 +281,7 @@ export default function Form20Page() {
           </>
         );
       })()}
+      </div>
     </div>
   );
 }

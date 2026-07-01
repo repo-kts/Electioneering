@@ -4,12 +4,87 @@ import { prisma } from '../lib/prisma.js';
 import { asyncHandler } from '../lib/asyncHandler.js';
 import {
   computePollingStationLeanings,
+  computeCommunityLeaning,
   recomputePredictedLeaning,
   linkVotersToPollingStations,
 } from '../services/inference.js';
 import { aggregate } from '../services/segmentation.js';
+import { computeBoothTargets, computeTurnoutGap, computeSwing } from '../services/boothAnalytics.js';
+import { assembleStrategyBrief } from '../services/strategy.js';
+import { geocodeElectionBooths } from '../services/geocode.js';
 
 const router = Router();
+
+// GET /api/analytics/community-leaning?electionId=X[&dimension=religion|community]
+// Ecological estimate of each community's candidate leaning (statistical).
+router.get(
+  '/community-leaning',
+  asyncHandler(async (req, res) => {
+    const { electionId } = z.object({ electionId: z.coerce.number().int() }).parse({
+      electionId: req.query.electionId,
+    });
+    const dimension = req.query.dimension === 'community' ? 'community' : 'religion';
+    const result = await computeCommunityLeaning(electionId, dimension);
+    res.json(result);
+  }),
+);
+
+// GET /api/analytics/swing?electionA=X&electionB=Y
+// Per-candidate + per-booth vote-share swing between two elections.
+router.get(
+  '/swing',
+  asyncHandler(async (req, res) => {
+    const { electionA, electionB } = z
+      .object({ electionA: z.coerce.number().int(), electionB: z.coerce.number().int() })
+      .parse({ electionA: req.query.electionA, electionB: req.query.electionB });
+    const result = await computeSwing(electionA, electionB);
+    res.json(result);
+  }),
+);
+
+// GET /api/analytics/booth-targets?electionId=X[&ourCandidate=Name]
+// Per-booth competitiveness classification for a chosen candidate +
+// summary counts (swing booths, strongholds, opposition strongholds).
+router.get(
+  '/booth-targets',
+  asyncHandler(async (req, res) => {
+    const { electionId } = z.object({ electionId: z.coerce.number().int() }).parse({
+      electionId: req.query.electionId,
+    });
+    const ourCandidate = (req.query.ourCandidate as string) || undefined;
+    const result = await computeBoothTargets(electionId, ourCandidate);
+    res.json(result);
+  }),
+);
+
+// GET /api/analytics/turnout-gap?electionId=X[&ourCandidate=Name]
+// GOTV list — favorable/winnable booths with below-median turnout.
+router.get(
+  '/turnout-gap',
+  asyncHandler(async (req, res) => {
+    const { electionId } = z.object({ electionId: z.coerce.number().int() }).parse({
+      electionId: req.query.electionId,
+    });
+    const ourCandidate = (req.query.ourCandidate as string) || undefined;
+    const result = await computeTurnoutGap(electionId, ourCandidate);
+    res.json(result);
+  }),
+);
+
+// GET /api/analytics/strategy?electionId=X[&candidate=Name]
+// Candidate campaign strategy brief: aggregate booth priorities,
+// recommendations, and data-quality gaps for planning.
+router.get(
+  '/strategy',
+  asyncHandler(async (req, res) => {
+    const { electionId } = z.object({ electionId: z.coerce.number().int() }).parse({
+      electionId: req.query.electionId,
+    });
+    const candidate = (req.query.candidate as string) || undefined;
+    const result = await assembleStrategyBrief(electionId, candidate);
+    res.json(result);
+  }),
+);
 
 // POST /api/analytics/recompute?electionId=X[&link=1]
 // Recomputes predictedLeaning for every voter linked to a PS in the election.
@@ -26,6 +101,99 @@ router.post(
     }
     const r = await recomputePredictedLeaning(electionId);
     res.json({ electionId, linked, ...r });
+  }),
+);
+
+// GET /api/analytics/booth/:psId
+// Everything about one polling station: candidate votes + share, turnout,
+// and the voter-roll demographics for that booth (community/religion/age/
+// gender/household) plus a voter sample. Powers the booth drill-down page.
+router.get(
+  '/booth/:psId',
+  asyncHandler(async (req, res) => {
+    const psId = Number(req.params.psId);
+    const ps = await prisma.pollingStation.findUnique({
+      where: { id: psId },
+      include: {
+        election: true,
+        voteResults: { include: { candidate: true } },
+      },
+    });
+    if (!ps) {
+      res.status(404).json({ error: 'NotFound' });
+      return;
+    }
+
+    let totalValid = 0;
+    for (const vr of ps.voteResults) totalValid += vr.votes;
+    const candidates = ps.voteResults
+      .map((vr) => ({
+        id: vr.candidateId,
+        name: vr.candidate.name,
+        party: vr.candidate.party,
+        votes: vr.votes,
+        share: totalValid > 0 ? vr.votes / totalValid : 0,
+      }))
+      .sort((a, b) => b.votes - a.votes);
+
+    const voters = await prisma.voter.findMany({
+      where: { pollingStationId: psId },
+      orderBy: [{ houseNumber: 'asc' }, { age: 'desc' }],
+    });
+    const registered = voters.length;
+    const voted = registered
+      ? await prisma.voterTurnout.count({
+          where: {
+            electionId: ps.electionId,
+            voted: true,
+            voter: { pollingStationId: psId },
+          },
+        })
+      : 0;
+
+    const totalPolled = totalValid + ps.rejectedVotes + ps.notaVotes;
+    res.json({
+      election: {
+        id: ps.election.id,
+        assemblyNo: ps.election.assemblyNo,
+        assemblyName: ps.election.assemblyName,
+        electionType: ps.election.electionType,
+        electionYear: ps.election.electionYear,
+      },
+      ps: {
+        id: ps.id,
+        serial: ps.serial,
+        name: ps.name,
+        rejectedVotes: ps.rejectedVotes,
+        notaVotes: ps.notaVotes,
+        tenderedVotes: ps.tenderedVotes,
+      },
+      candidates,
+      leader: candidates[0] ?? null,
+      runnerUp: candidates[1] ?? null,
+      totalValid,
+      totalPolled,
+      turnout: {
+        registered,
+        voted,
+        pct: registered > 0 ? voted / registered : 0,
+      },
+      demographics: aggregate(voters),
+      voters: voters.slice(0, 500).map((v) => ({
+        id: v.id,
+        fullName: v.fullName,
+        firstName: v.firstName,
+        lastName: v.lastName,
+        age: v.age,
+        gender: v.gender,
+        religion: v.religion,
+        community: v.community,
+        houseNumber: v.houseNumber,
+        epic: v.epic,
+        relationType: v.relationType,
+        relativeName: v.relativeName,
+      })),
+    });
   }),
 );
 
@@ -50,6 +218,8 @@ router.get(
         id: ps.id,
         serial: ps.serial,
         name: ps.name,
+        latitude: ps.latitude,
+        longitude: ps.longitude,
         registeredVoters: ps._count.voters,
         totalValid: lean?.totalValid ?? 0,
         leader: lean?.leader ?? null,
@@ -57,7 +227,21 @@ router.get(
         byCandidate: lean?.byCandidate ?? {},
       };
     });
-    res.json({ electionId, items });
+    const geocoded = items.filter((i) => i.latitude != null && i.longitude != null).length;
+    res.json({ electionId, items, geocoded });
+  }),
+);
+
+// POST /api/analytics/geocode?electionId=X[&force=1]
+// Geocode polling stations to lat/long (OSM Nominatim) for the map view.
+router.post(
+  '/geocode',
+  asyncHandler(async (req, res) => {
+    const { electionId } = z.object({ electionId: z.coerce.number().int() }).parse({
+      electionId: req.query.electionId,
+    });
+    const result = await geocodeElectionBooths(electionId, req.query.force === '1');
+    res.json(result);
   }),
 );
 

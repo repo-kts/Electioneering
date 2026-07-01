@@ -89,6 +89,10 @@ model PollingStation {
   election      Election @relation(fields: [electionId], references: [id], onDelete: Cascade)
   serial        Int      // PS # in Form 20 (1..N)
   name          String?
+  address       String?
+  latitude      Float?   // geocoded from name/address
+  longitude     Float?
+  geocodedAt    DateTime?
   rejectedVotes Int      @default(0)
   notaVotes     Int      @default(0)
   tenderedVotes Int      @default(0)
@@ -121,6 +125,10 @@ model VoteResult {
 model Household {
   id               Int             @id @default(autoincrement())
   headName         String?
+  headVoterId      Int?            // Voter.id of the inferred household head (scalar, no FK)
+  houseNumber      String?         // makan
+  assemblyNo       String?
+  size             Int             @default(0)
   address          String?
   partNumber       String?
   pollingStationId Int?
@@ -131,13 +139,17 @@ model Household {
 
   @@index([partNumber])
   @@index([pollingStationId])
+  @@index([assemblyNo, partNumber, houseNumber])
 }
 
 // ─── Voter ──────────────────────────────────────────────────────────────
 model Voter {
   id                 Int       @id @default(autoincrement())
+  fullName           String?   // raw single-column name from the roll
   firstName          String
   lastName           String
+  relationType       String?   // Father / Husband / Mother (from roll "Relation")
+  relativeName       String?   // raw relative name from the roll
   relFirstName       String
   relLastName        String
   age                Int
@@ -145,19 +157,38 @@ model Voter {
   epic               String    @unique // EPIC No, e.g. TGK3378866
   mobile             String?
 
-  // Geography
+  // Geography — full administrative hierarchy off the electoral roll
   state              String
   parlNo             String
   parlName           String
   assemblyNo         String
   assemblyName       String
   pollingStationName String
+  pollingStationAddress String?
   partNumber         String
   partName           String?
   partSerial         String
+  houseNumber        String?   // makan
+  sectionNo          String?   // anubhag number
+  sectionName        String?   // anubhag name
+  mainTown           String?
+  ward               String?
+  postOffice         String?
+  policeStation      String?
+  panchayat          String?
+  block              String?
+  tehsil             String?
+  mandal             String?
+  revenueDivision    String?
+  subdivision        String?
+  district           String?
+  pinCode            String?
 
   // Segmentation attributes
   community          String?   // caste / sub-caste tag (open-ended)
+  religion           String?   // inferred from name (Hindu/Christian/Muslim/…)
+  communityConfidence Float?   // 0..1 — confidence of the name-based inference
+  communitySource    String    @default("inferred") // inferred | manual
   occupation         String?
   language           String?
 
@@ -180,8 +211,15 @@ model Voter {
   @@index([state])
   @@index([epic])
   @@index([community])
+  @@index([religion])
   @@index([occupation])
   @@index([householdId])
+  @@index([ward])
+  @@index([panchayat])
+  @@index([block])
+  @@index([tehsil])
+  @@index([district])
+  @@index([assemblyNo, partNumber, houseNumber])
 }
 
 // ─── VoterTurnout (per voter × election) ────────────────────────────────

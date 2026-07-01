@@ -38,20 +38,34 @@ export default function CohortsList({ onLoad, onError }) {
           <ErrorState error={list.error} onRetry={() => list.refetch()} title="Couldn't load cohorts" />
         )}
         {list.data && list.data.items.length === 0 && (
-          <div className="grid-empty">No cohorts yet. Save the current filter to add one.</div>
+          <div className="border border-dashed border-slate-300 p-6 text-center text-sm text-slate-400">
+            No cohorts yet. Save the current filter to add one.
+          </div>
         )}
         {list.data?.items?.length > 0 && (
-          <div className="cohorts-list">
+          <div className="divide-y divide-slate-200 border border-slate-300">
             {list.data.items.map((c) => (
-              <div key={c.id} className="cohort-item">
-                <div className="cohort-name">{c.name}</div>
-                {c.description && <div className="cohort-desc">{c.description}</div>}
-                <div className="cohort-criteria">
-                  <code>{JSON.stringify(c.criteria)}</code>
+              <div key={c.id} className="p-4">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="font-semibold text-slate-800">{c.name}</div>
+                  <button
+                    type="button"
+                    title="Delete"
+                    onClick={() => handleDelete(c.id)}
+                    disabled={del.isPending}
+                    className="text-slate-400 hover:text-rose-600 disabled:opacity-50"
+                  >
+                    <CloseIcon />
+                  </button>
                 </div>
-                <div className="cohort-actions">
-                  <Button onClick={() => onLoad?.(c)}>Load</Button>
+                {c.description && <div className="mt-0.5 text-sm text-slate-500">{c.description}</div>}
+                <div className="mt-2 overflow-x-auto border border-slate-200 bg-[#fbfaf7] p-2">
+                  <code className="text-[11px] text-slate-500">{JSON.stringify(c.criteria)}</code>
+                </div>
+                <div className="mt-3 flex gap-2">
+                  <Button size="sm" onClick={() => onLoad?.(c)}>Load</Button>
                   <Button
+                    size="sm"
                     onClick={() =>
                       exportMut.mutate({
                         id: c.id,
@@ -62,20 +76,11 @@ export default function CohortsList({ onLoad, onError }) {
                   >
                     {exportMut.isPending ? 'Exporting…' : 'Export CSV'}
                   </Button>
-                  <button
-                    type="button"
-                    className="row-delete"
-                    title="Delete"
-                    onClick={() => handleDelete(c.id)}
-                    disabled={del.isPending}
-                  >
-                    <CloseIcon />
-                  </button>
                 </div>
               </div>
             ))}
             {del.isPending && (
-              <div className="qq-inline-busy">
+              <div className="flex items-center gap-2 text-xs text-slate-500">
                 <Spinner size={12} /> deleting…
               </div>
             )}

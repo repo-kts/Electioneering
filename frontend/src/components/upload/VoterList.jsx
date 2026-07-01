@@ -119,47 +119,24 @@ export default function VoterList({ onError, canDelete = true }) {
         subtitle={`Loaded from server. Total in DB: ${total}. Click the funnel on any column header to sort or filter.`}
       />
       <Card.Body>
-        <div className="grid-toolbar" style={{ gap: 8, flexWrap: 'wrap' }}>
+        <div className="mb-4 flex flex-wrap items-center gap-2">
           <input
             type="text"
             placeholder="Search name / EPIC / mobile"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && apply()}
-            className="field"
-            style={{ minWidth: 220 }}
+            className="min-w-[220px] flex-1"
           />
-          <input
-            type="text"
-            placeholder="State"
-            value={state}
-            onChange={(e) => setState(e.target.value)}
-            className="field"
-            style={{ width: 140 }}
-          />
-          <input
-            type="text"
-            placeholder="Assembly No"
-            value={assemblyNo}
-            onChange={(e) => setAssemblyNo(e.target.value)}
-            className="field"
-            style={{ width: 120 }}
-          />
-          <Button onClick={apply} disabled={list.isFetching}>
-            {list.isFetching ? 'Loading…' : 'Apply'}
-          </Button>
+          <input type="text" placeholder="State" value={state} onChange={(e) => setState(e.target.value)} className="w-36" />
+          <input type="text" placeholder="Assembly No" value={assemblyNo} onChange={(e) => setAssemblyNo(e.target.value)} className="w-32" />
+          <Button onClick={apply} disabled={list.isFetching}>{list.isFetching ? 'Loading…' : 'Apply'}</Button>
           <Button onClick={clear}>Clear</Button>
-          {colFilterCount > 0 && (
-            <Button onClick={clearColFilters}>
-              Clear column filters ({colFilterCount})
-            </Button>
-          )}
+          {colFilterCount > 0 && <Button onClick={clearColFilters}>Clear column filters ({colFilterCount})</Button>}
           {list.isFetching && (
-            <span className="qq-inline-busy"><Spinner size={12} /> refreshing…</span>
+            <span className="flex items-center gap-1.5 text-xs text-slate-500"><Spinner size={12} /> refreshing…</span>
           )}
-          <span className="row-count" style={{ marginLeft: 'auto' }}>
-            {filteredItems.length} / {items.length} shown
-          </span>
+          <span className="ml-auto text-sm text-slate-500">{filteredItems.length} / {items.length} shown</span>
         </div>
 
         {list.isPending && <SkeletonRows rows={6} cols={6} rowHeight={26} />}
@@ -172,15 +149,15 @@ export default function VoterList({ onError, canDelete = true }) {
         )}
 
         {list.data && (
-          <div className="grid-wrap">
-            <table className="voter-grid excel-compact">
-              <thead>
+          <div className="overflow-x-auto border border-slate-300">
+            <table className="w-full text-sm">
+              <thead className="bg-[#fbfaf7] text-left text-xs uppercase tracking-wide text-slate-500">
                 <tr>
-                  <th className="row-num">#</th>
+                  <th className="px-2 py-2 font-medium">#</th>
                   {COLS.map((c) => (
-                    <th key={c.key}>
-                      <span className="th-inner">
-                        <span className="th-label">{c.label}</span>
+                    <th key={c.key} className="px-2 py-2 font-medium whitespace-nowrap">
+                      <span className="inline-flex items-center gap-1">
+                        <span>{c.label}</span>
                         <ColumnFilter
                           columnKey={c.key}
                           label={c.label}
@@ -191,26 +168,24 @@ export default function VoterList({ onError, canDelete = true }) {
                       </span>
                     </th>
                   ))}
-                  {canDelete && <th className="actions-col" />}
+                  {canDelete && <th className="px-2 py-2" />}
                 </tr>
               </thead>
               <tbody>
                 {filteredItems.map((v, i) => (
-                  <tr key={v.id}>
-                    <td className="row-num">{i + 1}</td>
+                  <tr key={v.id} className="border-t border-slate-200 hover:bg-[#fbfaf7]">
+                    <td className="px-2 py-1.5 text-slate-400">{i + 1}</td>
                     {COLS.map((c) => (
-                      <td key={c.key} className="value">
-                        <span style={{ padding: '0 8px' }}>{v[c.key] ?? ''}</span>
-                      </td>
+                      <td key={c.key} className="px-2 py-1.5 whitespace-nowrap text-slate-700">{v[c.key] ?? ''}</td>
                     ))}
                     {canDelete && (
-                      <td className="actions-col">
+                      <td className="px-2 py-1.5">
                         <button
                           type="button"
-                          className="row-delete"
                           title="Delete voter"
                           onClick={() => handleDelete(v.id)}
                           disabled={del.isPending}
+                          className="text-slate-400 hover:text-rose-600 disabled:opacity-50"
                         >
                           <CloseIcon />
                         </button>
@@ -220,7 +195,7 @@ export default function VoterList({ onError, canDelete = true }) {
                 ))}
                 {filteredItems.length === 0 && (
                   <tr>
-                    <td colSpan={COLS.length + (canDelete ? 2 : 1)} style={{ padding: 16, color: 'var(--text-2)' }}>
+                    <td colSpan={COLS.length + (canDelete ? 2 : 1)} className="px-2 py-8 text-center text-slate-400">
                       No voters match the current filters.
                     </td>
                   </tr>

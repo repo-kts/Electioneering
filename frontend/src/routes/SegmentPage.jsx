@@ -64,22 +64,17 @@ export default function SegmentPage() {
   }
 
   return (
-    <div className="shell">
+    <div className="space-y-5">
       <PageHead
-        title="Voter segmentation"
-        subtitle="Slice the voter file by community, occupation, age, polling station, predicted leaning. Save filters as cohorts. Export CSV."
-        actions={
-          <Link to="/" style={{ textDecoration: 'none' }}>
-            <Button>← Home</Button>
-          </Link>
-        }
+        title="Voter search"
+        subtitle="Filter voter records by geography, demographics, turnout history, and predicted booth leaning."
       />
 
       <Tabs tabs={TABS} active={tab} onChange={setTab} />
 
       {tab === 'segment' && (
-        <div className="seg-shell">
-          <div className="seg-side">
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-[340px_minmax(0,1fr)]">
+          <div className="space-y-3">
             <FilterPanel
               value={criteria}
               elections={electionsQ.data?.items ?? []}
@@ -90,31 +85,22 @@ export default function SegmentPage() {
               onExport={() => exportMut.mutate(criteria)}
             />
             {(saveCohort.isPending || exportMut.isPending) && (
-              <div className="qq-inline-busy" style={{ marginTop: 8 }}>
+              <div className="flex items-center gap-2 text-xs text-slate-500">
                 <Spinner size={12} />
                 {saveCohort.isPending ? 'saving cohort…' : 'preparing export…'}
               </div>
             )}
           </div>
-          <div className="seg-main">
+          <div className="space-y-4">
             {segmentQ.isError && (
-              <ErrorState
-                error={segmentQ.error}
-                onRetry={() => segmentQ.refetch()}
-                title="Couldn't run segment"
-              />
+              <ErrorState error={segmentQ.error} onRetry={() => segmentQ.refetch()} title="Couldn't run segment" />
             )}
-            <AggregatesPanel
-              aggregates={segmentQ.data?.aggregates}
+            <AggregatesPanel aggregates={segmentQ.data?.aggregates} total={segmentQ.data?.total ?? 0} />
+            <ResultsTable
+              items={segmentQ.data?.items ?? []}
               total={segmentQ.data?.total ?? 0}
+              busy={segmentQ.isFetching}
             />
-            <div style={{ marginTop: 16 }}>
-              <ResultsTable
-                items={segmentQ.data?.items ?? []}
-                total={segmentQ.data?.total ?? 0}
-                busy={segmentQ.isFetching}
-              />
-            </div>
           </div>
         </div>
       )}

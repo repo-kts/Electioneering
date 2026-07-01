@@ -105,12 +105,59 @@ export const api = {
     // ─── Segmentation + analytics ──────────────────────────────
     segment: (criteria) =>
         request('/api/voters/segment', { method: 'POST', body: criteria }),
+    classifyVoters: (assemblyNo, force = false) => {
+        const p = new URLSearchParams();
+        if (assemblyNo) p.set('assemblyNo', assemblyNo);
+        if (force) p.set('force', '1');
+        const qs = p.toString();
+        return request(`/api/voters/classify${qs ? '?' + qs : ''}`, { method: 'POST' });
+    },
     recomputeLeaning: (electionId) =>
         request(`/api/analytics/recompute?electionId=${electionId}&link=1`, { method: 'POST' }),
     boothLeaning: (electionId) =>
         request(`/api/analytics/booth-leaning?electionId=${electionId}`),
+    boothDetail: (psId) => request(`/api/analytics/booth/${psId}`),
+    geocodeBooths: (electionId, force = false) =>
+        request(`/api/analytics/geocode?electionId=${electionId}${force ? '&force=1' : ''}`, { method: 'POST' }),
     analyticsOverview: (electionId) =>
         request(`/api/analytics/overview${electionId ? '?electionId=' + electionId : ''}`),
+    strategyBrief: (electionId, candidate) => {
+        const p = new URLSearchParams({ electionId });
+        if (candidate) p.set('candidate', candidate);
+        return request(`/api/analytics/strategy?${p.toString()}`);
+    },
+
+    // ─── Targeting + correlation ───────────────────────────────
+    boothTargets: (electionId, ourCandidate) => {
+        const p = new URLSearchParams({ electionId });
+        if (ourCandidate) p.set('ourCandidate', ourCandidate);
+        return request(`/api/analytics/booth-targets?${p.toString()}`);
+    },
+    turnoutGap: (electionId, ourCandidate) => {
+        const p = new URLSearchParams({ electionId });
+        if (ourCandidate) p.set('ourCandidate', ourCandidate);
+        return request(`/api/analytics/turnout-gap?${p.toString()}`);
+    },
+    communityLeaning: (electionId, dimension = 'religion') =>
+        request(`/api/analytics/community-leaning?electionId=${electionId}&dimension=${dimension}`),
+    swing: (electionA, electionB) =>
+        request(`/api/analytics/swing?electionA=${electionA}&electionB=${electionB}`),
+    reportCard: (electionId, candidate) => {
+        const p = new URLSearchParams({ electionId, format: 'json' });
+        if (candidate) p.set('candidate', candidate);
+        return request(`/api/reports/candidate?${p.toString()}`);
+    },
+
+    // ─── Households ────────────────────────────────────────────
+    listHouseholds: (params = {}) => {
+        const q = new URLSearchParams(params).toString();
+        return request(`/api/households${q ? '?' + q : ''}`);
+    },
+    getHousehold: (id) => request(`/api/households/${id}`),
+    rebuildHouseholds: (assemblyNo) =>
+        request(`/api/households/rebuild${assemblyNo ? '?assemblyNo=' + assemblyNo : ''}`, {
+            method: 'POST',
+        }),
 
     // ─── Cohorts ───────────────────────────────────────────────
     listCohorts: () => request('/api/cohorts'),

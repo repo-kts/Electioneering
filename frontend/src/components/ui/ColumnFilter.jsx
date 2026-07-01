@@ -132,96 +132,67 @@ export default function ColumnFilter({ columnKey, label, values = [], active, on
   const filterCount =
     active?.values && active.values.size !== allKeys.length ? active.values.size : null;
 
+  const miniBtn = 'rounded-md border border-slate-300 px-2 py-1 text-xs font-medium hover:bg-[#f7f5f0]';
+  const miniBtnOn = 'rounded-md border border-slate-950 bg-slate-950 px-2 py-1 text-xs font-medium text-white';
+
   return (
-    <span className="col-filter-wrap" ref={wrapRef}>
+    <span className="relative inline-flex" ref={wrapRef}>
       <button
         type="button"
         ref={btnRef}
-        className={`col-filter-btn ${active ? 'active' : ''}`}
+        className={`inline-flex items-center gap-0.5 rounded p-1 ${active ? 'text-accent-700' : 'text-slate-400 hover:text-slate-600'}`}
         onClick={() => setOpen((v) => !v)}
         title={`Filter ${label}`}
         aria-expanded={open}
         aria-label={`Filter ${label}`}
       >
         <FilterIcon style={{ width: 12, height: 12 }} />
-        {active?.sort && (
-          <span className="col-filter-sort">{active.sort === 'asc' ? '▲' : '▼'}</span>
+        {active?.sort && <span className="text-[9px]">{active.sort === 'asc' ? '▲' : '▼'}</span>}
+        {filterCount != null && (
+          <span className="bg-accent-700 px-1 text-[9px] text-white">{filterCount}</span>
         )}
-        {filterCount != null && <span className="col-filter-count">{filterCount}</span>}
       </button>
       {open && popPos && createPortal(
         <div
-          className="col-filter-pop"
+          className="z-50 w-[280px] border border-slate-300 bg-white p-3 shadow-pop"
           role="dialog"
           ref={popRef}
           style={{ position: 'fixed', top: popPos.top, left: popPos.left }}
         >
-          <div className="col-filter-head">
-            <strong>{label}</strong>
-            <button type="button" className="row-delete" onClick={() => setOpen(false)} aria-label="Close">
+          <div className="mb-2 flex items-center justify-between">
+            <strong className="text-sm text-slate-800">{label}</strong>
+            <button type="button" className="text-slate-400 hover:text-slate-600" onClick={() => setOpen(false)} aria-label="Close">
               <CloseIcon />
             </button>
           </div>
-          <div className="col-filter-sort-row">
-            <button
-              type="button"
-              className={`btn btn-sm ${draftSort === 'asc' ? 'btn-primary' : ''}`}
-              onClick={() => setSort('asc')}
-            >
-              Sort A → Z
-            </button>
-            <button
-              type="button"
-              className={`btn btn-sm ${draftSort === 'desc' ? 'btn-primary' : ''}`}
-              onClick={() => setSort('desc')}
-            >
-              Sort Z → A
-            </button>
+          <div className="mb-2 flex gap-2">
+            <button type="button" className={draftSort === 'asc' ? miniBtnOn : miniBtn} onClick={() => setSort('asc')}>Sort A → Z</button>
+            <button type="button" className={draftSort === 'desc' ? miniBtnOn : miniBtn} onClick={() => setSort('desc')}>Sort Z → A</button>
           </div>
           <input
             type="text"
-            className="field field-sm"
             placeholder="Search values…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            style={{ width: '100%' }}
           />
-          <div className="col-filter-tools">
-            <button type="button" className="link-btn" onClick={selectAll}>
-              Select all
-            </button>
-            <button type="button" className="link-btn" onClick={clearAll}>
-              Clear
-            </button>
-            <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-3)' }}>
-              {distinct.length} unique
-            </span>
+          <div className="mt-2 flex items-center gap-3 text-xs">
+            <button type="button" className="font-medium text-accent-700 hover:underline" onClick={selectAll}>Select all</button>
+            <button type="button" className="font-medium text-accent-700 hover:underline" onClick={clearAll}>Clear</button>
+            <span className="ml-auto text-slate-400">{distinct.length} unique</span>
           </div>
-          <div className="col-filter-list">
-            {filteredDistinct.length === 0 && (
-              <div className="grid-empty" style={{ padding: 12 }}>No matches.</div>
-            )}
+          <div className="mt-2 max-h-52 overflow-auto border border-slate-200">
+            {filteredDistinct.length === 0 && <div className="p-3 text-center text-sm text-slate-400">No matches.</div>}
             {filteredDistinct.map((d) => (
-              <label key={d.key} className="col-filter-item">
-                <input
-                  type="checkbox"
-                  checked={selectedKeys.has(d.key)}
-                  onChange={() => toggle(d.key)}
-                />
-                <span className="col-filter-label">{d.key}</span>
-                <span className="col-filter-cnt">{d.count}</span>
+              <label key={d.key} className="flex cursor-pointer items-center gap-2 px-2 py-1.5 text-sm hover:bg-[#fbfaf7]">
+                <input type="checkbox" checked={selectedKeys.has(d.key)} onChange={() => toggle(d.key)} />
+                <span className="flex-1 truncate text-slate-700">{d.key}</span>
+                <span className="text-xs text-slate-400">{d.count}</span>
               </label>
             ))}
           </div>
-          <div className="col-filter-actions">
-            {active && (
-              <button type="button" className="btn btn-sm" onClick={clearFilter}>
-                Clear filter
-              </button>
-            )}
-            <button type="button" className="btn btn-sm btn-primary" onClick={apply}>
-              Apply
-            </button>
+          <div className="mt-3 flex justify-end gap-2">
+            {active && <button type="button" className={miniBtn} onClick={clearFilter}>Clear filter</button>}
+            <button type="button" className="rounded-md bg-slate-950 px-3 py-1 text-xs font-medium text-white hover:bg-slate-800" onClick={apply}>Apply</button>
           </div>
         </div>,
         document.body,

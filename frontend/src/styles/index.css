@@ -1,7 +1,140 @@
-/* App stylesheet — composed from focused modules.
-   Edit tokens in tokens.css to re-skin everything. */
-@import './tokens.css';
-@import './base.css';
-@import './primitives.css';
-@import './pages.css';
-@import './analytics.css';
+@import 'tailwindcss';
+
+@theme {
+  --font-sans: 'Plus Jakarta Sans', ui-sans-serif, system-ui, -apple-system,
+    'Segoe UI', Roboto, sans-serif;
+
+  --color-accent-50: #eff6f3;
+  --color-accent-100: #dfece7;
+  --color-accent-500: #2f6f5e;
+  --color-accent-600: #24594b;
+  --color-accent-700: #1b443a;
+
+  --shadow-card: 0 1px 0 rgb(15 23 42 / 0.03);
+  --shadow-pop: 0 8px 20px rgb(15 23 42 / 0.08);
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+    overflow: hidden;
+  }
+
+  body {
+    @apply bg-[#f7f5f0] text-slate-900 antialiased;
+    font-feature-settings: 'cv11', 'ss01';
+    letter-spacing: 0;
+  }
+  h1, h2, h3 {
+    letter-spacing: 0;
+  }
+  ::selection {
+    @apply bg-accent-100 text-accent-700;
+  }
+  input[type='text'],
+  input[type='password'],
+  input[type='number'],
+  input[type='search'],
+  input[type='email'],
+  input[type='tel'],
+  input:not([type]),
+  select,
+  textarea {
+    @apply w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none transition;
+  }
+  input:focus,
+  select:focus,
+  textarea:focus {
+    @apply border-accent-600 ring-2 ring-accent-100;
+  }
+  input[type='checkbox'],
+  input[type='radio'] {
+    @apply h-4 w-4 accent-accent-600;
+  }
+  table {
+    @apply w-full border-collapse;
+  }
+}
+
+@layer components {
+  .field {
+    @apply w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none transition focus:border-accent-600 focus:ring-2 focus:ring-accent-100;
+  }
+  .field-sm {
+    @apply px-2 py-1 text-xs;
+  }
+
+  /* Spreadsheet data grids (Form 20 + upload preview) */
+  .grid-toolbar {
+    @apply mb-3 flex flex-wrap items-center gap-2;
+  }
+  .row-count {
+    @apply text-sm text-slate-500;
+  }
+  .grid-wrap {
+    @apply overflow-x-auto rounded-md border border-slate-200 bg-white;
+  }
+  .voter-grid,
+  .form20-grid {
+    @apply w-full border-collapse text-sm;
+  }
+  .voter-grid th,
+  .form20-grid th {
+    @apply border border-slate-200 bg-[#f3f1eb] px-2 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 whitespace-nowrap;
+  }
+  .voter-grid td,
+  .form20-grid td {
+    @apply border border-slate-100 px-2 py-1.5 text-slate-700;
+  }
+  .voter-grid .row-num,
+  .form20-grid .row-num {
+    @apply bg-slate-50 text-center text-slate-400;
+  }
+  .voter-grid td.value,
+  .form20-grid td.value {
+    @apply p-0;
+  }
+  .cell-input {
+    @apply w-full min-w-[80px] border-0 bg-transparent px-2 py-1.5 text-sm text-slate-700 outline-none focus:bg-accent-50 focus:ring-0;
+  }
+  .cell-error,
+  td.cell-error {
+    @apply bg-rose-50 ring-1 ring-inset ring-rose-300;
+  }
+  .totals-row td,
+  .totals-cell {
+    @apply bg-slate-50 font-semibold text-slate-800;
+  }
+  .actions-col {
+    @apply w-10 text-center;
+  }
+  .row-delete {
+    @apply text-slate-400 transition hover:text-rose-600;
+  }
+  .add-row-btn {
+    @apply mt-3 inline-flex items-center gap-1.5 rounded-md border border-dashed border-slate-300 px-3 py-2 text-sm font-medium text-slate-600 hover:border-accent-500 hover:text-accent-700;
+  }
+  .grid-empty {
+    @apply p-6 text-center text-sm text-slate-400;
+  }
+  .form20-header {
+    @apply mb-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4;
+  }
+  .form20-header-row {
+    @apply flex flex-col gap-1;
+  }
+  .form20-header-row label {
+    @apply text-xs font-medium text-slate-500;
+  }
+  .form20-cand-manager {
+    @apply mb-3 flex flex-wrap items-center gap-2;
+  }
+  .cand-head {
+    @apply min-w-[90px];
+  }
+  .form20-error {
+    @apply mt-2 text-sm text-rose-600;
+  }
+}

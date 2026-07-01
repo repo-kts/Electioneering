@@ -3,14 +3,19 @@
 // bad rows). Patterns match the frontend RecordForm so manual entry
 // and file upload behave identically.
 
+import { classifyName } from './nameClassifier.js';
+
 export const EPIC_RE = /^[A-Z]{3}\d{7}$/;
 export const MOBILE_RE = /^[6-9]\d{9}$/;
 export const GENDERS = ['Male', 'Female', 'Other'] as const;
 export type Gender = (typeof GENDERS)[number];
 
 export interface VoterClean {
+  fullName: string | null;
   firstName: string;
   lastName: string;
+  relationType: string | null;
+  relativeName: string | null;
   relFirstName: string;
   relLastName: string;
   age: number;
@@ -23,11 +28,31 @@ export interface VoterClean {
   assemblyNo: string;
   assemblyName: string;
   pollingStationName: string;
+  pollingStationAddress: string | null;
   partNumber: string;
   partName: string | null;
   partSerial: string;
-  // segmentation (optional)
+  // administrative hierarchy (optional)
+  houseNumber: string | null;
+  sectionNo: string | null;
+  sectionName: string | null;
+  mainTown: string | null;
+  ward: string | null;
+  postOffice: string | null;
+  policeStation: string | null;
+  panchayat: string | null;
+  block: string | null;
+  tehsil: string | null;
+  mandal: string | null;
+  revenueDivision: string | null;
+  subdivision: string | null;
+  district: string | null;
+  pinCode: string | null;
+  // segmentation (optional / inferred)
   community: string | null;
+  religion: string | null;
+  communityConfidence: number | null;
+  communitySource: string;
   occupation: string | null;
   language: string | null;
 }
@@ -50,10 +75,12 @@ export function validateVoter(raw: Record<string, unknown>): VoterValidation {
   required('firstName', firstName);
   const lastName = sUp('lastName');
   required('lastName', lastName);
+  // Relative name is optional on real rolls — default to '' (schema NOT NULL).
   const relFirstName = sUp('relFirstName');
-  required('relFirstName', relFirstName);
   const relLastName = sUp('relLastName');
-  required('relLastName', relLastName);
+  const fullName = s('fullName') || null;
+  const relationType = s('relationType') || null;
+  const relativeName = s('relativeName') || null;
 
   const ageRaw = s('age');
   let age = NaN;
@@ -87,26 +114,56 @@ export function validateVoter(raw: Record<string, unknown>): VoterValidation {
     else errors.mobile = '10 digits starting 6-9';
   }
 
+  // Geography — not present on raw electoral rolls (operator/file defaults
+  // fill state/parl/assembly). Stored as '' rather than required to NOT block
+  // bulk roll imports; schema columns are NOT NULL.
   const state = s('state');
-  required('state', state);
   const parlNo = s('parlNo');
-  required('parlNo', parlNo);
   const parlName = s('parlName');
-  required('parlName', parlName);
   const assemblyNo = s('assemblyNo');
-  required('assemblyNo', assemblyNo);
   const assemblyName = s('assemblyName');
-  required('assemblyName', assemblyName);
   const pollingStationName = s('pollingStationName');
-  required('pollingStationName', pollingStationName);
+  const pollingStationAddress = s('pollingStationAddress') || null;
   const partNumber = s('partNumber');
-  required('partNumber', partNumber);
   const partSerial = s('partSerial');
-  required('partSerial', partSerial);
   const partName = s('partName') || null;
 
-  // Segmentation — all optional, free-text
-  const community = s('community') || null;
+  // Extended administrative hierarchy — all optional.
+  const houseNumber = s('houseNumber') || null;
+  const sectionNo = s('sectionNo') || null;
+  const sectionName = s('sectionName') || null;
+  const mainTown = s('mainTown') || null;
+  const ward = s('ward') || null;
+  const postOffice = s('postOffice') || null;
+  const policeStation = s('policeStation') || null;
+  const panchayat = s('panchayat') || null;
+  const block = s('block') || null;
+  const tehsil = s('tehsil') || null;
+  const mandal = s('mandal') || null;
+  const revenueDivision = s('revenueDivision') || null;
+  const subdivision = s('subdivision') || null;
+  const district = s('district') || null;
+  const pinCode = s('pinCode') || null;
+
+  // Segmentation — community/religion manual when supplied, else inferred
+  // from the name. Inferred values carry a confidence score.
+  const manualCommunity = s('community') || null;
+  const manualReligion = s('religion') || null;
+  let community = manualCommunity;
+  let religion = manualReligion;
+  let communityConfidence: number | null = null;
+  let communitySource = 'inferred';
+  if (manualCommunity || manualReligion) {
+    communitySource = 'manual';
+    communityConfidence = 1;
+  } else {
+    const c = classifyName(firstName, lastName);
+    religion = c.religion;
+    community = c.community;
+    communityConfidence = c.confidence;
+    communitySource = c.source;
+  }
+
   const occupation = s('occupation') || null;
   const language = s('language') || null;
 
@@ -116,8 +173,11 @@ export function validateVoter(raw: Record<string, unknown>): VoterValidation {
     errors,
     value: ok
       ? {
+          fullName,
           firstName,
           lastName,
+          relationType,
+          relativeName,
           relFirstName,
           relLastName,
           age,
@@ -130,10 +190,29 @@ export function validateVoter(raw: Record<string, unknown>): VoterValidation {
           assemblyNo,
           assemblyName,
           pollingStationName,
+          pollingStationAddress,
           partNumber,
           partName,
           partSerial,
+          houseNumber,
+          sectionNo,
+          sectionName,
+          mainTown,
+          ward,
+          postOffice,
+          policeStation,
+          panchayat,
+          block,
+          tehsil,
+          mandal,
+          revenueDivision,
+          subdivision,
+          district,
+          pinCode,
           community,
+          religion,
+          communityConfidence,
+          communitySource,
           occupation,
           language,
         }

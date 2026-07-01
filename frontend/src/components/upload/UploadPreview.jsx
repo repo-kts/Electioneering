@@ -337,13 +337,13 @@ export default function UploadPreview({ kind, data, onCancel, onCommit, headerEx
 
         <div className="grid-toolbar">
           <div className="row-count">
-            <strong style={{ color: 'var(--success, #16a34a)' }}>{validRowCount}</strong> valid
+            <strong style={{ color: '#16a34a' }}>{validRowCount}</strong> valid
             {errorRowCount > 0 && (
-              <span style={{ color: 'var(--danger)', marginLeft: 12 }}>
+              <span style={{ color: '#dc2626', marginLeft: 12 }}>
                 · <strong>{errorRowCount}</strong> with errors
               </span>
             )}
-            <span style={{ marginLeft: 12, color: 'var(--text-3)' }}>
+            <span style={{ marginLeft: 12, color: '#94a3b8' }}>
               of {rows.length} row{rows.length === 1 ? '' : 's'}
             </span>
           </div>

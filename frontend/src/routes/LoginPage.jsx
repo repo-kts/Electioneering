@@ -1,78 +1,61 @@
 import { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
-import Card from '../components/ui/Card.jsx';
 import Button from '../components/ui/Button.jsx';
 import { Spinner } from '../components/ui/Loader.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 
 export default function LoginPage() {
-    const { login } = useAuth();
-    const navigate = useNavigate();
-    const [params] = useSearchParams();
-    const next = params.get('next') || '/';
-    const [username, setUsername] = useState('');
-    const [password, setPassword] = useState('');
+  const { login } = useAuth();
+  const navigate = useNavigate();
+  const [params] = useSearchParams();
+  const next = params.get('next') || '/';
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
 
-    const loginM = useMutation({
-        mutationFn: ({ u, p }) => login(u.trim(), p),
-        onSuccess: () => navigate(next, { replace: true }),
-    });
-    const busy = loginM.isPending;
-    const error = loginM.error;
+  const loginM = useMutation({
+    mutationFn: ({ u, p }) => login(u.trim(), p),
+    onSuccess: () => navigate(next, { replace: true }),
+  });
+  const busy = loginM.isPending;
+  const error = loginM.error;
 
-    function handleSubmit(e) {
-        e.preventDefault();
-        loginM.mutate({ u: username, p: password });
-    }
+  function handleSubmit(e) {
+    e.preventDefault();
+    loginM.mutate({ u: username, p: password });
+  }
 
-    return (
-        <div className="shell" style={{ maxWidth: 420, marginTop: 80 }}>
-            <Card>
-                <Card.Head
-                    title="Sign in"
-                    subtitle="Internal access only. Use the credentials assigned to you."
-                />
-                <Card.Body>
-                    <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                        <label className="form20-header-row">
-                            <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-2)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                                Username
-                            </span>
-                            <input
-                                type="text"
-                                autoFocus
-                                autoComplete="username"
-                                required
-                                value={username}
-                                onChange={(e) => setUsername(e.target.value)}
-                            />
-                        </label>
-                        <label className="form20-header-row">
-                            <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-2)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                                Password
-                            </span>
-                            <input
-                                type="password"
-                                autoComplete="current-password"
-                                required
-                                value={password}
-                                onChange={(e) => setPassword(e.target.value)}
-                            />
-                        </label>
-                        {error && (
-                            <div style={{ color: 'var(--danger)', fontSize: 13 }}>{error.message || 'Login failed'}</div>
-                        )}
-                        <Button type="submit" variant="primary" disabled={busy} leadingIcon={busy ? <Spinner size={12} /> : undefined}>
-                            {busy ? 'Signing in…' : 'Sign in'}
-                        </Button>
-                        <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 8 }}>
-                            Default seeded users: <code>admin / admin123</code>,{' '}
-                            <code>operator / operator123</code>.
-                        </div>
-                    </form>
-                </Card.Body>
-            </Card>
+  const labelCls = 'text-[11px] font-semibold uppercase tracking-wider text-slate-500';
+
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-[#f7f5f0] px-4">
+      <div className="w-full max-w-sm border border-slate-300 bg-white p-7">
+        <div className="mb-8 border-b border-slate-200 pb-5">
+          <div className="text-lg font-semibold text-slate-950">Electioneering</div>
+          <div className="mt-1 text-xs text-slate-500">Field operations desk</div>
         </div>
-    );
+        <h1 className="text-xl font-semibold text-slate-950">Sign in</h1>
+        <p className="mt-1 text-sm text-slate-600">Internal access only. Use your assigned credentials.</p>
+
+        <form onSubmit={handleSubmit} className="mt-6 flex flex-col gap-4">
+          <label className="flex flex-col gap-1.5">
+            <span className={labelCls}>Username</span>
+            <input type="text" autoFocus autoComplete="username" required value={username} onChange={(e) => setUsername(e.target.value)} />
+          </label>
+          <label className="flex flex-col gap-1.5">
+            <span className={labelCls}>Password</span>
+            <input type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
+          </label>
+          {error && <div className="text-sm text-rose-600">{error.message || 'Login failed'}</div>}
+          <Button type="submit" variant="primary" disabled={busy} leadingIcon={busy ? <Spinner size={12} /> : undefined}>
+            {busy ? 'Signing in…' : 'Sign in'}
+          </Button>
+          <div className="mt-1 border-t border-slate-200 pt-3 text-xs text-slate-500">
+            Seeded users: <code className="bg-[#f7f5f0] px-1 text-slate-700">admin / admin123</code>,{' '}
+            <code className="bg-[#f7f5f0] px-1 text-slate-700">operator / operator123</code>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
 }

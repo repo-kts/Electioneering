@@ -76,51 +76,38 @@ export default function FormatCard({ kind = 'voter' }) {
         subtitle="Download a template, fill it, and upload the same file. Admin upload updates the database directly."
       />
       <Card.Body>
-        <div style={{ marginBottom: 12, color: 'var(--text-2)', fontSize: 13, lineHeight: 1.5 }}>
-          {notes}
-        </div>
+        <div className="mb-3 text-sm leading-relaxed text-slate-600">{notes}</div>
 
-        <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
-          <Button variant="primary" onClick={() => download()}>
-            Download blank .xlsx
-          </Button>
-          <Button onClick={() => download('', true)}>Download sample .xlsx</Button>
+        <div className="mb-4 flex flex-wrap gap-2">
+          <Button variant="primary" onClick={() => download()}>Download blank .xlsx</Button>
+          <Button onClick={() => download('', true)}>Sample .xlsx</Button>
           <Button onClick={() => download('csv')}>Blank .csv</Button>
           <Button onClick={() => download('csv', true)}>Sample .csv</Button>
         </div>
 
-        <div className="grid-wrap">
-          <table className="voter-grid">
-            <thead>
+        <div className="overflow-x-auto border border-slate-300">
+          <table className="w-full text-sm">
+            <thead className="bg-[#fbfaf7] text-left text-xs uppercase tracking-wide text-slate-500">
               <tr>
-                <th>Column</th>
-                <th>Type / format</th>
-                <th>Example</th>
+                <th className="px-3 py-2 font-medium">Column</th>
+                <th className="px-3 py-2 font-medium">Type / format</th>
+                <th className="px-3 py-2 font-medium">Example</th>
               </tr>
             </thead>
             <tbody>
               {fields.map(([col, type, ex]) => (
-                <tr key={col}>
-                  <td className="value">
-                    <span style={{ padding: '0 8px', fontFamily: 'monospace', fontSize: 12 }}>
-                      {col}
-                    </span>
-                  </td>
-                  <td className="value">
-                    <span style={{ padding: '0 8px', fontSize: 12 }}>{type}</span>
-                  </td>
-                  <td className="value">
-                    <span style={{ padding: '0 8px', fontSize: 12 }}>{ex}</span>
-                  </td>
+                <tr key={col} className="border-t border-slate-200">
+                  <td className="px-3 py-1.5 font-mono text-xs text-slate-700">{col}</td>
+                  <td className="px-3 py-1.5 text-xs text-slate-500">{type}</td>
+                  <td className="px-3 py-1.5 text-xs text-slate-500">{ex}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
 
-        <div style={{ marginTop: 12, fontSize: 12, color: 'var(--text-2)' }}>
-          * Required &nbsp;·&nbsp; Rows that fail validation are skipped on
-          import (count returned in the upload response).
+        <div className="mt-3 text-xs text-slate-500">
+          * Required · Rows that fail validation are skipped on import (count returned in the upload response).
         </div>
       </Card.Body>
     </Card>

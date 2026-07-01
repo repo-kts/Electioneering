@@ -58,6 +58,11 @@ function parseDelimited(buffer: Buffer, delimiter: string): ParseResult {
 
 // ─── Column key normalization (header → canonical voter field) ───────
 const VOTER_HEADER_MAP: Record<string, string> = {
+  // Full name (real electoral roll has one Name column)
+  name: 'fullName',
+  'voter name': 'fullName',
+  'full name': 'fullName',
+  'naam': 'fullName',
   // First Name
   firstname: 'firstName',
   'first name': 'firstName',
@@ -67,7 +72,17 @@ const VOTER_HEADER_MAP: Record<string, string> = {
   'last name': 'lastName',
   surname: 'lastName',
   upnaam: 'lastName',
-  // Relative
+  // Relation type + relative name
+  relation: 'relationType',
+  'relation type': 'relationType',
+  'father name': 'relativeName',
+  "father's name": 'relativeName',
+  'fathers name': 'relativeName',
+  'husband name': 'relativeName',
+  "husband's name": 'relativeName',
+  'relative name': 'relativeName',
+  "relative's name": 'relativeName',
+  // Relative split (kept for older split-format files)
   relfirstname: 'relFirstName',
   "relative's first name": 'relFirstName',
   'relative first name': 'relFirstName',
@@ -77,10 +92,13 @@ const VOTER_HEADER_MAP: Record<string, string> = {
   // Demographics
   age: 'age',
   gender: 'gender',
-  // EPIC + mobile
+  sex: 'gender',
+  // EPIC + mobile (roll labels EPIC column "Number")
   epic: 'epic',
   'epic no': 'epic',
   'epic number': 'epic',
+  number: 'epic',
+  'epic card no': 'epic',
   mobile: 'mobile',
   'mobile number': 'mobile',
   'mobile no': 'mobile',
@@ -101,21 +119,66 @@ const VOTER_HEADER_MAP: Record<string, string> = {
   'asm name': 'assemblyName',
   'assembly name': 'assemblyName',
   'assembly constituency name': 'assemblyName',
+  vidhansabha: 'assemblyName',
   pollingstation: 'pollingStationName',
   'polling station': 'pollingStationName',
+  'polling station name': 'pollingStationName',
+  polling_station_name: 'pollingStationName',
+  'polling station address': 'pollingStationAddress',
+  polling_station_address: 'pollingStationAddress',
   partnumber: 'partNumber',
   'part number': 'partNumber',
   'part no': 'partNumber',
+  bhag_no: 'partNumber',
+  'bhag no': 'partNumber',
   partname: 'partName',
   'part name': 'partName',
   partserial: 'partSerial',
   'part serial': 'partSerial',
   'part serial number': 'partSerial',
+  sr: 'partSerial',
+  'sr.': 'partSerial',
+  'sl no': 'partSerial',
+  // Extended administrative hierarchy
+  makan: 'houseNumber',
+  'house number': 'houseNumber',
+  'house no': 'houseNumber',
+  anubhag_number: 'sectionNo',
+  'anubhag number': 'sectionNo',
+  'section no': 'sectionNo',
+  'section number': 'sectionNo',
+  anubhag_name: 'sectionName',
+  'anubhag name': 'sectionName',
+  'section name': 'sectionName',
+  main_town: 'mainTown',
+  'main town': 'mainTown',
+  ward: 'ward',
+  post_office: 'postOffice',
+  'post office': 'postOffice',
+  police_station: 'policeStation',
+  'police station': 'policeStation',
+  panchayat: 'panchayat',
+  block: 'block',
+  tehsil: 'tehsil',
+  taluka: 'tehsil',
+  mandal: 'mandal',
+  revenue_division: 'revenueDivision',
+  'revenue division': 'revenueDivision',
+  subdivision: 'subdivision',
+  'sub division': 'subdivision',
+  'sub-division': 'subdivision',
+  district: 'district',
+  pin_code: 'pinCode',
+  'pin code': 'pinCode',
+  pincode: 'pinCode',
+  pin: 'pinCode',
   // Segmentation
   community: 'community',
   caste: 'community',
   'sub-caste': 'community',
   jati: 'community',
+  religion: 'religion',
+  dharm: 'religion',
   occupation: 'occupation',
   job: 'occupation',
   profession: 'occupation',
@@ -124,13 +187,40 @@ const VOTER_HEADER_MAP: Record<string, string> = {
   'mother tongue': 'language',
 };
 
+/** Split a full name into first (all but last token) + last (surname). */
+export function splitFullName(full: string): { firstName: string; lastName: string } {
+  const parts = String(full ?? '').trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return { firstName: '', lastName: '' };
+  if (parts.length === 1) return { firstName: parts[0], lastName: parts[0] };
+  return {
+    firstName: parts.slice(0, -1).join(' '),
+    lastName: parts[parts.length - 1],
+  };
+}
+
 export function normalizeVoterRows(rows: ParsedRow[]): ParsedRow[] {
   return rows.map((raw) => {
     const out: ParsedRow = {};
     for (const [k, v] of Object.entries(raw)) {
       const key = VOTER_HEADER_MAP[k.toLowerCase().trim()] ?? k;
-      out[key] = typeof v === 'string' ? v.trim() : v;
+      const cleaned = typeof v === 'string' ? v.trim() : v;
+      // Don't let a generic mapping clobber an already-set canonical field.
+      if (out[key] == null || out[key] === '') out[key] = cleaned;
     }
+
+    // Derive first/last from a single fullName column when not already split.
+    if ((out.firstName == null || out.firstName === '') && out.fullName) {
+      const { firstName, lastName } = splitFullName(String(out.fullName));
+      out.firstName = firstName;
+      out.lastName = lastName;
+    }
+    // Derive relative first/last from a single relativeName column.
+    if ((out.relFirstName == null || out.relFirstName === '') && out.relativeName) {
+      const { firstName, lastName } = splitFullName(String(out.relativeName));
+      out.relFirstName = firstName;
+      out.relLastName = lastName;
+    }
+
     return out;
   });
 }

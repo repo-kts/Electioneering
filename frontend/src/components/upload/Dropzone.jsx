@@ -1,6 +1,8 @@
 import { useRef, useState } from 'react';
 import { UploadIcon } from '../ui/Icon.jsx';
 
+const FORMATS = ['.xlsx', '.xlsm', '.xlsb', '.xls', '.ods', '.csv', '.tsv'];
+
 export default function Dropzone({ onFileAccepted }) {
   const inputRef = useRef(null);
   const [dragover, setDragover] = useState(false);
@@ -28,12 +30,11 @@ export default function Dropzone({ onFileAccepted }) {
   return (
     <>
       <div
-        className={`dropzone ${dragover ? 'dragover' : ''}`}
+        className={`flex cursor-pointer flex-col items-center border border-dashed p-8 text-center transition ${
+          dragover ? 'border-accent-600 bg-accent-50' : 'border-slate-300 bg-[#fbfaf7] hover:border-accent-500 hover:bg-white'
+        }`}
         onClick={() => inputRef.current?.click()}
-        onDragOver={(e) => {
-          e.preventDefault();
-          setDragover(true);
-        }}
+        onDragOver={(e) => { e.preventDefault(); setDragover(true); }}
         onDragLeave={() => setDragover(false)}
         onDrop={(e) => {
           e.preventDefault();
@@ -51,49 +52,39 @@ export default function Dropzone({ onFileAccepted }) {
             e.target.value = '';
           }}
         />
-        <div className="drop-icon-wrap">
+        <div className="flex h-11 w-11 items-center justify-center border border-slate-300 bg-white text-accent-700">
           <UploadIcon />
         </div>
-        <div className="drop-title">
-          Drop your file here, or <strong>click to browse</strong>
+        <div className="mt-3 text-sm text-slate-700">
+          Drop your file here, or <strong className="text-accent-700">click to browse</strong>
         </div>
-        <div className="drop-sub">
-          Supports Excel (.xlsx .xlsm .xlsb .xls), OpenDocument (.ods .fods),
-          CSV/TSV — up to 25 MB
+        <div className="mt-1 max-w-md text-xs text-slate-400">
+          Excel (.xlsx .xlsm .xlsb .xls), OpenDocument (.ods .fods), CSV/TSV — up to 25 MB
         </div>
         <button
           type="button"
-          className="drop-btn"
-          onClick={(e) => {
-            e.stopPropagation();
-            inputRef.current?.click();
-          }}
+          className="mt-4 rounded-md bg-slate-950 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800"
+          onClick={(e) => { e.stopPropagation(); inputRef.current?.click(); }}
         >
           Choose File
         </button>
-        <div className="drop-formats">
-          <span>.xlsx</span>
-          <span>.xlsm</span>
-          <span>.xlsb</span>
-          <span>.xls</span>
-          <span>.ods</span>
-          <span>.csv</span>
-          <span>.tsv</span>
+        <div className="mt-4 flex flex-wrap justify-center gap-1.5">
+          {FORMATS.map((f) => (
+            <span key={f} className="border border-slate-200 bg-white px-2 py-0.5 text-[11px] text-slate-500">{f}</span>
+          ))}
         </div>
       </div>
 
       {progress && (
-        <div className="upload-progress">
-          <div className="upload-progress-row">
-            <span className="upload-progress-name">{progress.name}</span>
-            <span className="upload-progress-pct">{Math.floor(progress.pct)}%</span>
+        <div className="mt-4 border border-slate-300 bg-white p-4">
+          <div className="flex items-center justify-between text-sm">
+            <span className="truncate font-medium text-slate-700">{progress.name}</span>
+            <span className="tabular-nums text-slate-500">{Math.floor(progress.pct)}%</span>
           </div>
-          <div className="progress-bar">
-            <div className="progress-bar-fill" style={{ width: progress.pct + '%' }} />
+          <div className="mt-2 h-1.5 overflow-hidden bg-slate-200">
+            <div className="h-full bg-accent-600 transition-all" style={{ width: progress.pct + '%' }} />
           </div>
-          <div style={{ marginTop: 8, fontSize: 12, color: 'var(--text-2)' }}>
-            Validating fields…
-          </div>
+          <div className="mt-2 text-xs text-slate-500">Validating fields…</div>
         </div>
       )}
     </>

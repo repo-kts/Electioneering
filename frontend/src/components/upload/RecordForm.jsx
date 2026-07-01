@@ -186,13 +186,15 @@ export default function RecordForm({ onSubmit }) {
     const ek = `${row.id}-${col.key}`;
     const errMsg = errors[ek];
     const hasError = !!errMsg;
-    const cellClass = 'value' + (hasError ? ' cell-error' : '');
+    const tdCls = `border border-slate-200 p-0 ${hasError ? 'bg-rose-50 ring-1 ring-inset ring-rose-300' : ''}`;
+    const inputCls =
+      'w-full min-w-[90px] border-0 bg-transparent px-2 py-1.5 text-sm text-slate-700 outline-none focus:bg-accent-50 focus:ring-0';
 
     if (col.type === 'select') {
       return (
-        <td key={col.key} className={cellClass} data-error={errMsg || undefined}>
+        <td key={col.key} className={tdCls} data-error={errMsg || undefined}>
           <select
-            className={`cell-input cell-select ${col.short ? 'short' : col.long ? 'long' : ''}`}
+            className={inputCls}
             value={row[col.key]}
             onChange={(e) => updateCell(row.id, col.key, e.target.value)}
             data-row={ri}
@@ -209,10 +211,10 @@ export default function RecordForm({ onSubmit }) {
     }
 
     return (
-      <td key={col.key} className={cellClass} data-error={errMsg || undefined}>
+      <td key={col.key} className={tdCls} data-error={errMsg || undefined}>
         <input
           type={col.type}
-          className={`cell-input ${col.short ? 'short' : col.long ? 'long' : ''}`}
+          className={inputCls}
           value={row[col.key]}
           placeholder={col.placeholder}
           maxLength={col.maxLength}
@@ -247,66 +249,55 @@ export default function RecordForm({ onSubmit }) {
         subtitle="Spreadsheet entry: Tab / Enter / arrows to move between cells, paste a TSV block from Excel to fill many rows at once. Add Row appends a blank row."
       />
       <Card.Body>
-        <div className="grid-toolbar">
-          <div className="row-count">
-            <strong>{filledCount}</strong> of <strong>{rows.length}</strong> rows have data
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+          <div className="text-sm text-slate-500">
+            <strong className="text-slate-700">{filledCount}</strong> of <strong className="text-slate-700">{rows.length}</strong> rows have data
             {errorCount > 0 && (
-              <span style={{ color: 'var(--danger)', marginLeft: 12 }}>
-                · {errorCount} field{errorCount === 1 ? '' : 's'} need attention
-              </span>
+              <span className="ml-3 text-rose-600">· {errorCount} field{errorCount === 1 ? '' : 's'} need attention</span>
             )}
           </div>
-          <div style={{ display: 'flex', gap: 8 }}>
+          <div className="flex gap-2">
             <Button onClick={handleClear}>Clear all</Button>
-            <Button
-              variant="primary"
-              leadingIcon={<CheckIcon />}
-              onClick={handleSave}
-            >
-              Save {filledCount > 0 ? `${filledCount} ` : ''}
-              {filledCount === 1 ? 'Voter' : 'Voters'}
+            <Button variant="primary" leadingIcon={<CheckIcon />} onClick={handleSave}>
+              Save {filledCount > 0 ? `${filledCount} ` : ''}{filledCount === 1 ? 'Voter' : 'Voters'}
             </Button>
           </div>
         </div>
 
-        <div className="grid-wrap">
-          <table className="voter-grid excel-compact" data-grid-id={gridId} {...gridProps}>
-            <thead>
+        <div className="overflow-x-auto border border-slate-300">
+          <table className="border-collapse text-sm" data-grid-id={gridId} {...gridProps}>
+            <thead className="bg-[#fbfaf7] text-left text-xs uppercase tracking-wide text-slate-500">
               <tr>
-                <th className="row-num">#</th>
+                <th className="border border-slate-200 px-2 py-2 font-medium">#</th>
                 {COLUMNS.map((c) => (
-                  <th key={c.key} className={c.required ? 'req-col' : ''}>
-                    {c.label}
+                  <th key={c.key} className="border border-slate-200 px-2 py-2 font-medium whitespace-nowrap">
+                    {c.label}{c.required && <span className="text-rose-500"> *</span>}
                   </th>
                 ))}
-                <th className="actions-col" />
+                <th className="border border-slate-200 px-2 py-2" />
               </tr>
             </thead>
             <tbody>
-              {rows.map((row, i) => {
-                const rowHasError = Object.keys(errors).some((k) => k.startsWith(`${row.id}-`));
-                return (
-                <tr key={row.id} className={rowHasError ? 'row-has-error' : ''}>
-                  <td className="row-num">{i + 1}</td>
+              {rows.map((row, i) => (
+                <tr key={row.id}>
+                  <td className="border border-slate-200 px-2 py-1.5 text-center text-slate-400">{i + 1}</td>
                   {COLUMNS.map((col, j) => renderCell(row, col, i, j))}
-                  <td className="actions-col">
-                    <button
-                      type="button"
-                      className="row-delete"
-                      title="Delete row"
-                      onClick={() => deleteRow(row.id)}
-                    >
+                  <td className="border border-slate-200 px-2 text-center">
+                    <button type="button" className="text-slate-400 hover:text-rose-600" title="Delete row" onClick={() => deleteRow(row.id)}>
                       <CloseIcon />
                     </button>
                   </td>
                 </tr>
-                );
-              })}
+              ))}
             </tbody>
           </table>
         </div>
 
-        <button type="button" className="add-row-btn" onClick={addRow}>
+        <button
+          type="button"
+          className="mt-3 inline-flex items-center gap-1.5 rounded-md border border-dashed border-slate-300 px-3 py-2 text-sm font-medium text-slate-600 hover:border-accent-500 hover:text-accent-700"
+          onClick={addRow}
+        >
           <PlusIcon />
           Add Row
         </button>

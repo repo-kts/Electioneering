@@ -25,41 +25,33 @@ export default function ResultsTable({ items, total, busy }) {
     <Card>
       <Card.Head
         title={`Voters (${items.length}${total != null && total !== items.length ? ' / ' + total : ''})`}
-        subtitle={
-          busy
-            ? 'Loading…'
-            : 'Predicted leader shown based on the latest Form 20 of each voter\'s polling station.'
-        }
+        subtitle={busy ? 'Loading…' : 'Predicted leader uses the latest Form 20 for each voter polling station.'}
       />
       <Card.Body>
-        <div className="grid-wrap">
-          <table className="voter-grid excel-compact">
-            <thead>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-[#fbfaf7] text-left text-xs uppercase tracking-wide text-slate-500">
               <tr>
-                <th className="row-num">#</th>
+                <th className="px-2 py-2">#</th>
                 {COLS.map((c) => (
-                  <th key={c.key}>{c.label}</th>
+                  <th key={c.key} className="px-2 py-2 font-medium">{c.label}</th>
                 ))}
-                <th>Predicted</th>
+                <th className="px-2 py-2 font-medium">Predicted</th>
               </tr>
             </thead>
             <tbody>
               {items.map((v, i) => (
-                <tr key={v.id}>
-                  <td className="row-num">{i + 1}</td>
+                <tr key={v.id} className="border-t border-slate-200 hover:bg-[#fbfaf7]">
+                  <td className="px-2 py-1.5 text-slate-400">{i + 1}</td>
                   {COLS.map((c) => (
-                    <td key={c.key} className="value">
-                      <span style={{ padding: '0 8px' }}>{v[c.key] ?? ''}</span>
-                    </td>
+                    <td key={c.key} className="px-2 py-1.5 text-slate-700">{v[c.key] ?? ''}</td>
                   ))}
-                  <td className="value">
-                    <span style={{ padding: '0 8px' }}>{leaderCell(v)}</span>
-                  </td>
+                  <td className="px-2 py-1.5 text-slate-700">{leaderCell(v)}</td>
                 </tr>
               ))}
               {items.length === 0 && !busy && (
                 <tr>
-                  <td colSpan={COLS.length + 2} className="grid-empty">
+                  <td colSpan={COLS.length + 2} className="px-2 py-8 text-center text-slate-400">
                     No voters match this filter.
                   </td>
                 </tr>

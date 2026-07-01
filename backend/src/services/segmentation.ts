@@ -14,13 +14,22 @@ export const segmentSchema = z.object({
   partNumber: z.string().optional(),
   pollingStationName: z.string().optional(),
   pollingStationId: z.coerce.number().int().optional(),
+  // extended administrative geography
+  ward: z.string().optional(),
+  panchayat: z.string().optional(),
+  block: z.string().optional(),
+  tehsil: z.string().optional(),
+  district: z.string().optional(),
+  householdId: z.coerce.number().int().optional(),
   // demographics
   community: z.union([z.string(), z.array(z.string())]).optional(),
+  religion: z.union([z.string(), z.array(z.string())]).optional(),
   occupation: z.union([z.string(), z.array(z.string())]).optional(),
   language: z.union([z.string(), z.array(z.string())]).optional(),
   gender: z.enum(['Male', 'Female', 'Other']).optional(),
   ageMin: z.coerce.number().int().min(0).optional(),
   ageMax: z.coerce.number().int().max(150).optional(),
+  firstTimeOnly: z.coerce.boolean().optional(), // age ≤ 19
   // turnout
   votedIn: z.array(z.coerce.number().int()).optional(),    // election ids
   notVotedIn: z.array(z.coerce.number().int()).optional(),
@@ -54,19 +63,29 @@ export function buildVoterWhere(c: SegmentCriteria): Prisma.VoterWhereInput {
     where.pollingStationName = { equals: c.pollingStationName, mode: 'insensitive' };
   }
   if (c.pollingStationId) where.pollingStationId = c.pollingStationId;
+  if (c.householdId) where.householdId = c.householdId;
   if (c.gender) where.gender = c.gender;
+  if (c.ward) where.ward = { equals: c.ward, mode: 'insensitive' };
+  if (c.panchayat) where.panchayat = { equals: c.panchayat, mode: 'insensitive' };
+  if (c.block) where.block = { equals: c.block, mode: 'insensitive' };
+  if (c.tehsil) where.tehsil = { equals: c.tehsil, mode: 'insensitive' };
+  if (c.district) where.district = { equals: c.district, mode: 'insensitive' };
 
   const community = multi(c.community);
   if (community) where.community = { in: community, mode: 'insensitive' };
+  const religion = multi(c.religion);
+  if (religion) where.religion = { in: religion, mode: 'insensitive' };
   const occupation = multi(c.occupation);
   if (occupation) where.occupation = { in: occupation, mode: 'insensitive' };
   const language = multi(c.language);
   if (language) where.language = { in: language, mode: 'insensitive' };
 
-  if (c.ageMin != null || c.ageMax != null) {
+  const ageMin = c.firstTimeOnly ? (c.ageMin ?? 18) : c.ageMin;
+  const ageMax = c.firstTimeOnly ? Math.min(c.ageMax ?? 19, 19) : c.ageMax;
+  if (ageMin != null || ageMax != null) {
     where.age = {};
-    if (c.ageMin != null) (where.age as { gte?: number }).gte = c.ageMin;
-    if (c.ageMax != null) (where.age as { lte?: number }).lte = c.ageMax;
+    if (ageMin != null) (where.age as { gte?: number }).gte = ageMin;
+    if (ageMax != null) (where.age as { lte?: number }).lte = ageMax;
   }
 
   // turnout filters via relations
@@ -125,12 +144,18 @@ export function passesLeaningFilter(
 
 export interface SegmentAggregates {
   byCommunity: Array<{ key: string; count: number }>;
+  byReligion: Array<{ key: string; count: number }>;
   byOccupation: Array<{ key: string; count: number }>;
   byLanguage: Array<{ key: string; count: number }>;
   byGender: Array<{ key: string; count: number }>;
   byAgeBucket: Array<{ key: string; count: number }>;
+  byWard: Array<{ key: string; count: number }>;
+  byPanchayat: Array<{ key: string; count: number }>;
+  byBlock: Array<{ key: string; count: number }>;
   byPollingStation: Array<{ key: string; count: number }>;
   byPredictedLeader: Array<{ key: string; count: number }>;
+  byHouseholdSize: Array<{ key: string; count: number }>;
+  firstTimeVoters: number;
 }
 
 const AGE_BUCKETS: Array<[string, (a: number) => boolean]> = [
@@ -154,39 +179,74 @@ function toArray(m: Map<string, number>) {
 export function aggregate(
   voters: Array<{
     community: string | null;
+    religion?: string | null;
     occupation: string | null;
     language: string | null;
     gender: string;
     age: number;
     pollingStationName: string;
+    ward?: string | null;
+    panchayat?: string | null;
+    block?: string | null;
+    householdId?: number | null;
     predictedLeaning?: unknown;
   }>,
 ): SegmentAggregates {
   const community = new Map<string, number>();
+  const religion = new Map<string, number>();
   const occupation = new Map<string, number>();
   const language = new Map<string, number>();
   const gender = new Map<string, number>();
   const ageB = new Map<string, number>();
+  const ward = new Map<string, number>();
+  const panchayat = new Map<string, number>();
+  const block = new Map<string, number>();
   const ps = new Map<string, number>();
   const leader = new Map<string, number>();
+  const householdCounts = new Map<number, number>(); // householdId → members
+  let firstTimeVoters = 0;
   for (const v of voters) {
     bumpMap(community, v.community);
+    bumpMap(religion, v.religion);
     bumpMap(occupation, v.occupation);
     bumpMap(language, v.language);
     bumpMap(gender, v.gender);
     const bucket = AGE_BUCKETS.find(([, f]) => f(v.age))?.[0] ?? '—';
     bumpMap(ageB, bucket);
+    bumpMap(ward, v.ward);
+    bumpMap(panchayat, v.panchayat);
+    bumpMap(block, v.block);
     bumpMap(ps, v.pollingStationName);
     const lean = v.predictedLeaning as { leader?: string } | null;
     bumpMap(leader, lean?.leader);
+    if (v.age <= 19) firstTimeVoters += 1;
+    if (v.householdId != null) {
+      householdCounts.set(v.householdId, (householdCounts.get(v.householdId) ?? 0) + 1);
+    }
   }
+
+  // Distribution of household sizes (number of households per size bucket).
+  const sizeBuckets = new Map<string, number>();
+  for (const size of householdCounts.values()) {
+    const key = size >= 5 ? '5+' : String(size);
+    sizeBuckets.set(key, (sizeBuckets.get(key) ?? 0) + 1);
+  }
+
   return {
     byCommunity: toArray(community),
+    byReligion: toArray(religion),
     byOccupation: toArray(occupation),
     byLanguage: toArray(language),
     byGender: toArray(gender),
     byAgeBucket: toArray(ageB),
+    byWard: toArray(ward),
+    byPanchayat: toArray(panchayat),
+    byBlock: toArray(block),
     byPollingStation: toArray(ps),
     byPredictedLeader: toArray(leader),
+    byHouseholdSize: Array.from(sizeBuckets.entries())
+      .map(([key, count]) => ({ key, count }))
+      .sort((a, b) => a.key.localeCompare(b.key)),
+    firstTimeVoters,
   };
 }

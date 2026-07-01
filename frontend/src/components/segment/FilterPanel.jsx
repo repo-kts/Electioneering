@@ -55,7 +55,7 @@ export default function FilterPanel({
         subtitle="Combine geography, demographics, turnout history and predicted leaning."
       />
       <Card.Body>
-        <div className="seg-filter">
+        <div className="space-y-2.5">
           <FilterRow label="Free text">
             <input
               type="text"
@@ -105,7 +105,7 @@ export default function FilterPanel({
             />
           </FilterRow>
 
-          <hr />
+          <hr className="my-3 border-slate-200" />
 
           <FilterRow label="Gender">
             <select
@@ -149,6 +149,42 @@ export default function FilterPanel({
               }}
             />
           </FilterRow>
+          <FilterRow label="Religion">
+            <input
+              type="text"
+              placeholder="Hindu, Christian, Muslim"
+              value={Array.isArray(v.religion) ? v.religion.join(', ') : v.religion ?? ''}
+              onChange={(e) => {
+                const arr = e.target.value.split(',').map((s) => s.trim()).filter(Boolean);
+                set('religion', arr.length === 0 ? undefined : arr.length === 1 ? arr[0] : arr);
+              }}
+            />
+          </FilterRow>
+          <FilterRow label="Ward / Panchayat">
+            <input
+              type="text"
+              placeholder="Ward"
+              style={{ width: 110 }}
+              value={v.ward ?? ''}
+              onChange={(e) => set('ward', e.target.value || undefined)}
+            />
+            <input
+              type="text"
+              placeholder="Panchayat"
+              value={v.panchayat ?? ''}
+              onChange={(e) => set('panchayat', e.target.value || undefined)}
+            />
+          </FilterRow>
+          <FilterRow label="First-time (≤19)">
+            <label className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 px-2.5 py-1 text-xs text-slate-700 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={!!v.firstTimeOnly}
+                onChange={(e) => set('firstTimeOnly', e.target.checked || undefined)}
+              />
+              only first-time voters
+            </label>
+          </FilterRow>
           <FilterRow label="Occupation">
             <input
               type="text"
@@ -172,14 +208,14 @@ export default function FilterPanel({
             />
           </FilterRow>
 
-          <hr />
+          <hr className="my-3 border-slate-200" />
 
           {elections.length > 0 && (
             <>
               <FilterRow label="Voted in">
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                   {elections.map((e) => (
-                    <label key={e.id} className="seg-chip">
+                    <label key={e.id} className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 px-2.5 py-1 text-xs text-slate-700 cursor-pointer">
                       <input
                         type="checkbox"
                         checked={isElecOn('votedIn', e.id)}
@@ -193,7 +229,7 @@ export default function FilterPanel({
               <FilterRow label="Did NOT vote in">
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                   {elections.map((e) => (
-                    <label key={e.id} className="seg-chip">
+                    <label key={e.id} className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 px-2.5 py-1 text-xs text-slate-700 cursor-pointer">
                       <input
                         type="checkbox"
                         checked={isElecOn('notVotedIn', e.id)}
@@ -242,9 +278,9 @@ export default function FilterPanel({
 
 function FilterRow({ label, children }) {
   return (
-    <div className="seg-filter-row">
-      <div className="seg-filter-label">{label}</div>
-      <div className="seg-filter-input">{children}</div>
+    <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-3">
+      <div className="text-xs font-medium text-slate-500 sm:w-32 sm:shrink-0">{label}</div>
+      <div className="flex flex-1 flex-wrap items-center gap-2">{children}</div>
     </div>
   );
 }

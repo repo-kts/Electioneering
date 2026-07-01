@@ -1,5 +1,6 @@
 import { PrismaClient, Gender, Role } from '@prisma/client';
 import bcrypt from 'bcryptjs';
+import { classifyName } from '../src/services/nameClassifier.js';
 
 const prisma = new PrismaClient();
 
@@ -136,9 +137,162 @@ function makeVoter(i: number) {
   };
 }
 
+// ─── Goa — Mandrem AC segment, Lok Sabha 2024 (real-shape sample) ──────
+const GOA_CANDIDATES = [
+  'Tukaram Bharat Parab',
+  'Milan R Vaingankar',
+  'Ramakant Khalap',
+  'Shripad Yesso Naik',
+  'Mr Sakharam Naik',
+  'Thomas Augustine Fernandes',
+  'Adv Nishal Naik',
+  'Shakeel Jamal Shaikh',
+];
+// rows: 8 candidate votes…, rejected, nota
+const GOA_FORM20 = [
+  [1, 0, 90, 57, 0, 0, 1, 0, 0, 0],
+  [54, 4, 172, 458, 2, 1, 4, 1, 0, 8],
+  [42, 1, 120, 247, 2, 0, 0, 1, 0, 9],
+  [43, 2, 135, 268, 3, 2, 1, 3, 0, 5],
+  [23, 2, 208, 231, 3, 2, 1, 1, 0, 17],
+  [38, 4, 244, 366, 0, 2, 1, 1, 0, 8],
+];
+
+// The 15 Tiracol voters from the real roll (PS-1, all Christian surnames).
+const TIRACOL = [
+  ['Sebastiao Xavier Fernandes', 'Male', 78, 'TRW0273011', '3'],
+  ['Julie Sebastiao Fernandes', 'Female', 66, 'TRW0226530', '3'],
+  ['Brayan Sebastiao Fernandes', 'Male', 41, 'CDM3600244', '3'],
+  ['Jordan Fernandes', 'Male', 38, 'TRW0114348', '3'],
+  ["Anaruzaria Andre D'souza", 'Female', 86, 'TRW0226506', '4'],
+  ['Eugenia Desouza', 'Female', 58, 'TRW0343152', '4'],
+  ["Fermino Andre D'Souza", 'Male', 53, 'TRW0226589', '4'],
+  ["Wilma D'Souza", 'Female', 53, 'CDM5406228', '6'],
+  ['Cicilie Santanjocky Mendes', 'Female', 90, 'TRW0227496', '8'],
+  ["Santana Caridade De'Souza", 'Male', 68, 'TRW0226522', '8'],
+  ['Jeronimo Mendes', 'Male', 62, 'CDM5406418', '8'],
+  ['Girgol Santanjocky Mendes', 'Male', 58, 'CDM5406293', '8'],
+  ['Simao Santanjocky Mendes', 'Male', 56, 'CDM5406236', '8'],
+  ['Josephina Jeronimo Mendes', 'Female', 55, 'TRW0403287', '8'],
+  ['Francis Santanjocky Mendes', 'Male', 54, 'CDM5409321', '8'],
+] as const;
+
+// Mixed Goan surnames for the other booths (Hindu / Christian / Muslim).
+const GOA_GEN_NAMES = [
+  'Mahesh Naik', 'Sunita Parab', 'Rajesh Shirodkar', 'Anil Kerkar',
+  'Maria Fernandes', 'Joseph Dsouza', 'Imran Shaikh', 'Ayesha Shaikh',
+  'Suresh Chodankar', 'Vaishali Sawant', 'Pravin Gawde', 'Deepa Naik',
+  'Caetano Rodrigues', 'Filomena Pereira', 'Yusuf Khan', 'Sameer Mulla',
+  'Ganesh Parsekar', 'Manoj Mandrekar', 'Savio Pinto', 'Agnelo Gomes',
+];
+
+function splitName(full: string): { first: string; last: string } {
+  const p = full.trim().split(/\s+/);
+  return { first: p.slice(0, -1).join(' ') || p[0], last: p[p.length - 1] };
+}
+
+async function seedGoa() {
+  const election =
+    (await prisma.election.findFirst({
+      where: { assemblyNo: '1', assemblyName: 'Mandrem', electionYear: 2024 },
+    })) ??
+    (await prisma.election.create({
+      data: {
+        state: 'Goa', parlNo: '1', parlName: 'North Goa',
+        assemblyNo: '1', assemblyName: 'Mandrem',
+        electionType: 'Lok Sabha Election', electionYear: 2024, totalElectors: 26000,
+      },
+    }));
+  await prisma.pollingStation.deleteMany({ where: { electionId: election.id } });
+  await prisma.candidate.deleteMany({ where: { electionId: election.id } });
+
+  const candIds: number[] = [];
+  for (let i = 0; i < GOA_CANDIDATES.length; i++) {
+    const party = GOA_CANDIDATES[i].includes('Shripad') ? 'BJP'
+      : GOA_CANDIDATES[i].includes('Ramakant') ? 'INC' : 'IND';
+    const c = await prisma.candidate.create({
+      data: { electionId: election.id, name: GOA_CANDIDATES[i], position: i, party },
+    });
+    candIds.push(c.id);
+  }
+  const psIds: number[] = [];
+  for (let i = 0; i < GOA_FORM20.length; i++) {
+    const row = GOA_FORM20[i];
+    const ps = await prisma.pollingStation.create({
+      data: {
+        electionId: election.id, serial: i + 1,
+        name: `${i + 1} - Government Primary School, Tiracol`,
+        rejectedVotes: row[8], notaVotes: row[9],
+      },
+    });
+    psIds.push(ps.id);
+    await prisma.voteResult.createMany({
+      data: candIds.map((cid, j) => ({ pollingStationId: ps.id, candidateId: cid, votes: row[j] })),
+    });
+  }
+  console.log('[seed] Goa Mandrem form20 →', GOA_FORM20.length, 'PS');
+
+  // Wipe prior Goa voters (TRW/CDM EPIC prefixes + generated GOA prefix).
+  await prisma.voter.deleteMany({
+    where: { OR: [{ epic: { startsWith: 'TRW' } }, { epic: { startsWith: 'CDM' } }, { epic: { startsWith: 'GOA' } }] },
+  });
+
+  const geo = {
+    state: 'Goa', parlNo: '1', parlName: 'North Goa', assemblyNo: '1', assemblyName: 'Mandrem',
+    ward: 'ARAMBOL', panchayat: 'MANDREM', tehsil: 'PERNEM', district: 'NORTH GOA', pinCode: '403524',
+  };
+
+  let made = 0;
+  // Tiracol roll → PS-1
+  for (let i = 0; i < TIRACOL.length; i++) {
+    const [full, sex, age, epic, makan] = TIRACOL[i];
+    const { first, last } = splitName(full);
+    const c = classifyName(first.toUpperCase(), last.toUpperCase());
+    await prisma.voter.create({
+      data: {
+        ...geo,
+        fullName: full, firstName: first.toUpperCase(), lastName: last.toUpperCase(),
+        relationType: sex === 'Female' ? 'Husband' : 'Father', relativeName: null,
+        relFirstName: '', relLastName: '',
+        age: age as number, gender: sex as Gender, epic: epic as string,
+        pollingStationName: '1 - Government Primary School, Tiracol',
+        pollingStationId: psIds[0], partNumber: '1', partSerial: `${i + 1}`,
+        houseNumber: makan as string,
+        religion: c.religion, community: c.community, communityConfidence: c.confidence,
+        communitySource: 'inferred',
+      },
+    });
+    made++;
+  }
+  // Generated voters spread across PS-2..6
+  for (let i = 0; i < GOA_GEN_NAMES.length; i++) {
+    const { first, last } = splitName(GOA_GEN_NAMES[i]);
+    const c = classifyName(first.toUpperCase(), last.toUpperCase());
+    const psIdx = 1 + (i % (psIds.length - 1)); // 1..5
+    const isF = /a$|i$/.test(first.toLowerCase());
+    await prisma.voter.create({
+      data: {
+        ...geo,
+        fullName: GOA_GEN_NAMES[i], firstName: first.toUpperCase(), lastName: last.toUpperCase(),
+        relationType: isF ? 'Husband' : 'Father', relFirstName: '', relLastName: '',
+        age: 22 + ((i * 7) % 55), gender: isF ? Gender.Female : Gender.Male,
+        epic: `GOA${(4000000 + i * 311).toString().slice(-7)}`,
+        pollingStationName: `${psIdx + 1} - Government Primary School, Tiracol`,
+        pollingStationId: psIds[psIdx], partNumber: `${psIdx + 1}`, partSerial: `${i + 1}`,
+        houseNumber: `${10 + (i % 6)}`,
+        religion: c.religion, community: c.community, communityConfidence: c.confidence,
+        communitySource: 'inferred',
+      },
+    });
+    made++;
+  }
+  console.log('[seed] Goa voters created =', made);
+}
+
 async function main() {
   console.log('[seed] starting...');
   await seedUsers();
+  await seedGoa();
 
   // ─── Election (2025) ──────────────────────────────────────────
   const e2025 =

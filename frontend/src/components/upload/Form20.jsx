@@ -297,7 +297,7 @@ export default function Form20({ electionId, onSubmit, onChangeElection }) {
         subtitle="Excel-style grid: Tab / Enter / arrows to move between cells, paste a TSV block from Excel to fill many polling stations at once. Totals recalc live."
       />
       <Card.Body>
-        {error && <div className="form20-error" style={{ color: 'var(--danger)', marginBottom: 12 }}>{error}</div>}
+        {error && <div className="form20-error" style={{ color: '#dc2626', marginBottom: 12 }}>{error}</div>}
         {loading && <div>Loading…</div>}
 
         {/* ─── Header info ─── */}
@@ -328,7 +328,7 @@ export default function Form20({ electionId, onSubmit, onChangeElection }) {
             <Button variant="primary" onClick={createElection} disabled={saving || !header.assemblyNo || !header.assemblyName}>
               {saving ? 'Creating…' : 'Create Election'}
             </Button>
-            <span style={{ marginLeft: 12, color: 'var(--text-2)', fontSize: 12 }}>
+            <span style={{ marginLeft: 12, color: '#475569', fontSize: 12 }}>
               Saves the election header. After this, add candidates and polling-station rows.
             </span>
           </div>
@@ -566,7 +566,7 @@ export default function Form20({ electionId, onSubmit, onChangeElection }) {
         )}
 
         {election && candidates.length === 0 && (
-          <div style={{ padding: 16, color: 'var(--text-2)' }}>
+          <div style={{ padding: 16, color: '#475569' }}>
             Add at least one candidate above to start filling the spreadsheet.
           </div>
         )}

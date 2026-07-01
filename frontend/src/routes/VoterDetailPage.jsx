@@ -124,20 +124,18 @@ export default function VoterDetailPage() {
   }
 
   return (
-    <div className="shell">
+    <div>
       <PageHead
         title="Voter Detail"
         subtitle="Add voter records by hand, upload bulk data from Excel/CSV, or review submission history. Everything is checked before it's saved."
-        stats={<StatGroup items={stats} />}
-        actions={
-          <Link to="/" style={{ textDecoration: 'none' }}>
-            <Button>← Home</Button>
-          </Link>
-        }
       />
+      <div className="mb-5">
+        <StatGroup items={stats} />
+      </div>
 
       <Tabs tabs={tabsWithCount} active={tab} onChange={setTab} />
 
+      <div className="mt-5 space-y-4">
       {tab === 'add' && (
         <>
           <RecordForm onSubmit={handleRecordSubmit} busy={bulkVotersM.isPending} />
@@ -159,7 +157,7 @@ export default function VoterDetailPage() {
                 <Card.Body>
                   <Dropzone onFileAccepted={(f) => previewM.mutate(f)} />
                   {previewM.isPending && (
-                    <div className="qq-inline-busy" style={{ marginTop: 8 }}>
+                    <div className="mt-2 flex items-center gap-2 text-xs text-slate-500">
                       <Spinner size={12} /> parsing file…
                     </div>
                   )}
@@ -207,23 +205,18 @@ export default function VoterDetailPage() {
         );
         return (
           <>
-            <div className="grid-toolbar" style={{ gap: 8, flexWrap: 'wrap', marginBottom: 12, alignItems: 'center' }}>
+            <div className="mb-3 flex flex-wrap items-center gap-2">
               <input
                 type="text"
                 placeholder="Search history (file / source / constituency)…"
                 value={historyQuery}
                 onChange={(e) => setHistoryQuery(e.target.value)}
-                className="field"
-                style={{ minWidth: 280 }}
+                className="min-w-[280px] flex-1"
               />
               {historyQuery && <Button onClick={() => setHistoryQuery('')}>Clear</Button>}
-              <span className="row-count" style={{ marginLeft: 'auto' }}>
+              <span className="ml-auto flex items-center gap-2 text-sm text-slate-500">
                 {filtered.length} / {history.length}
-                {historyQ.isFetching && (
-                  <span className="qq-inline-busy" style={{ marginLeft: 8 }}>
-                    <Spinner size={10} />
-                  </span>
-                )}
+                {historyQ.isFetching && <Spinner size={10} />}
               </span>
             </div>
             {historyQ.isPending && <SkeletonRows rows={5} cols={5} rowHeight={32} />}
@@ -238,6 +231,7 @@ export default function VoterDetailPage() {
           </>
         );
       })()}
+      </div>
     </div>
   );
 }
