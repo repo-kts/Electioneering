@@ -10,6 +10,21 @@ export const MOBILE_RE = /^[6-9]\d{9}$/;
 export const GENDERS = ['Male', 'Female', 'Other'] as const;
 export type Gender = (typeof GENDERS)[number];
 
+// Reservation class — fixed set for the `community` field.
+export const COMMUNITIES = ['Gen', 'OBC', 'SC', 'ST'] as const;
+export type Community = (typeof COMMUNITIES)[number];
+
+/** Normalise a free-typed community value to the canonical Gen/OBC/SC/ST, or null. */
+export function normalizeCommunity(raw: string): Community | null {
+  const v = raw.trim().toUpperCase();
+  if (!v) return null;
+  if (v === 'GEN' || v === 'GENERAL' || v === 'UR') return 'Gen';
+  if (v === 'OBC' || v === 'BC') return 'OBC';
+  if (v === 'SC') return 'SC';
+  if (v === 'ST') return 'ST';
+  return null;
+}
+
 export interface VoterClean {
   fullName: string | null;
   firstName: string;
@@ -49,7 +64,9 @@ export interface VoterClean {
   district: string | null;
   pinCode: string | null;
   // segmentation (optional / inferred)
-  community: string | null;
+  caste: string | null;
+  community: string | null; // Gen | OBC | SC | ST
+  category: string | null;
   religion: string | null;
   communityConfidence: number | null;
   communitySource: string;
@@ -145,23 +162,36 @@ export function validateVoter(raw: Record<string, unknown>): VoterValidation {
   const district = s('district') || null;
   const pinCode = s('pinCode') || null;
 
-  // Segmentation — community/religion manual when supplied, else inferred
-  // from the name. Inferred values carry a confidence score.
-  const manualCommunity = s('community') || null;
+  // Segmentation — caste/religion are inferred from the name when not supplied;
+  // community (Gen/OBC/SC/ST) and category are manual-only. Inferred values
+  // carry a confidence score. `community` accepts free spellings and is
+  // normalised to the fixed set (invalid values are flagged).
+  const manualCaste = s('caste') || null;
+  const communityRaw = s('community');
+  const community = communityRaw ? normalizeCommunity(communityRaw) : null;
+  if (communityRaw && !community) errors.community = 'must be Gen/OBC/SC/ST';
+  const manualCategory = s('category') || null;
   const manualReligion = s('religion') || null;
-  let community = manualCommunity;
+
+  let caste = manualCaste;
   let religion = manualReligion;
   let communityConfidence: number | null = null;
   let communitySource = 'inferred';
-  if (manualCommunity || manualReligion) {
+  if (manualCaste || manualReligion || community || manualCategory) {
     communitySource = 'manual';
     communityConfidence = 1;
-  } else {
+  }
+  // Fill caste + religion from the name when either is missing.
+  if (!caste || !religion) {
     const c = classifyName(firstName, lastName);
-    religion = c.religion;
-    community = c.community;
-    communityConfidence = c.confidence;
-    communitySource = c.source;
+    if (!religion) religion = c.religion;
+    if (!caste) {
+      caste = c.community;
+      if (!manualCaste && !community && !manualCategory && !manualReligion) {
+        communityConfidence = c.confidence;
+        communitySource = c.source;
+      }
+    }
   }
 
   const occupation = s('occupation') || null;
@@ -209,7 +239,9 @@ export function validateVoter(raw: Record<string, unknown>): VoterValidation {
           subdivision,
           district,
           pinCode,
+          caste,
           community,
+          category: manualCategory,
           religion,
           communityConfidence,
           communitySource,

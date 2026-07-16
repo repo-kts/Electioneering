@@ -177,6 +177,11 @@ router.get(
         id: ps.election.id,
         assemblyNo: ps.election.assemblyNo,
         assemblyName: ps.election.assemblyName,
+        assemblySeatType: ps.election.assemblySeatType,
+        parlNo: ps.election.parlNo,
+        parlName: ps.election.parlName,
+        parlSeatType: ps.election.parlSeatType,
+        state: ps.election.state,
         electionType: ps.election.electionType,
         electionYear: ps.election.electionYear,
       },
@@ -184,6 +189,14 @@ router.get(
         id: ps.id,
         serial: ps.serial,
         name: ps.name,
+        address: ps.address,
+        cityVillage: ps.cityVillage,
+        ward: ps.ward,
+        tolaMohalla: ps.tolaMohalla,
+        postOffice: ps.postOffice,
+        policeStation: ps.policeStation,
+        latitude: ps.latitude,
+        longitude: ps.longitude,
         rejectedVotes: ps.rejectedVotes,
         notaVotes: ps.notaVotes,
         tenderedVotes: ps.tenderedVotes,
@@ -210,7 +223,9 @@ router.get(
         age: v.age,
         gender: v.gender,
         religion: v.religion,
+        caste: v.caste,
         community: v.community,
+        category: v.category,
         houseNumber: v.houseNumber,
         epic: v.epic,
         relationType: v.relationType,
@@ -321,6 +336,7 @@ router.get(
     let turnoutHistory: Array<{
       electionId: number;
       electionYear: number | null;
+      electionType: string;
       voted: number;
       registered: number;
       pct: number;
@@ -394,7 +410,7 @@ router.get(
       const sameAssembly = await prisma.election.findMany({
         where: { assemblyNo: election.assemblyNo, assemblyName: election.assemblyName },
         orderBy: { electionYear: 'asc' },
-        select: { id: true, electionYear: true },
+        select: { id: true, electionYear: true, electionType: true },
       });
       for (const e of sameAssembly) {
         const v = voterIds.length
@@ -413,6 +429,7 @@ router.get(
         turnoutHistory.push({
           electionId: e.id,
           electionYear: e.electionYear,
+          electionType: e.electionType,
           voted: v,
           registered: voters.length,
           pct: voters.length > 0 ? v / voters.length : 0,

@@ -5,6 +5,7 @@ import Card from '../ui/Card.jsx';
 import {
   EPIC_PATTERN,
   GENDER_OPTIONS,
+  COMMUNITY_OPTIONS,
   INDIAN_STATES,
 } from '../../data/voterForm.js';
 import { useGridNav } from '../../lib/useGridNav.js';
@@ -33,7 +34,9 @@ const COLUMNS = [
   { key: 'partNumber', label: 'Part No', type: 'number', required: true, placeholder: '381', short: true, min: 1 },
   { key: 'partName', label: 'Part Name', type: 'text', placeholder: 'Madarasa Ajijaya Dakshini Bhag', long: true },
   { key: 'partSerial', label: 'Part Serial', type: 'number', required: true, placeholder: '283', short: true, min: 1 },
-  { key: 'community', label: 'Community / Caste', type: 'text', placeholder: 'Kayastha' },
+  { key: 'caste', label: 'Caste', type: 'text', placeholder: 'Kayastha' },
+  { key: 'community', label: 'Community', type: 'select', options: COMMUNITY_OPTIONS, short: true },
+  { key: 'category', label: 'Category', type: 'text', placeholder: 'General', short: true },
   { key: 'occupation', label: 'Occupation', type: 'text', placeholder: 'Teacher' },
   { key: 'language', label: 'Language', type: 'text', placeholder: 'Hindi', short: true },
 ];

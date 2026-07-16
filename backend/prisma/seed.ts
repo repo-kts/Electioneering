@@ -58,7 +58,10 @@ const FORM20_2020_RAW = [
 ];
 
 // ─── Voter generator (50 voters across 5 polling stations) ─────────
-const COMMUNITIES = [
+// Reservation class — fixed set for the `community` field.
+const RESERVATION = ['Gen', 'OBC', 'SC', 'ST'];
+const CATEGORIES = ['General', 'Backward', 'Minority', 'Reserved'];
+const CASTES = [
   'Yadav',
   'Kurmi',
   'Pasmanda Muslim',
@@ -131,7 +134,9 @@ function makeVoter(i: number) {
     partNumber: `${380 + psSerial}`,
     partName: `Part of PS-${psSerial}`,
     partSerial: `${i + 1}`,
-    community: pick(COMMUNITIES, i),
+    caste: pick(CASTES, i),
+    community: pick(RESERVATION, i),
+    category: pick(CATEGORIES, i),
     occupation: pick(OCCUPATIONS, i + 2),
     language: pick(LANGUAGES, i + 1),
   };
@@ -200,6 +205,7 @@ async function seedGoa() {
       data: {
         state: 'Goa', parlNo: '1', parlName: 'North Goa',
         assemblyNo: '1', assemblyName: 'Mandrem',
+        assemblySeatType: 'GEN', parlSeatType: 'GEN',
         electionType: 'Lok Sabha Election', electionYear: 2024, totalElectors: 26000,
       },
     }));
@@ -222,6 +228,9 @@ async function seedGoa() {
       data: {
         electionId: election.id, serial: i + 1,
         name: `${i + 1} - Government Primary School, Tiracol`,
+        address: `Tiracol, Pernem, North Goa`,
+        cityVillage: 'Tiracol', ward: `${i + 1}`, tolaMohalla: 'Querim',
+        postOffice: 'Pernem', policeStation: 'Pernem',
         rejectedVotes: row[8], notaVotes: row[9],
       },
     });
@@ -258,7 +267,7 @@ async function seedGoa() {
         pollingStationName: '1 - Government Primary School, Tiracol',
         pollingStationId: psIds[0], partNumber: '1', partSerial: `${i + 1}`,
         houseNumber: makan as string,
-        religion: c.religion, community: c.community, communityConfidence: c.confidence,
+        religion: c.religion, caste: c.community, communityConfidence: c.confidence,
         communitySource: 'inferred',
       },
     });
@@ -280,7 +289,7 @@ async function seedGoa() {
         pollingStationName: `${psIdx + 1} - Government Primary School, Tiracol`,
         pollingStationId: psIds[psIdx], partNumber: `${psIdx + 1}`, partSerial: `${i + 1}`,
         houseNumber: `${10 + (i % 6)}`,
-        religion: c.religion, community: c.community, communityConfidence: c.confidence,
+        religion: c.religion, caste: c.community, communityConfidence: c.confidence,
         communitySource: 'inferred',
       },
     });
@@ -421,7 +430,7 @@ async function main() {
       assemblyNo: '64', assemblyName: 'Karawal Nagar',
       pollingStationName: 'Government School Block A', partNumber: '142',
       partName: 'Karawal Nagar Block A', partSerial: '47',
-      community: 'Brahmin', occupation: 'Teacher', language: 'Hindi',
+      caste: 'Brahmin', community: 'Gen', category: 'General', occupation: 'Teacher', language: 'Hindi',
     },
     {
       firstName: 'ARJUN', lastName: 'PATEL', relFirstName: 'KIRAN', relLastName: 'PATEL',
@@ -430,7 +439,7 @@ async function main() {
       assemblyNo: '33', assemblyName: 'Sabarmati',
       pollingStationName: 'Municipal Primary School', partNumber: '98',
       partName: 'Sabarmati North Ward', partSerial: '215',
-      community: 'Patel', occupation: 'Business', language: 'Gujarati',
+      caste: 'Patel', community: 'OBC', category: 'Backward', occupation: 'Business', language: 'Gujarati',
     },
   ];
   for (const v of DEMO_OUTSIDE) {
@@ -481,7 +490,7 @@ async function main() {
       criteria: {
         assemblyNo: '172',
         assemblyName: 'Biharsharif',
-        community: 'Yadav',
+        caste: 'Yadav',
         ageMin: 18,
         ageMax: 30,
       },
@@ -494,7 +503,7 @@ async function main() {
       criteria: {
         assemblyNo: '172',
         assemblyName: 'Biharsharif',
-        community: 'Pasmanda Muslim',
+        caste: 'Pasmanda Muslim',
         gender: 'Female',
         votedIn: [2025],
         notVotedIn: [2020],
