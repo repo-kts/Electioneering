@@ -12,6 +12,12 @@ import { aggregate } from '../services/segmentation.js';
 import { computeBoothTargets, computeTurnoutGap, computeSwing } from '../services/boothAnalytics.js';
 import { assembleStrategyBrief } from '../services/strategy.js';
 import { geocodeElectionBooths } from '../services/geocode.js';
+import { computeBoothRecommendations } from '../services/boothRecommendations.js';
+import {
+  computePartyAnalytics,
+  computeAssemblyTimeline,
+  computeElectionsHierarchy,
+} from '../services/electionInsights.js';
 
 const router = Router();
 
@@ -152,6 +158,20 @@ router.get(
       : 0;
 
     const totalPolled = totalValid + ps.rejectedVotes + ps.notaVotes;
+    const leader = candidates[0] ?? null;
+    const runnerUp = candidates[1] ?? null;
+    const demographics = aggregate(voters);
+
+    // Booth classification + concrete campaign recommendations.
+    const reco = await computeBoothRecommendations(ps.electionId, ps.id, {
+      leader: leader ? { name: leader.name, share: leader.share } : null,
+      runnerUp: runnerUp ? { name: runnerUp.name, share: runnerUp.share } : null,
+      totalValid,
+      notaShare: totalPolled > 0 ? ps.notaVotes / totalPolled : 0,
+      demographics,
+      registered,
+    });
+
     res.json({
       election: {
         id: ps.election.id,
@@ -169,8 +189,8 @@ router.get(
         tenderedVotes: ps.tenderedVotes,
       },
       candidates,
-      leader: candidates[0] ?? null,
-      runnerUp: candidates[1] ?? null,
+      leader,
+      runnerUp,
       totalValid,
       totalPolled,
       turnout: {
@@ -178,7 +198,10 @@ router.get(
         voted,
         pct: registered > 0 ? voted / registered : 0,
       },
-      demographics: aggregate(voters),
+      classification: reco.classification,
+      priority: reco.priority,
+      recommendations: reco.recommendations,
+      demographics,
       voters: voters.slice(0, 500).map((v) => ({
         id: v.id,
         fullName: v.fullName,
@@ -411,6 +434,56 @@ router.get(
       },
       turnoutHistory,
     });
+  }),
+);
+
+// GET /api/analytics/party?electionId=X
+// Party-level vote aggregation for one election: votes, share, candidate count,
+// booths led, and top candidate per party. Null/empty party → "Independent".
+router.get(
+  '/party',
+  asyncHandler(async (req, res) => {
+    const { electionId } = z.object({ electionId: z.coerce.number().int() }).parse({
+      electionId: req.query.electionId,
+    });
+    const result = await computePartyAnalytics(electionId);
+    res.json(result);
+  }),
+);
+
+// GET /api/analytics/assembly-timeline?assemblyNo=X&assemblyName=Y[&limit=N]
+// Year-over-year results for one assembly constituency: turnout, winner,
+// runner-up, and margin per election, newest first. `limit` caps the count.
+router.get(
+  '/assembly-timeline',
+  asyncHandler(async (req, res) => {
+    const params = z
+      .object({
+        assemblyNo: z.string().optional(),
+        assemblyName: z.string().optional(),
+        limit: z.coerce.number().int().min(1).optional(),
+      })
+      .refine((p) => p.assemblyNo || p.assemblyName, {
+        message: 'assemblyNo or assemblyName is required',
+      })
+      .parse({
+        assemblyNo: req.query.assemblyNo,
+        assemblyName: req.query.assemblyName,
+        limit: req.query.limit,
+      });
+    const result = await computeAssemblyTimeline(params);
+    res.json(result);
+  }),
+);
+
+// GET /api/analytics/hierarchy
+// All elections grouped into a tree: Election Type → Year → Constituency,
+// with electionCount + totalElectors rollups at each level.
+router.get(
+  '/hierarchy',
+  asyncHandler(async (_req, res) => {
+    const result = await computeElectionsHierarchy();
+    res.json(result);
   }),
 );
 

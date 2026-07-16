@@ -11,6 +11,8 @@ import ElectionOverviewPage from './routes/ElectionOverviewPage.jsx';
 import BoothDetailPage from './routes/BoothDetailPage.jsx';
 import CandidateReportPage from './routes/CandidateReportPage.jsx';
 import StrategyPage from './routes/StrategyPage.jsx';
+import PartyAnalyticsPage from './routes/PartyAnalyticsPage.jsx';
+import AssemblyTimelinePage from './routes/AssemblyTimelinePage.jsx';
 import HouseholdsPage from './routes/HouseholdsPage.jsx';
 
 // Landing — send admins to the results explorer, operators to data entry.
@@ -41,6 +43,8 @@ export default function App() {
         <Route path="/elections/:id/booth/:psId" element={<ProtectedRoute roles={ADMIN}><BoothDetailPage /></ProtectedRoute>} />
         <Route path="/elections/:id/candidate/:name" element={<ProtectedRoute roles={ADMIN}><CandidateReportPage /></ProtectedRoute>} />
         <Route path="/elections/:id/strategy" element={<ProtectedRoute roles={ADMIN}><StrategyPage /></ProtectedRoute>} />
+        <Route path="/elections/:id/parties" element={<ProtectedRoute roles={ADMIN}><PartyAnalyticsPage /></ProtectedRoute>} />
+        <Route path="/elections/:id/timeline" element={<ProtectedRoute roles={ADMIN}><AssemblyTimelinePage /></ProtectedRoute>} />
         <Route path="/households" element={<ProtectedRoute roles={ADMIN}><HouseholdsPage /></ProtectedRoute>} />
         <Route path="/segment" element={<ProtectedRoute roles={ADMIN}><SegmentPage /></ProtectedRoute>} />
 
