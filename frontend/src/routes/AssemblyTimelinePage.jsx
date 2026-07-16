@@ -7,7 +7,7 @@ import {
 import Breadcrumbs from '../components/ui/Breadcrumbs.jsx';
 import { PageHeader, StatCard, Surface, Loading, ErrorBox } from '../components/ui/kit.jsx';
 import { api } from '../lib/api.js';
-import { colorFor, num } from '../components/elections/helpers.js';
+import { colorFor, colorForParty, colorForCandidate, num } from '../components/elections/helpers.js';
 
 const p1 = (n) => `${((n ?? 0) * 100).toFixed(1)}%`; // fraction → percent string
 
@@ -152,7 +152,7 @@ export default function AssemblyTimelinePage() {
                   <Tooltip formatter={(v) => [num(v), 'Margin']} cursor={{ fill: '#f7f5f0' }} />
                   <Bar dataKey="margin" radius={[4, 4, 0, 0]}>
                     {chartData.map((d) => (
-                      <Cell key={d.year} fill={colorFor(d.party)} />
+                      <Cell key={d.year} fill={colorForParty(d.party)} />
                     ))}
                   </Bar>
                 </BarChart>
@@ -162,7 +162,7 @@ export default function AssemblyTimelinePage() {
             <div className="mt-4 flex flex-wrap gap-3 border-t border-slate-200 pt-4">
               {[...new Set(chartData.map((d) => d.party).filter(Boolean))].map((party) => (
                 <span key={party} className="flex items-center gap-1.5 text-xs text-slate-600">
-                  <span className="inline-block h-3 w-3" style={{ background: colorFor(party) }} />
+                  <span className="inline-block h-3 w-3" style={{ background: colorForParty(party) }} />
                   {party}
                 </span>
               ))}
@@ -194,7 +194,7 @@ export default function AssemblyTimelinePage() {
                     <div className="min-w-0">
                       {e.winner ? (
                         <div className="flex items-center gap-2">
-                          <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: colorFor(e.winner.name) }} />
+                          <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: colorForCandidate(e.winner.name, e.winner.party) }} />
                           <span className="truncate text-sm text-slate-700">
                             <span className="font-medium text-slate-900">{e.winner.name}</span>
                             {e.winner.party ? <span className="text-slate-500"> · {e.winner.party}</span> : null}

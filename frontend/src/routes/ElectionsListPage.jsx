@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../lib/api.js';
-import { colorFor, num } from '../components/elections/helpers.js';
+import { colorForCandidate, num } from '../components/elections/helpers.js';
 
 const pct = (n) => `${((n ?? 0) * 100).toFixed(1)}%`;
 
@@ -52,7 +52,7 @@ function ConstituencyRow({ c }) {
       <div className="min-w-0">
         {w ? (
           <div className="flex items-center gap-2">
-            <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: colorFor(w.name) }} />
+            <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: colorForCandidate(w.name, w.party) }} />
             <span className="truncate text-sm text-slate-700">
               <span className="font-medium text-slate-900">{w.name}</span>
               {w.party ? <span className="text-slate-500"> · {w.party}</span> : null}
