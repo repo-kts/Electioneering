@@ -7,7 +7,10 @@ import Card from '../ui/Card.jsx';
 export default function AggregatesPanel({ aggregates, total }) {
   if (!aggregates) return null;
   const groups = [
+    { title: 'Caste', items: aggregates.byCaste },
     { title: 'Community', items: aggregates.byCommunity },
+    { title: 'Category', items: aggregates.byCategory },
+    { title: 'Religion', items: aggregates.byReligion },
     { title: 'Age', items: aggregates.byAgeBucket },
     { title: 'Gender', items: aggregates.byGender },
     { title: 'Occupation', items: aggregates.byOccupation },

@@ -173,10 +173,12 @@ const VOTER_HEADER_MAP: Record<string, string> = {
   pincode: 'pinCode',
   pin: 'pinCode',
   // Segmentation
-  community: 'community',
-  caste: 'community',
-  'sub-caste': 'community',
-  jati: 'community',
+  caste: 'caste',
+  'sub-caste': 'caste',
+  jati: 'caste',
+  community: 'community', // Gen / OBC / SC / ST
+  'reservation': 'community',
+  category: 'category',
   religion: 'religion',
   dharm: 'religion',
   occupation: 'occupation',

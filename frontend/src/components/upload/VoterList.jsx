@@ -13,7 +13,7 @@ const COLS = [
   { key: 'age', label: 'Age', short: true, numeric: true },
   { key: 'gender', label: 'Gender', short: true },
   { key: 'epic', label: 'EPIC' },
-  { key: 'mobile', label: 'Mobile' },  { key: 'community', label: 'Community' },
+  { key: 'mobile', label: 'Mobile' },  { key: 'caste', label: 'Caste' },  { key: 'community', label: 'Community' },  { key: 'category', label: 'Category' },
   { key: 'occupation', label: 'Occupation' },
   { key: 'language', label: 'Lang', short: true },
   { key: 'state', label: 'State' },

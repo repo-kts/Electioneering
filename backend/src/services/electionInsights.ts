@@ -211,33 +211,43 @@ export async function computeAssemblyTimeline(opts: {
   };
 }
 
-// ─── 3. Elections hierarchy (type → year → constituency) ───────────────────
+// ─── 3. Elections hierarchy (type → constituency, years nested per row) ─────
+export interface HierarchyYear {
+  electionId: number;
+  year: number | null;
+  electionType: string;
+  totalElectors: number | null;
+  pollingStations: number;
+  winner: { name: string; party: string | null; share: number } | null;
+}
+
+export interface HierarchyConstituency {
+  key: string;
+  assemblyNo: string;
+  assemblyName: string;
+  state: string;
+  parlName: string;
+  latestElectionId: number; // link target (most recent year)
+  yearCount: number;
+  totalElectors: number | null; // latest year's electors
+  pollingStations: number; // latest year
+  winner: { name: string; party: string | null; share: number } | null; // latest year
+  years: HierarchyYear[]; // newest first
+}
+
 export interface ElectionsHierarchyResult {
   types: Array<{
     electionType: string;
-    electionCount: number;
+    constituencyCount: number;
+    yearCount: number;
     totalElectors: number;
-    years: Array<{
-      year: number | null;
-      electionCount: number;
-      totalElectors: number;
-      constituencies: Array<{
-        electionId: number;
-        assemblyNo: string;
-        assemblyName: string;
-        state: string;
-        parlName: string;
-        totalElectors: number | null;
-        pollingStations: number;
-        winner: { name: string; party: string | null; share: number } | null;
-      }>;
-    }>;
+    constituencies: HierarchyConstituency[];
   }>;
 }
 
 export async function computeElectionsHierarchy(): Promise<ElectionsHierarchyResult> {
   const elections = await prisma.election.findMany({
-    orderBy: [{ electionType: 'asc' }, { electionYear: 'desc' }, { assemblyName: 'asc' }],
+    orderBy: [{ electionType: 'asc' }, { assemblyName: 'asc' }, { electionYear: 'desc' }],
   });
 
   const enriched = await Promise.all(
@@ -253,45 +263,65 @@ export async function computeElectionsHierarchy(): Promise<ElectionsHierarchyRes
     }),
   );
 
-  // type → year → constituencies
-  const typeMap = new Map<
-    string,
-    Map<number | null, ElectionsHierarchyResult['types'][number]['years'][number]['constituencies']>
-  >();
+  // type → constituency(assemblyNo::assemblyName) → year rows
+  const typeMap = new Map<string, Map<string, HierarchyConstituency>>();
 
   for (const item of enriched) {
     const e = item.election;
-    const years = typeMap.get(e.electionType) ?? new Map();
-    const list = years.get(e.electionYear) ?? [];
-    list.push({
+    const consMap = typeMap.get(e.electionType) ?? new Map<string, HierarchyConstituency>();
+    const key = `${e.assemblyNo}::${e.assemblyName}`;
+    const yearRow: HierarchyYear = {
       electionId: e.id,
-      assemblyNo: e.assemblyNo,
-      assemblyName: e.assemblyName,
-      state: e.state,
-      parlName: e.parlName,
+      year: e.electionYear,
+      electionType: e.electionType,
       totalElectors: e.totalElectors,
       pollingStations: item.pollingStations,
       winner: item.winner,
-    });
-    years.set(e.electionYear, list);
-    typeMap.set(e.electionType, years);
+    };
+    const existing = consMap.get(key);
+    if (existing) {
+      existing.years.push(yearRow);
+    } else {
+      consMap.set(key, {
+        key,
+        assemblyNo: e.assemblyNo,
+        assemblyName: e.assemblyName,
+        state: e.state,
+        parlName: e.parlName,
+        latestElectionId: e.id,
+        yearCount: 1,
+        totalElectors: e.totalElectors,
+        pollingStations: item.pollingStations,
+        winner: item.winner,
+        years: [yearRow],
+      });
+    }
+    typeMap.set(e.electionType, consMap);
   }
 
   const types = Array.from(typeMap.entries())
-    .map(([electionType, years]) => {
-      const yearArr = Array.from(years.entries())
-        .map(([year, constituencies]) => ({
-          year,
-          electionCount: constituencies.length,
-          totalElectors: constituencies.reduce((s, c) => s + (c.totalElectors ?? 0), 0),
-          constituencies,
-        }))
-        .sort((a, b) => (b.year ?? -Infinity) - (a.year ?? -Infinity));
+    .map(([electionType, consMap]) => {
+      const constituencies = Array.from(consMap.values())
+        .map((c) => {
+          // Order years newest first; the newest defines the row's headline stats.
+          c.years.sort((a, b) => (b.year ?? -Infinity) - (a.year ?? -Infinity));
+          const latest = c.years[0];
+          return {
+            ...c,
+            yearCount: c.years.length,
+            latestElectionId: latest.electionId,
+            totalElectors: latest.totalElectors,
+            pollingStations: latest.pollingStations,
+            winner: latest.winner,
+          };
+        })
+        .sort((a, b) => a.assemblyName.localeCompare(b.assemblyName));
       return {
         electionType,
-        electionCount: yearArr.reduce((s, y) => s + y.electionCount, 0),
-        totalElectors: yearArr.reduce((s, y) => s + y.totalElectors, 0),
-        years: yearArr,
+        constituencyCount: constituencies.length,
+        yearCount: constituencies.reduce((s, c) => s + c.yearCount, 0),
+        totalElectors: constituencies.reduce((s, c) => s + (c.totalElectors ?? 0), 0),
+        constituencies,
       };
     })
     .sort((a, b) => a.electionType.localeCompare(b.electionType));

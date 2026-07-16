@@ -53,6 +53,8 @@ model Election {
   parlName        String
   assemblyNo      String
   assemblyName    String
+  assemblySeatType String?  // legislative assembly seat type (GEN / SC / ST)
+  parlSeatType    String?   // loksabha seat type (GEN / SC / ST)
   electionType    String   @default("Assembly Election")
   electionYear    Int?
   totalElectors   Int?
@@ -90,6 +92,11 @@ model PollingStation {
   serial        Int      // PS # in Form 20 (1..N)
   name          String?
   address       String?
+  cityVillage   String?  // city / village
+  ward          String?  // ward no.
+  tolaMohalla   String?  // tola / mohalla
+  postOffice    String?
+  policeStation String?
   latitude      Float?   // geocoded from name/address
   longitude     Float?
   geocodedAt    DateTime?
@@ -185,7 +192,9 @@ model Voter {
   pinCode            String?
 
   // Segmentation attributes
-  community          String?   // caste / sub-caste tag (open-ended)
+  caste              String?   // specific caste / jati / sub-caste (open-ended)
+  community          String?   // reservation class — Gen / OBC / SC / ST (fixed set)
+  category           String?   // additional free-text classification
   religion           String?   // inferred from name (Hindu/Christian/Muslim/…)
   communityConfidence Float?   // 0..1 — confidence of the name-based inference
   communitySource    String    @default("inferred") // inferred | manual
@@ -210,7 +219,9 @@ model Voter {
   @@index([assemblyNo, assemblyName])
   @@index([state])
   @@index([epic])
+  @@index([caste])
   @@index([community])
+  @@index([category])
   @@index([religion])
   @@index([occupation])
   @@index([householdId])

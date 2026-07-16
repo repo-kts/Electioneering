@@ -1,15 +1,16 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
-  BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer,
+  BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer, Cell,
 } from 'recharts';
 import Breadcrumbs from '../components/ui/Breadcrumbs.jsx';
-import {
-  GenderPictograph, AgeDistribution, CommunityDonut, HouseholdPictograph,
-} from '../components/analytics/DemographicVisuals.jsx';
+import BoothMap from '../components/analytics/BoothMap.jsx';
+import { DemographicCard } from '../components/analytics/BoothDemographics.jsx';
+import FilterableTable from '../components/analytics/FilterableTable.jsx';
+import DraggablePanel from '../components/analytics/DraggablePanel.jsx';
 import { api } from '../lib/api.js';
-import { partyColor } from '../components/elections/helpers.js';
+import { partyColor, colorForParty, benchmarkFor } from '../components/elections/helpers.js';
 
 function colorFor(s) {
   if (!s) return '#94a3b8';
@@ -18,8 +19,6 @@ function colorFor(s) {
   for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
   return palette[h % palette.length];
 }
-const RELIGION_COLOR = { Hindu: '#8a6f2a', Christian: '#3f5f75', Muslim: '#24594b', Other: '#94a3b8' };
-const PALETTE = ['#24594b', '#6f4e37', '#5f6f52', '#7a4e57', '#3f5f75', '#8a6f2a', '#574b63', '#6b6f76'];
 const pct = (n) => `${((n ?? 0) * 100).toFixed(1)}%`;
 const num = (n) => (n ?? 0).toLocaleString();
 
@@ -55,26 +54,18 @@ const PRIORITY = {
   low: { badge: 'border-slate-300 bg-white text-slate-600', accent: '#94a3b8' },
 };
 
-// Classification badge tone by leaning.
-const CLASS_TONE = {
-  Stronghold: 'border-emerald-200 bg-emerald-50 text-emerald-800',
-  Swing: 'border-amber-200 bg-amber-50 text-amber-800',
-  'Opposition-leaning': 'border-rose-200 bg-rose-50 text-rose-800',
-  'Low-turnout': 'border-sky-200 bg-sky-50 text-sky-800',
-  'No-data': 'border-slate-300 bg-white text-slate-500',
-};
-
-function Recommendations({ classification, priority, recommendations }) {
+function Recommendations({ benchmark, priority, recommendations }) {
   const items = recommendations ?? [];
-  const isEmpty = !classification || classification === 'No-data' || items.length === 0;
+  const isEmpty = items.length === 0;
   return (
     <Panel
       eyebrow="Booth strategy"
       title="Recommendations"
       right={
         <div className="flex items-center gap-2">
-          <span className={`border px-2 py-0.5 text-xs font-semibold ${CLASS_TONE[classification] ?? CLASS_TONE['No-data']}`}>
-            {classification ?? 'No data'}
+          <span className={`inline-flex items-center gap-1.5 border px-2 py-0.5 text-xs font-semibold ${benchmark.cls}`}>
+            <span className="h-2 w-2 rounded-full" style={{ background: benchmark.dot }} />
+            {benchmark.label} · {benchmark.range}
           </span>
           {priority && (
             <span className={`border px-2 py-0.5 text-[11px] font-medium capitalize ${(PRIORITY[priority] ?? PRIORITY.low).badge}`}>
@@ -112,37 +103,93 @@ function Recommendations({ classification, priority, recommendations }) {
   );
 }
 
+// Tooltip for the vote chart — axis shows `key`; the other dimension (`sub`)
+// only surfaces here on hover.
+function VoteTooltip({ active, payload, subLabel }) {
+  if (!active || !payload?.length) return null;
+  const d = payload[0].payload;
+  return (
+    <div className="border border-slate-300 bg-white px-3 py-2 text-xs shadow-sm">
+      <div className="font-semibold text-slate-900">{d.key}</div>
+      {d.sub && <div className="text-slate-600">{subLabel}: {d.sub}</div>}
+      <div className="tabular-nums text-slate-700">{num(d.votes)} votes · {pct(d.share)}</div>
+    </div>
+  );
+}
+
 export default function BoothDetailPage() {
   const { id, psId } = useParams();
   const electionId = Number(id);
   const q = useQuery({ queryKey: ['booth', psId], queryFn: () => api.boothDetail(psId) });
   const d = q.data;
-  const partyByName = {};
-  for (const c of d?.candidates ?? []) partyByName[c.name] = c.party;
-  const colorForName = (nm) => partyColor(partyByName[nm]) ?? colorFor(nm);
+  const dem = d?.demographics;
 
   const electionName = d ? `${d.election.assemblyName} ${d.election.electionYear ?? ''}`.trim() : 'Election';
-  const dem = d?.demographics;
-  const candBars = (d?.candidates ?? []).map((c) => ({ name: c.name, votes: c.votes }));
+  const benchmark = benchmarkFor(d?.leader?.share);
 
-  // Family blocs in this booth — group voters by house number.
-  const families = useMemo(() => {
+  const [voteView, setVoteView] = useState('party'); // 'party' | 'candidate'
+
+  // Votes aggregated by party — bars are parties, candidate shows on hover.
+  const partyBars = useMemo(() => {
+    const total = d?.totalValid ?? 0;
     const m = new Map();
-    for (const v of d?.voters ?? []) {
-      const key = (v.houseNumber ?? '').trim();
-      if (!key) continue;
-      if (!m.has(key)) m.set(key, []);
-      m.get(key).push(v);
+    for (const c of d?.candidates ?? []) {
+      const key = c.party?.trim() || c.name; // independents fall back to their name
+      const e = m.get(key) ?? { key, votes: 0, top: null, topVotes: -1 };
+      e.votes += c.votes;
+      if (c.votes > e.topVotes) { e.top = c.name; e.topVotes = c.votes; }
+      m.set(key, e);
     }
-    return Array.from(m.entries())
-      .map(([house, members]) => ({
-        house,
-        members,
-        head: members.reduce((a, b) => (b.age > a.age ? b : a), members[0]),
-      }))
-      .filter((f) => f.members.length > 1)
-      .sort((a, b) => b.members.length - a.members.length);
+    return Array.from(m.values())
+      .map((e) => ({ key: e.key, votes: e.votes, sub: e.top, color: colorForParty(e.key), share: total > 0 ? e.votes / total : 0 }))
+      .sort((a, b) => b.votes - a.votes);
   }, [d]);
+
+  // Votes per candidate — bars are candidates, party shows on hover.
+  const candidateBars = useMemo(() => {
+    const total = d?.totalValid ?? 0;
+    return (d?.candidates ?? [])
+      .map((c) => ({
+        key: c.name,
+        votes: c.votes,
+        sub: c.party || 'Independent',
+        color: partyColor(c.party) ?? colorFor(c.name),
+        share: total > 0 ? c.votes / total : 0,
+      }))
+      .sort((a, b) => b.votes - a.votes);
+  }, [d]);
+
+  const voteBars = voteView === 'party' ? partyBars : candidateBars;
+
+  // Voters whose name matches a candidate contesting this booth — surface them.
+  const candidateNames = useMemo(
+    () => new Set((d?.candidates ?? []).map((c) => c.name.trim().toLowerCase())),
+    [d],
+  );
+  const voterName = (v) => (v.fullName ?? `${v.firstName} ${v.lastName}`).trim();
+  const isCandidateVoter = (v) => candidateNames.has(voterName(v).toLowerCase());
+  // Candidate-matches first, so they sit at the top of the list.
+  const voters = useMemo(() => {
+    const list = [...(d?.voters ?? [])];
+    list.sort((a, b) => Number(isCandidateVoter(b)) - Number(isCandidateVoter(a)));
+    return list;
+  }, [d, candidateNames]);
+  const matchedCount = (d?.voters ?? []).filter(isCandidateVoter).length;
+
+  // Single-booth map item (uses the election-level geocode, if present).
+  const mapItems = d
+    ? [{
+        id: d.ps.id,
+        serial: d.ps.serial,
+        name: d.ps.name,
+        latitude: d.ps.latitude,
+        longitude: d.ps.longitude,
+        leader: d.leader?.name,
+        leaderShare: d.leader?.share,
+        totalValid: d.totalValid,
+        registeredVoters: d.turnout.registered,
+      }]
+    : [];
 
   return (
     <div>
@@ -161,140 +208,192 @@ export default function BoothDetailPage() {
 
       {d && (
         <>
-          <div className="mb-6 border-b border-slate-300 pb-5">
-            <div className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Polling station</div>
-            <h1 className="text-[26px] font-semibold text-slate-950">PS-{d.ps.serial}</h1>
-            <p className="mt-1 text-sm text-slate-600">{d.ps.name ?? '—'}</p>
+          {/* Hero — booth details on the left, location map on the right */}
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(320px,0.85fr)]">
+            <div className="flex flex-col border border-slate-300 bg-white">
+              <div className="border-b border-slate-200 bg-[#fbfaf7] px-5 py-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">Polling station</div>
+                    <h1 className="text-[26px] font-semibold leading-tight text-slate-950">PS-{d.ps.serial}</h1>
+                    <p className="mt-0.5 text-sm text-slate-600">{d.ps.name ?? '—'}</p>
+                    {d.ps.address && <p className="mt-0.5 text-xs text-slate-400">{d.ps.address}</p>}
+                  </div>
+                  <span className={`inline-flex items-center gap-1.5 border px-2.5 py-1 text-sm font-semibold ${benchmark.cls}`}>
+                    <span className="h-2.5 w-2.5 rounded-full" style={{ background: benchmark.dot }} />
+                    {benchmark.label} <span className="font-normal opacity-70">· {benchmark.range}</span>
+                  </span>
+                </div>
+              </div>
+              {/* Key metrics */}
+              <div className="grid grid-cols-2 md:grid-cols-3">
+                <Kpi label="Total voters" value={num(d.turnout.registered)} />
+                <Kpi label="Voted" value={num(d.turnout.voted)} accent="#16a34a" sub={pct(Math.min(d.turnout.pct, 1)) + ' turnout'} />
+                <Kpi label="Valid votes" value={num(d.totalValid)} />
+                <Kpi label="NOTA" value={num(d.ps.notaVotes)} />
+                <Kpi label="Leader" value={d.leader?.name ?? '—'} accent={partyColor(d.leader?.party) ?? colorFor(d.leader?.name)} sub={d.leader ? pct(d.leader.share) : ''} />
+                <Kpi label="Runner-up" value={d.runnerUp?.name ?? '—'} sub={d.runnerUp ? pct(d.runnerUp.share) : ''} />
+              </div>
+
+              {/* Booth details */}
+              <div className="border-t border-slate-200 px-5 py-4">
+                <div className="mb-3 text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-500">Booth details</div>
+                <dl className="grid grid-cols-1 gap-x-6 gap-y-0 sm:grid-cols-2">
+                  {[
+                    ['Name', d.ps.name],
+                    ['Polling station number', d.ps.serial != null ? `PS-${d.ps.serial}` : null],
+                    ['Address', d.ps.address],
+                    ['City / Village', d.ps.cityVillage],
+                    ['Ward No.', d.ps.ward],
+                    ['Tola / Mohalla', d.ps.tolaMohalla],
+                    ['Post Office', d.ps.postOffice],
+                    ['Legislative Assembly Name', d.election.assemblyName],
+                    ['Legislative Assembly Number', d.election.assemblyNo],
+                    ['Legislative Assembly Seat Type', d.election.assemblySeatType],
+                    ['Loksabha Name', d.election.parlName],
+                    ['Loksabha Number', d.election.parlNo],
+                    ['Loksabha Seat Type', d.election.parlSeatType],
+                    ['Police Station', d.ps.policeStation],
+                  ].map(([label, value]) => (
+                    <div key={label} className="flex items-baseline justify-between gap-3 border-b border-slate-100 py-2 last:border-b-0">
+                      <dt className="shrink-0 text-xs text-slate-500">{label}</dt>
+                      <dd className="min-w-0 truncate text-right text-sm font-medium text-slate-800" title={value ?? ''}>{value ?? '—'}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </div>
+            </div>
+
+            {/* Location map */}
+            <div className="border border-slate-300 bg-white">
+              <div className="border-b border-slate-200 bg-[#fbfaf7] px-5 py-4">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-500">Location</div>
+                <h3 className="text-sm font-semibold text-slate-950">Booth on the map</h3>
+              </div>
+              <div className="p-3">
+                <BoothMap items={mapItems} electionId={electionId} />
+              </div>
+            </div>
           </div>
 
-          {/* Turnout / result KPIs */}
-          <div className="grid grid-cols-2 border border-slate-300 bg-white md:grid-cols-3 lg:grid-cols-6">
-            <Kpi label="Registered voters" value={num(d.turnout.registered)} />
-            <Kpi label="Voted" value={num(d.turnout.voted)} accent="#16a34a" />
-            <Kpi label="Turnout" value={pct(Math.min(d.turnout.pct, 1))} />
-            <Kpi label="Valid votes" value={num(d.totalValid)} />
-            <Kpi label="NOTA" value={num(d.ps.notaVotes)} />
-            <Kpi label="Leader" value={d.leader?.name ?? '—'} accent={colorForName(d.leader?.name)} sub={d.leader ? pct(d.leader.share) : ''} />
-          </div>
-
-          {/* Recommendations */}
-          <Recommendations
-            classification={d.classification}
-            priority={d.priority}
-            recommendations={d.recommendations}
-          />
-
-          {/* Votes at this booth */}
-          <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
-            <Panel title="Votes by candidate (this booth)" className="lg:col-span-2">
-              <ResponsiveContainer width="100%" height={260}>
-                <BarChart data={candBars} layout="vertical" margin={{ left: 8, right: 16, top: 4, bottom: 4 }}>
-                  <CartesianGrid stroke="#e7e5de" horizontal={false} />
-                  <XAxis type="number" tick={{ fontSize: 11 }} />
-                  <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={140} />
-                  <Tooltip formatter={(v) => num(v)} />
-                  <Bar dataKey="votes">
-                    {candBars.map((c) => <Cell key={c.name} fill={colorForName(c.name)} />)}
+          {/* Vote results (this booth) — toggle party / candidate */}
+          <Panel
+            title="Vote results (this booth)"
+            className="mt-6"
+            right={
+              <div className="inline-flex overflow-hidden rounded-md border border-slate-300">
+                {[['party', 'By party'], ['candidate', 'By candidate']].map(([v, label]) => (
+                  <button
+                    key={v}
+                    type="button"
+                    onClick={() => setVoteView(v)}
+                    className={`px-3 py-1 text-xs font-medium transition ${voteView === v ? 'bg-slate-900 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            }
+          >
+            {voteBars.length === 0 ? (
+              <p className="py-8 text-center text-sm text-slate-400">No Form 20 data recorded for this booth.</p>
+            ) : (
+              <ResponsiveContainer width="100%" height={320}>
+                <BarChart data={voteBars} margin={{ left: 8, right: 16, top: 8, bottom: voteView === 'candidate' ? 72 : 24 }}>
+                  <CartesianGrid stroke="#e7e5de" vertical={false} />
+                  <XAxis
+                    type="category"
+                    dataKey="key"
+                    tick={{ fontSize: 11 }}
+                    interval={0}
+                    angle={voteView === 'candidate' ? -22 : 0}
+                    textAnchor={voteView === 'candidate' ? 'end' : 'middle'}
+                    height={voteView === 'candidate' ? 90 : 30}
+                  />
+                  <YAxis type="number" tick={{ fontSize: 11 }} tickFormatter={num} />
+                  <Tooltip content={<VoteTooltip subLabel={voteView === 'party' ? 'Top candidate' : 'Party'} />} cursor={{ fill: '#f7f5f0' }} />
+                  <Bar dataKey="votes" radius={[4, 4, 0, 0]}>
+                    {voteBars.map((b) => <Cell key={b.key} fill={b.color} />)}
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
-            </Panel>
-            <Panel title="Religion mix (inferred)">
-              {(dem?.byReligion ?? []).length === 0 ? (
-                <p className="py-8 text-center text-sm text-slate-400">No voter data for this booth</p>
-              ) : (
-                <>
-                  <ResponsiveContainer width="100%" height={160}>
-                    <PieChart>
-                      <Pie data={dem.byReligion} dataKey="count" nameKey="key" innerRadius={40} outerRadius={72} paddingAngle={2}>
-                        {dem.byReligion.map((r, i) => <Cell key={r.key} fill={RELIGION_COLOR[r.key] ?? PALETTE[i % PALETTE.length]} />)}
-                      </Pie>
-                      <Tooltip formatter={(v, n) => [v, n]} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                  <ul className="mt-2 space-y-1">
-                    {dem.byReligion.map((r, i) => (
-                      <li key={r.key} className="flex items-center gap-2 text-sm">
-                        <span className="inline-block h-3 w-3" style={{ background: RELIGION_COLOR[r.key] ?? PALETTE[i % PALETTE.length] }} />
-                        <span className="flex-1 text-slate-600">{r.key}</span>
-                        <span className="tabular-nums text-slate-500">{r.count}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </>
-              )}
-            </Panel>
-          </div>
-
-          {/* Demographics — pictorial */}
-          <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
-            <Panel title="Caste / community"><CommunityDonut data={dem?.byCommunity ?? []} /></Panel>
-            <Panel title="Age groups"><AgeDistribution data={dem?.byAgeBucket ?? []} /></Panel>
-            <Panel title="Gender"><GenderPictograph data={dem?.byGender ?? []} /></Panel>
-            <Panel title="Household size">
-              <HouseholdPictograph data={dem?.byHouseholdSize ?? []} firstTimeVoters={dem?.firstTimeVoters} />
-            </Panel>
-          </div>
-
-          {/* Family blocs */}
-          <Panel
-            eyebrow="Households"
-            title="Family blocs"
-            right={<span className="border border-slate-300 bg-white px-2 py-0.5 text-xs font-medium text-slate-600">{families.length} families</span>}
-            className="mt-4"
-          >
-            <p className="mb-3 text-sm text-slate-500">Multi-voter houses in this booth. Persuade the head to move the whole bloc.</p>
-            {families.length === 0 ? (
-              <p className="py-3 text-center text-sm text-slate-400">No multi-voter households — run “Rebuild households” or check house numbers.</p>
-            ) : (
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                {families.slice(0, 12).map((f) => (
-                  <div key={f.house} className="border border-slate-200 p-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-semibold text-slate-800">House #{f.house}</span>
-                      <span className="border border-accent-200 bg-accent-50 px-2 py-0.5 text-[11px] font-semibold text-accent-700">{f.members.length} voters</span>
-                    </div>
-                    <div className="mt-1 text-xs text-slate-500">
-                      Head: <span className="font-medium text-slate-700">{f.head.fullName ?? `${f.head.firstName} ${f.head.lastName}`}</span> · {f.head.age}y
-                    </div>
-                  </div>
-                ))}
-              </div>
             )}
           </Panel>
 
-          {/* Voter list */}
-          <Panel title={`Voters in this booth (${num(d.turnout.registered)})`} className="mt-4">
-            <div className="max-h-[420px] overflow-auto">
-              <table className="w-full text-sm">
-                <thead className="sticky top-0 bg-[#fbfaf7] text-left text-xs uppercase tracking-wide text-slate-500">
-                  <tr>
-                    <th className="px-2 py-2">Name</th>
-                    <th className="px-2 py-2">Age</th>
-                    <th className="px-2 py-2">Gender</th>
-                    <th className="px-2 py-2">Religion</th>
-                    <th className="px-2 py-2">House</th>
-                    <th className="px-2 py-2">EPIC</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {d.voters.map((v) => (
-                    <tr key={v.id} className="border-t border-slate-200">
-                      <td className="px-2 py-1.5 font-medium text-slate-700">{v.fullName ?? `${v.firstName} ${v.lastName}`}</td>
-                      <td className="px-2 py-1.5">{v.age}</td>
-                      <td className="px-2 py-1.5">{v.gender}</td>
-                      <td className="px-2 py-1.5">{v.religion ?? '—'}</td>
-                      <td className="px-2 py-1.5">{v.houseNumber ?? '—'}</td>
-                      <td className="px-2 py-1.5 text-slate-400">{v.epic}</td>
-                    </tr>
-                  ))}
-                  {d.voters.length === 0 && (
-                    <tr><td colSpan={6} className="px-2 py-6 text-center text-slate-400">No voters mapped to this booth.</td></tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </Panel>
+          {/* Community composition — caste / community / religion / category */}
+          <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+            <DemographicCard title="Religion" data={dem?.byReligion ?? []} scheme="religion" />
+            <DemographicCard title="Community" data={dem?.byCommunity ?? []} scheme="community" orderKeys={['Gen', 'OBC', 'SC', 'ST']} />
+            <DemographicCard title="Category" data={dem?.byCategory ?? []} />
+            <DemographicCard title="Caste" data={dem?.byCaste ?? []} />
+          </div>
+
+          {/* Age / gender / household */}
+          <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
+            <DemographicCard title="Age groups" data={dem?.byAgeBucket ?? []} orderKeys={['18-25', '26-40', '41-60', '61-80', '80+']} />
+            <DemographicCard title="Gender" data={dem?.byGender ?? []} scheme="gender" />
+            <DemographicCard
+              title="Households"
+              data={dem?.byHouseholdSize ?? []}
+              unitLabel="households"
+              footer={
+                <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-2.5 text-xs text-slate-500">
+                  <span>First-time voters (≤19)</span>
+                  <strong className="tabular-nums text-slate-800">{num(dem?.firstTimeVoters)}</strong>
+                </div>
+              }
+            />
+          </div>
+
+          {/* Voter list — draggable panel */}
+          <DraggablePanel
+            title={`Voters in this booth (${num(d.turnout.registered)})`}
+            right={matchedCount > 0 ? (
+              <span className="border border-amber-300 bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-800">
+                {matchedCount} candidate {matchedCount === 1 ? 'match' : 'matches'}
+              </span>
+            ) : null}
+            className="mt-4"
+          >
+            <FilterableTable
+              rows={voters}
+              getRowKey={(v) => v.id}
+              searchPlaceholder="Search voters by name, EPIC…"
+              rowClassName={(v) => (isCandidateVoter(v) ? 'bg-amber-50' : '')}
+              columns={[
+                {
+                  key: 'name',
+                  label: 'Name',
+                  filterValue: (v) => voterName(v),
+                  className: 'font-medium text-slate-700',
+                  render: (v) => (
+                    <span className="flex items-center gap-2">
+                      {voterName(v)}
+                      {isCandidateVoter(v) && (
+                        <span className="border border-amber-300 bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-800">
+                          Candidate
+                        </span>
+                      )}
+                    </span>
+                  ),
+                },
+                { key: 'age', label: 'Age' },
+                { key: 'gender', label: 'Gender' },
+                { key: 'caste', label: 'Caste' },
+                { key: 'community', label: 'Community' },
+                { key: 'religion', label: 'Religion' },
+                { key: 'houseNumber', label: 'House' },
+                { key: 'epic', label: 'EPIC', className: 'text-slate-400' },
+              ]}
+            />
+          </DraggablePanel>
+
+          {/* Recommendations — last */}
+          <Recommendations
+            benchmark={benchmark}
+            priority={d.priority}
+            recommendations={d.recommendations}
+          />
         </>
       )}
     </div>

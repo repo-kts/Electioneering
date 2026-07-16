@@ -47,3 +47,13 @@ export function colorForParty(party) {
 /** Share value is a 0..1 fraction. */
 export const pct = (n) => `${((n ?? 0) * 100).toFixed(1)}%`;
 export const num = (n) => (n ?? 0).toLocaleString();
+
+/** Single competitiveness benchmark used across the app, keyed off a 0..1 vote
+ *  share: Safe 75+ / Favorable 50–75 / Battleground 30–50 / Difficult 0–30. */
+export function benchmarkFor(share) {
+  const p = (share ?? 0) * 100;
+  if (p >= 75) return { label: 'Safe', range: '75%+', cls: 'border-emerald-200 bg-emerald-50 text-emerald-800', dot: '#16a34a' };
+  if (p >= 50) return { label: 'Favorable', range: '50–75%', cls: 'border-lime-200 bg-lime-50 text-lime-800', dot: '#65a30d' };
+  if (p >= 30) return { label: 'Battleground', range: '30–50%', cls: 'border-amber-200 bg-amber-50 text-amber-800', dot: '#d97706' };
+  return { label: 'Difficult', range: '0–30%', cls: 'border-rose-200 bg-rose-50 text-rose-800', dot: '#e11d48' };
+}

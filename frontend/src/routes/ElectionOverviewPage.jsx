@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
-import { Link, useParams, useNavigate } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import BoothMap from '../components/analytics/BoothMap.jsx';
+import AllYearsAnalytics from '../components/analytics/AllYearsAnalytics.jsx';
 import { useToast } from '../context/ToastContext.jsx';
 import {
   BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer,
@@ -9,7 +10,7 @@ import {
 import Breadcrumbs from '../components/ui/Breadcrumbs.jsx';
 import InsightsSection from '../components/analytics/InsightsSection.jsx';
 import StrategyBrief from '../components/analytics/StrategyBrief.jsx';
-import { PageHeader, StatCard, Surface, Pill, Button, Loading, ErrorBox } from '../components/ui/kit.jsx';
+import { PageHeader, StatCard, Surface, Button, Loading, ErrorBox } from '../components/ui/kit.jsx';
 import { api } from '../lib/api.js';
 import { partyColor } from '../components/elections/helpers.js';
 
@@ -25,26 +26,31 @@ const num = (n) => (n ?? 0).toLocaleString();
 
 export default function ElectionOverviewPage() {
   const { id } = useParams();
-  const navigate = useNavigate();
-  const electionId = Number(id);
+  const entryId = Number(id); // election we arrived on (latest year of the constituency)
+
+  // '' = all years (default). Otherwise the chosen year's viewId.
+  const [selectedYear, setSelectedYear] = useState('');
+  const showAll = selectedYear === '';
+  const viewId = selectedYear ? Number(selectedYear) : entryId;
 
   const overviewQ = useQuery({
-    queryKey: ['analytics', 'overview', electionId],
-    queryFn: () => api.analyticsOverview(electionId),
+    queryKey: ['analytics', 'overview', viewId],
+    queryFn: () => api.analyticsOverview(viewId),
   });
   const boothQ = useQuery({
-    queryKey: ['analytics', 'boothLeaning', electionId],
-    queryFn: () => api.boothLeaning(electionId),
+    enabled: !showAll,
+    queryKey: ['analytics', 'boothLeaning', viewId],
+    queryFn: () => api.boothLeaning(viewId),
   });
 
   const qc = useQueryClient();
   const { show } = useToast();
   const [boothView, setBoothView] = useState('grid'); // 'grid' | 'map'
   const geocode = useMutation({
-    mutationFn: () => api.geocodeBooths(electionId),
+    mutationFn: () => api.geocodeBooths(viewId),
     onSuccess: (r) => {
       show(`Geocoded ${r.geocoded} of ${r.total} booths`, r.failed ? 'warn' : 'success');
-      qc.invalidateQueries({ queryKey: ['analytics', 'boothLeaning', electionId] });
+      qc.invalidateQueries({ queryKey: ['analytics', 'boothLeaning', viewId] });
       setBoothView('map');
     },
     onError: (e) => show(e.message || 'Geocoding failed', 'error'),
@@ -73,7 +79,11 @@ export default function ElectionOverviewPage() {
     [election],
   );
 
-  const name = election ? `${election.assemblyName} ${election.electionYear ?? ''}`.trim() : 'Election';
+  const constituency = election ? election.assemblyName : 'Constituency';
+  // Header reflects the mode: constituency name for all-years, name + year otherwise.
+  const headerTitle = election
+    ? (showAll ? election.assemblyName : `${election.assemblyName} ${election.electionYear ?? ''}`.trim())
+    : 'Constituency';
 
   // Other elections for this same constituency + election type — for the year switcher.
   const yearOptions = useMemo(() => {
@@ -91,52 +101,76 @@ export default function ElectionOverviewPage() {
   return (
     <div className="space-y-6">
       <div>
-        <Breadcrumbs items={[{ label: 'Elections', to: '/elections' }, { label: name }]} />
+        <Breadcrumbs items={[{ label: 'Elections', to: '/elections' }, { label: constituency }]} />
         <PageHeader
           eyebrow={election ? election.electionType : 'Results'}
-          title={name}
-          subtitle={election ? `${election.assemblyNo}-${election.assemblyName}${election.state ? ' · ' + election.state : ''}` : 'Loading…'}
+          title={headerTitle}
+          subtitle={election
+            ? `${election.assemblyNo}-${election.assemblyName}${election.state ? ' · ' + election.state : ''}${showAll ? ` · all ${yearOptions.length || 1} ${yearOptions.length === 1 ? 'year' : 'years'}` : ''}`
+            : 'Loading…'}
           actions={
             <>
-              {election && yearOptions.length > 0 && (
-                <label
-                  className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-2.5 py-1 text-sm"
-                  title={`Switch year for ${election.electionType} · ${election.assemblyName}`}
-                >
-                  <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Year</span>
-                  <select
-                    value={electionId}
-                    onChange={(e) => navigate(`/elections/${e.target.value}`)}
-                    className="border-0 bg-transparent p-0 pr-1 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-0"
-                  >
-                    {yearOptions.map((e) => (
-                      <option key={e.id} value={e.id}>
-                        {e.electionYear ?? '—'}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              )}
               <Link to="/segment">
                 <Button variant="secondary"><span className="text-slate-700">Voter search</span></Button>
               </Link>
-              <Link to={`/elections/${electionId}/parties`}>
+              <Link to={`/elections/${viewId}/parties`}>
                 <Button variant="secondary"><span className="text-slate-700">Party analytics →</span></Button>
               </Link>
-              <Link to={`/elections/${electionId}/timeline`}>
+              <Link to={`/elections/${viewId}/timeline`}>
                 <Button variant="secondary"><span className="text-slate-700">Yearly trends →</span></Button>
               </Link>
-              <Link to={`/elections/${electionId}/strategy`}>
+              <Link to={`/elections/${viewId}/strategy`}>
                 <Button variant="primary">Win plan →</Button>
               </Link>
             </>
           }
         />
+
+        {/* Year switcher — defaults to "All years"; pick a year to drill in. */}
+        {election && (
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Showing</span>
+            <label className="inline-flex items-center gap-1.5 border border-slate-300 bg-white px-3 py-1.5 text-sm">
+              <select
+                value={selectedYear}
+                onChange={(e) => setSelectedYear(e.target.value)}
+                className="border-0 bg-transparent p-0 pr-1 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-0"
+              >
+                <option value="">All years</option>
+                {yearOptions.map((e) => (
+                  <option key={e.id} value={e.id}>{e.electionYear ?? '—'}</option>
+                ))}
+              </select>
+            </label>
+            {!showAll && (
+              <button
+                type="button"
+                onClick={() => setSelectedYear('')}
+                className="text-xs font-medium text-accent-600 hover:text-accent-700"
+              >
+                ← Back to all years
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {overviewQ.isError && <ErrorBox message={overviewQ.error.message} onRetry={() => overviewQ.refetch()} />}
       {overviewQ.isPending && <Loading className="h-28" />}
 
+      {/* Default view — all-year analytics for the whole constituency */}
+      {election && showAll && (
+        <AllYearsAnalytics
+          electionId={viewId}
+          currentElectionId={viewId}
+          assemblyNo={election.assemblyNo}
+          assemblyName={election.assemblyName}
+        />
+      )}
+
+      {/* Single-year detail — shown when a specific year is picked */}
+      {!showAll && (
+        <div className="space-y-6">
       {/* KPIs */}
       {election && (
         <div className="grid grid-cols-2 border border-slate-300 bg-white md:grid-cols-3 lg:grid-cols-6">
@@ -179,7 +213,7 @@ export default function ElectionOverviewPage() {
         }
       >
         {boothView === 'map' ? (
-          <BoothMap items={booths} electionId={electionId} />
+          <BoothMap items={booths} electionId={viewId} />
         ) : boothQ.isError ? (
           <ErrorBox message={boothQ.error.message} onRetry={() => boothQ.refetch()} />
         ) : boothQ.isPending ? (
@@ -201,7 +235,7 @@ export default function ElectionOverviewPage() {
                 return (
                   <Link
                     key={ps.id}
-                    to={`/elections/${electionId}/booth/${ps.id}`}
+                    to={`/elections/${viewId}/booth/${ps.id}`}
                     className="group grid gap-2 border-b border-slate-100 px-3 py-3 transition last:border-b-0 hover:bg-[#fbfaf7] md:grid-cols-[88px_minmax(0,1fr)_minmax(120px,0.8fr)_120px] md:items-center md:gap-3"
                   >
                     <div className="flex items-center gap-2">
@@ -239,7 +273,7 @@ export default function ElectionOverviewPage() {
         )}
       </Surface>
 
-      {election && <StrategyBrief electionId={electionId} candidates={election.candidates ?? []} />}
+      {election && <StrategyBrief electionId={viewId} candidates={election.candidates ?? []} />}
 
       {/* Candidate results */}
       <Surface title="Candidate results" subtitle="Form 20 totals across all polling stations.">
@@ -270,7 +304,7 @@ export default function ElectionOverviewPage() {
               {(election?.candidates ?? []).map((c, i) => (
                 <li key={c.name}>
                   <Link
-                    to={`/elections/${electionId}/candidate/${encodeURIComponent(c.name)}`}
+                    to={`/elections/${viewId}/candidate/${encodeURIComponent(c.name)}`}
                     className="group flex items-center gap-2.5 border-b border-slate-100 py-2.5 transition last:border-b-0 hover:bg-[#fbfaf7]"
                   >
                     <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: colorForName(c.name) }} />
@@ -290,11 +324,13 @@ export default function ElectionOverviewPage() {
       {election && (
         <Surface title="Insights" subtitle="Religion mix, community leaning estimates, and swing vs the last election.">
           <InsightsSection
-            electionId={electionId}
+            electionId={viewId}
             religionData={voters?.byReligion ?? []}
             turnoutHistory={data?.turnoutHistory ?? []}
           />
         </Surface>
+      )}
+        </div>
       )}
     </div>
   );

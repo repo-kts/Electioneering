@@ -33,15 +33,24 @@ function Panel({ title, subtitle, children, tag }) {
 }
 
 export default function InsightsSection({ electionId, religionData = [], turnoutHistory = [] }) {
-  // Previous same-assembly election for swing (the year before the current one).
-  const prevElectionId = useMemo(() => {
-    const sorted = [...turnoutHistory].sort((a, b) => (a.electionYear ?? 0) - (b.electionYear ?? 0));
-    const idx = sorted.findIndex((t) => t.electionId === electionId);
-    if (idx > 0) return sorted[idx - 1].electionId;
-    // fallback: any other election in the history
-    const other = sorted.find((t) => t.electionId !== electionId);
-    return other?.electionId ?? null;
+  // Previous election in this seat OF THE SAME TYPE (e.g. Assembly vs Assembly) —
+  // never cross a Lok Sabha with an Assembly election, since the candidate sets differ.
+  const swingPair = useMemo(() => {
+    const current = turnoutHistory.find((t) => t.electionId === electionId);
+    if (!current) return { prevElectionId: null };
+    const sameType = turnoutHistory
+      .filter((t) => t.electionType === current.electionType)
+      .sort((a, b) => (a.electionYear ?? 0) - (b.electionYear ?? 0));
+    const idx = sameType.findIndex((t) => t.electionId === electionId);
+    const prev = idx > 0 ? sameType[idx - 1] : null;
+    return {
+      prevElectionId: prev?.electionId ?? null,
+      electionType: current.electionType,
+      currentYear: current.electionYear,
+      prevYear: prev?.electionYear ?? null,
+    };
   }, [turnoutHistory, electionId]);
+  const prevElectionId = swingPair.prevElectionId;
 
   const communityQ = useQuery({
     queryKey: ['community-leaning', electionId],
@@ -109,7 +118,12 @@ export default function InsightsSection({ electionId, religionData = [], turnout
       <div className="lg:col-span-2">
         <Panel
           title="Cross-election swing"
-          subtitle={prevElectionId ? 'Vote-share change vs the previous election in this seat' : 'Needs two elections in the same seat'}
+          subtitle={
+            prevElectionId
+              ? `Vote-share change (points): ${swingPair.electionType} ${swingPair.prevYear ?? '—'} → ${swingPair.currentYear ?? '—'}`
+              : `Needs an earlier ${swingPair.electionType ?? 'same-type'} in this seat to compare`
+          }
+          tag={prevElectionId ? `${swingPair.prevYear ?? '—'} → ${swingPair.currentYear ?? '—'}` : undefined}
         >
           <SwingView q={swingQ} enabled={!!prevElectionId} />
         </Panel>

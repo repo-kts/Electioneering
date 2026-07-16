@@ -1,5 +1,8 @@
 export const GENDER_OPTIONS = ['Male', 'Female', 'Other'];
 
+// Reservation class — fixed set for the Community field.
+export const COMMUNITY_OPTIONS = ['Gen', 'OBC', 'SC', 'ST'];
+
 export const INDIAN_STATES = [
   'Andhra Pradesh',
   'Arunachal Pradesh',

@@ -21,7 +21,9 @@ const VOTER_HEADERS = [
   'partNumber',
   'partName',
   'partSerial',
+  'caste',
   'community',
+  'category',
   'occupation',
   'language',
 ];
@@ -44,7 +46,9 @@ const VOTER_SAMPLE: Record<string, string | number> = {
   partNumber: '381',
   partName: 'Madarasa Ajijaya Dakshini Bhag',
   partSerial: '283',
-  community: 'Kayastha',
+  caste: 'Kayastha',
+  community: 'Gen',
+  category: 'General',
   occupation: 'Student',
   language: 'Hindi',
 };

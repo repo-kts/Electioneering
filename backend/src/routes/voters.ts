@@ -9,6 +9,7 @@ import {
   aggregate,
 } from '../services/segmentation.js';
 import { classifyName } from '../services/nameClassifier.js';
+import { normalizeCommunity } from '../services/voterValidation.js';
 import { requireAdmin } from '../middleware/auth.js';
 
 const router = Router();
@@ -66,7 +67,9 @@ const voterSchema = z.object({
   subdivision: optStr,
   district: optStr,
   pinCode: optStr,
-  community: optStr,
+  caste: optStr,
+  community: optStr, // Gen | OBC | SC | ST
+  category: optStr,
   religion: optStr,
   occupation: optStr,
   language: optStr,
@@ -74,18 +77,22 @@ const voterSchema = z.object({
 
 type VoterInput = z.infer<typeof voterSchema>;
 
-/** Fill religion/community from the name when not supplied manually. */
+/** Fill caste/religion from the name when not supplied manually. Community
+ *  (Gen/OBC/SC/ST) and category are manual-only and normalised on the way in. */
 function enrichVoter(v: VoterInput) {
-  if (v.community || v.religion) {
-    return { ...v, communitySource: 'manual', communityConfidence: 1 };
+  const community = v.community ? normalizeCommunity(v.community) ?? undefined : undefined;
+  const manual = !!(v.caste || v.religion || community || v.category);
+  if (v.caste && v.religion) {
+    return { ...v, community, communitySource: 'manual', communityConfidence: 1 };
   }
   const c = classifyName(v.firstName, v.lastName);
   return {
     ...v,
-    religion: c.religion,
-    community: c.community ?? undefined,
-    communitySource: c.source,
-    communityConfidence: c.confidence,
+    religion: v.religion || c.religion,
+    caste: v.caste || c.community || undefined,
+    community,
+    communitySource: manual ? 'manual' : c.source,
+    communityConfidence: manual ? 1 : c.confidence,
   };
 }
 
@@ -205,7 +212,7 @@ router.post(
         where: { id: v.id },
         data: {
           religion: c.religion,
-          community: c.community,
+          caste: c.community,
           communityConfidence: c.confidence,
           communitySource: 'inferred',
         },

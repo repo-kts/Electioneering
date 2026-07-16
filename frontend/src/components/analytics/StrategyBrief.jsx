@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { Surface, Button, Loading, ErrorBox } from '../ui/kit.jsx';
 import { api } from '../../lib/api.js';
+import { benchmarkFor } from '../elections/helpers.js';
 
 const pct = (n) => `${((n ?? 0) * 100).toFixed(0)}%`;
 const num = (n) => (n ?? 0).toLocaleString();
@@ -13,13 +14,11 @@ const PRIORITY = {
   low: 'border-slate-300 bg-white text-slate-600',
 };
 
-const CLASS_LABEL = {
-  'Safe-win': 'Safe win',
-  'Marginal-win': 'Narrow win',
-  Swing: 'Swing',
-  'Marginal-loss': 'Recoverable loss',
-  'Safe-loss': 'Opposition strong',
-  'No-data': 'No data',
+// Spell out what high/medium/low mean so the badge is self-explanatory.
+const PRIORITY_LABEL = {
+  high: 'High priority',
+  medium: 'Medium priority',
+  low: 'Low priority',
 };
 
 export default function StrategyBrief({ electionId, candidates = [] }) {
@@ -162,7 +161,7 @@ function PlayCard({ play, electionId }) {
           <div className="flex items-center gap-2">
             <h3 className="text-sm font-semibold text-slate-950">{play.title}</h3>
             <span className={`border px-2 py-0.5 text-[11px] font-medium ${PRIORITY[play.priority]}`}>
-              {play.priority}
+              {PRIORITY_LABEL[play.priority] ?? play.priority}
             </span>
           </div>
           <p className="mt-1 text-sm text-slate-600">{play.rationale}</p>
@@ -178,7 +177,7 @@ function PlayCard({ play, electionId }) {
             <thead className="bg-white text-left text-xs uppercase tracking-wide text-slate-500">
               <tr>
                 <th className="px-4 py-2 font-medium">Booth</th>
-                <th className="px-3 py-2 font-medium">Class</th>
+                <th className="px-3 py-2 font-medium">Benchmark</th>
                 <th className="px-3 py-2 text-right font-medium">Our %</th>
                 <th className="px-3 py-2 text-right font-medium">Margin</th>
                 <th className="px-3 py-2 text-right font-medium">Turnout</th>
@@ -193,7 +192,17 @@ function PlayCard({ play, electionId }) {
                     </Link>
                     <div className="max-w-[260px] truncate text-xs text-slate-500" title={b.name ?? ''}>{b.name ?? '—'}</div>
                   </td>
-                  <td className="px-3 py-2 text-slate-700">{CLASS_LABEL[b.classification] ?? b.classification}</td>
+                  <td className="px-3 py-2">
+                    {(() => {
+                      const bm = benchmarkFor(b.ourShare);
+                      return (
+                        <span className={`inline-flex items-center gap-1 border px-1.5 py-0.5 text-[11px] font-semibold ${bm.cls}`} title={`Our vote share ${bm.range}`}>
+                          <span className="h-1.5 w-1.5 rounded-full" style={{ background: bm.dot }} />
+                          {bm.label}
+                        </span>
+                      );
+                    })()}
+                  </td>
                   <td className="px-3 py-2 text-right tabular-nums text-slate-700">{pct(b.ourShare)}</td>
                   <td className={`px-3 py-2 text-right tabular-nums ${b.margin >= 0 ? 'text-accent-700' : 'text-rose-700'}`}>
                     {b.margin >= 0 ? '+' : ''}{pct(b.margin)}

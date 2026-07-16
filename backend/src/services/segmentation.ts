@@ -22,7 +22,9 @@ export const segmentSchema = z.object({
   district: z.string().optional(),
   householdId: z.coerce.number().int().optional(),
   // demographics
-  community: z.union([z.string(), z.array(z.string())]).optional(),
+  caste: z.union([z.string(), z.array(z.string())]).optional(),
+  community: z.union([z.string(), z.array(z.string())]).optional(), // Gen/OBC/SC/ST
+  category: z.union([z.string(), z.array(z.string())]).optional(),
   religion: z.union([z.string(), z.array(z.string())]).optional(),
   occupation: z.union([z.string(), z.array(z.string())]).optional(),
   language: z.union([z.string(), z.array(z.string())]).optional(),
@@ -71,8 +73,12 @@ export function buildVoterWhere(c: SegmentCriteria): Prisma.VoterWhereInput {
   if (c.tehsil) where.tehsil = { equals: c.tehsil, mode: 'insensitive' };
   if (c.district) where.district = { equals: c.district, mode: 'insensitive' };
 
+  const caste = multi(c.caste);
+  if (caste) where.caste = { in: caste, mode: 'insensitive' };
   const community = multi(c.community);
   if (community) where.community = { in: community, mode: 'insensitive' };
+  const category = multi(c.category);
+  if (category) where.category = { in: category, mode: 'insensitive' };
   const religion = multi(c.religion);
   if (religion) where.religion = { in: religion, mode: 'insensitive' };
   const occupation = multi(c.occupation);
@@ -143,7 +149,9 @@ export function passesLeaningFilter(
 }
 
 export interface SegmentAggregates {
+  byCaste: Array<{ key: string; count: number }>;
   byCommunity: Array<{ key: string; count: number }>;
+  byCategory: Array<{ key: string; count: number }>;
   byReligion: Array<{ key: string; count: number }>;
   byOccupation: Array<{ key: string; count: number }>;
   byLanguage: Array<{ key: string; count: number }>;
@@ -160,10 +168,10 @@ export interface SegmentAggregates {
 
 const AGE_BUCKETS: Array<[string, (a: number) => boolean]> = [
   ['18-25', (a) => a >= 18 && a <= 25],
-  ['26-35', (a) => a >= 26 && a <= 35],
-  ['36-45', (a) => a >= 36 && a <= 45],
-  ['46-60', (a) => a >= 46 && a <= 60],
-  ['60+', (a) => a > 60],
+  ['26-40', (a) => a >= 26 && a <= 40],
+  ['41-60', (a) => a >= 41 && a <= 60],
+  ['61-80', (a) => a >= 61 && a <= 80],
+  ['80+', (a) => a > 80],
 ];
 
 function bumpMap(m: Map<string, number>, k: string | null | undefined) {
@@ -178,7 +186,9 @@ function toArray(m: Map<string, number>) {
 
 export function aggregate(
   voters: Array<{
+    caste?: string | null;
     community: string | null;
+    category?: string | null;
     religion?: string | null;
     occupation: string | null;
     language: string | null;
@@ -192,7 +202,9 @@ export function aggregate(
     predictedLeaning?: unknown;
   }>,
 ): SegmentAggregates {
+  const caste = new Map<string, number>();
   const community = new Map<string, number>();
+  const category = new Map<string, number>();
   const religion = new Map<string, number>();
   const occupation = new Map<string, number>();
   const language = new Map<string, number>();
@@ -206,7 +218,9 @@ export function aggregate(
   const householdCounts = new Map<number, number>(); // householdId → members
   let firstTimeVoters = 0;
   for (const v of voters) {
+    bumpMap(caste, v.caste);
     bumpMap(community, v.community);
+    bumpMap(category, v.category);
     bumpMap(religion, v.religion);
     bumpMap(occupation, v.occupation);
     bumpMap(language, v.language);
@@ -233,7 +247,9 @@ export function aggregate(
   }
 
   return {
+    byCaste: toArray(caste),
     byCommunity: toArray(community),
+    byCategory: toArray(category),
     byReligion: toArray(religion),
     byOccupation: toArray(occupation),
     byLanguage: toArray(language),
