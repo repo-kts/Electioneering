@@ -3,7 +3,16 @@
 // Attaches Authorization Bearer token from localStorage; bounces to /login
 // on 401 (except for the login/me endpoints themselves).
 
-const BASE = import.meta.env.VITE_API_URL
+const BASE = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+
+// Warn when VITE_API_URL isn't configured so the fallback isn't mistaken for
+// intended config — the earlier `undefined/api/...` bug was silent otherwise.
+if (!import.meta.env.VITE_API_URL) {
+    console.warn(
+        `[api] VITE_API_URL is not set — falling back to ${BASE}. ` +
+        `Create frontend/.env with VITE_API_URL=<backend-url> to override.`
+    );
+}
 
 const NO_REDIRECT_PATHS = new Set(['/api/auth/login', '/api/auth/me']);
 
@@ -126,6 +135,15 @@ export const api = {
         if (candidate) p.set('candidate', candidate);
         return request(`/api/analytics/strategy?${p.toString()}`);
     },
+    partyAnalytics: (electionId) => request(`/api/analytics/party?electionId=${electionId}`),
+    assemblyTimeline: ({ assemblyNo, assemblyName, limit } = {}) => {
+        const p = new URLSearchParams();
+        if (assemblyNo) p.set('assemblyNo', assemblyNo);
+        if (assemblyName) p.set('assemblyName', assemblyName);
+        if (limit) p.set('limit', String(limit));
+        return request(`/api/analytics/assembly-timeline?${p.toString()}`);
+    },
+    electionsHierarchy: () => request('/api/analytics/hierarchy'),
 
     // ─── Targeting + correlation ───────────────────────────────
     boothTargets: (electionId, ourCandidate) => {

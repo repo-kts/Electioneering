@@ -5,6 +5,9 @@ import {
   BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer,
 } from 'recharts';
 import Breadcrumbs from '../components/ui/Breadcrumbs.jsx';
+import {
+  GenderPictograph, AgeDistribution, CommunityDonut, HouseholdPictograph,
+} from '../components/analytics/DemographicVisuals.jsx';
 import { api } from '../lib/api.js';
 
 function colorFor(s) {
@@ -44,22 +47,67 @@ function Panel({ title, eyebrow, right, children, className = '' }) {
   );
 }
 
-function DistroBars({ data = [], limit = 8 }) {
-  const top = data.slice(0, limit);
-  const max = Math.max(...top.map((d) => d.count), 1);
-  if (top.length === 0) return <p className="py-4 text-center text-sm text-slate-400">No data</p>;
+// Priority accent convention shared with StrategyBrief: high=rose, medium=amber, low=slate.
+const PRIORITY = {
+  high: { badge: 'border-rose-200 bg-rose-50 text-rose-800', accent: '#e11d48' },
+  medium: { badge: 'border-amber-200 bg-amber-50 text-amber-800', accent: '#d97706' },
+  low: { badge: 'border-slate-300 bg-white text-slate-600', accent: '#94a3b8' },
+};
+
+// Classification badge tone by leaning.
+const CLASS_TONE = {
+  Stronghold: 'border-emerald-200 bg-emerald-50 text-emerald-800',
+  Swing: 'border-amber-200 bg-amber-50 text-amber-800',
+  'Opposition-leaning': 'border-rose-200 bg-rose-50 text-rose-800',
+  'Low-turnout': 'border-sky-200 bg-sky-50 text-sky-800',
+  'No-data': 'border-slate-300 bg-white text-slate-500',
+};
+
+function Recommendations({ classification, priority, recommendations }) {
+  const items = recommendations ?? [];
+  const isEmpty = !classification || classification === 'No-data' || items.length === 0;
   return (
-    <ul className="space-y-1.5">
-      {top.map((d, i) => (
-        <li key={d.key} className="flex items-center gap-2 text-sm">
-          <span className="w-28 truncate text-slate-600" title={d.key}>{d.key}</span>
-          <div className="h-1.5 flex-1 overflow-hidden bg-slate-200">
-            <div className="h-full" style={{ width: `${(d.count / max) * 100}%`, background: PALETTE[i % PALETTE.length] }} />
-          </div>
-          <span className="w-10 text-right tabular-nums text-slate-500">{d.count}</span>
-        </li>
-      ))}
-    </ul>
+    <Panel
+      eyebrow="Booth strategy"
+      title="Recommendations"
+      right={
+        <div className="flex items-center gap-2">
+          <span className={`border px-2 py-0.5 text-xs font-semibold ${CLASS_TONE[classification] ?? CLASS_TONE['No-data']}`}>
+            {classification ?? 'No data'}
+          </span>
+          {priority && (
+            <span className={`border px-2 py-0.5 text-[11px] font-medium capitalize ${(PRIORITY[priority] ?? PRIORITY.low).badge}`}>
+              {priority} priority
+            </span>
+          )}
+        </div>
+      }
+      className="mt-6"
+    >
+      {isEmpty ? (
+        <p className="py-3 text-center text-sm text-slate-400">
+          Not enough Form 20 / voter data to generate recommendations for this booth yet.
+        </p>
+      ) : (
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
+          {items.map((r) => {
+            const p = PRIORITY[r.priority] ?? PRIORITY.low;
+            return (
+              <div key={r.id} className="flex border border-slate-200 bg-white">
+                <span className="w-1 shrink-0" style={{ background: p.accent }} aria-hidden="true" />
+                <div className="min-w-0 flex-1 p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <h4 className="text-sm font-semibold text-slate-900">{r.title}</h4>
+                    <span className={`shrink-0 border px-1.5 py-0.5 text-[10px] font-medium capitalize ${p.badge}`}>{r.priority}</span>
+                  </div>
+                  <p className="mt-1 text-xs leading-relaxed text-slate-600">{r.detail}</p>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </Panel>
   );
 }
 
@@ -125,6 +173,13 @@ export default function BoothDetailPage() {
             <Kpi label="Leader" value={d.leader?.name ?? '—'} accent={colorFor(d.leader?.name)} sub={d.leader ? pct(d.leader.share) : ''} />
           </div>
 
+          {/* Recommendations */}
+          <Recommendations
+            classification={d.classification}
+            priority={d.priority}
+            recommendations={d.recommendations}
+          />
+
           {/* Votes at this booth */}
           <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
             <Panel title="Votes by candidate (this booth)" className="lg:col-span-2">
@@ -167,16 +222,13 @@ export default function BoothDetailPage() {
             </Panel>
           </div>
 
-          {/* Demographics */}
+          {/* Demographics — pictorial */}
           <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
-            <Panel title="Caste / community"><DistroBars data={dem?.byCommunity} /></Panel>
-            <Panel title="Age groups"><DistroBars data={dem?.byAgeBucket} /></Panel>
-            <Panel title="Gender"><DistroBars data={dem?.byGender} /></Panel>
+            <Panel title="Caste / community"><CommunityDonut data={dem?.byCommunity ?? []} /></Panel>
+            <Panel title="Age groups"><AgeDistribution data={dem?.byAgeBucket ?? []} /></Panel>
+            <Panel title="Gender"><GenderPictograph data={dem?.byGender ?? []} /></Panel>
             <Panel title="Household size">
-              <DistroBars data={dem?.byHouseholdSize} />
-              <div className="mt-3 border-t border-slate-100 pt-2 text-xs text-slate-500">
-                First-time voters (≤19): <strong className="text-slate-700">{num(dem?.firstTimeVoters)}</strong>
-              </div>
+              <HouseholdPictograph data={dem?.byHouseholdSize ?? []} firstTimeVoters={dem?.firstTimeVoters} />
             </Panel>
           </div>
 

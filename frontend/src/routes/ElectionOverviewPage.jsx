@@ -78,6 +78,12 @@ export default function ElectionOverviewPage() {
               <Link to="/segment">
                 <Button variant="secondary"><span className="text-slate-700">Voter search</span></Button>
               </Link>
+              <Link to={`/elections/${electionId}/parties`}>
+                <Button variant="secondary"><span className="text-slate-700">Party analytics →</span></Button>
+              </Link>
+              <Link to={`/elections/${electionId}/timeline`}>
+                <Button variant="secondary"><span className="text-slate-700">Yearly trends →</span></Button>
+              </Link>
               <Link to={`/elections/${electionId}/strategy`}>
                 <Button variant="primary">Win plan →</Button>
               </Link>
@@ -100,53 +106,6 @@ export default function ElectionOverviewPage() {
           <StatCard label="Margin" value={election.leader && election.runnerUp ? num(election.leader.votes - election.runnerUp.votes) : '—'} sub={election.runnerUp ? `over ${election.runnerUp.name}` : ''} />
         </div>
       )}
-
-      {election && <StrategyBrief electionId={electionId} candidates={election.candidates ?? []} />}
-
-      {/* Candidate results */}
-      <Surface title="Candidate results" subtitle="Form 20 totals across all polling stations.">
-        <div className="grid grid-cols-1 gap-8 lg:grid-cols-5">
-          <div className="lg:col-span-3">
-            <ResponsiveContainer width="100%" height={320}>
-              <BarChart data={candBars} margin={{ left: 8, right: 8, top: 8, bottom: 56 }}>
-                <CartesianGrid stroke="#e7e5de" vertical={false} />
-                <XAxis dataKey="name" tick={{ fontSize: 11 }} interval={0} angle={-22} textAnchor="end" height={80} />
-                <YAxis tick={{ fontSize: 11 }} />
-                <Tooltip formatter={(v) => num(v)} cursor={{ fill: '#f7f5f0' }} />
-                <Bar dataKey="votes">
-                  {candBars.map((c) => <Cell key={c.name} fill={colorFor(c.name)} />)}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-          <div className="lg:col-span-2">
-            <ResponsiveContainer width="100%" height={170}>
-              <PieChart>
-                <Pie data={donut} dataKey="value" nameKey="name" innerRadius={48} outerRadius={80} paddingAngle={2}>
-                  {donut.map((d) => <Cell key={d.name} fill={colorFor(d.name)} />)}
-                </Pie>
-                <Tooltip formatter={(v, n) => [num(v), n]} />
-              </PieChart>
-            </ResponsiveContainer>
-            <ul className="mt-3 divide-y divide-slate-100">
-              {(election?.candidates ?? []).map((c, i) => (
-                <li key={c.name}>
-                  <Link
-                    to={`/elections/${electionId}/candidate/${encodeURIComponent(c.name)}`}
-                    className="group flex items-center gap-2.5 border-b border-slate-100 py-2.5 transition last:border-b-0 hover:bg-[#fbfaf7]"
-                  >
-                    <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: colorFor(c.name) }} />
-                    <span className="flex-1 truncate text-sm text-slate-700">{c.name}</span>
-                    {i === 0 && <span className="border border-accent-200 bg-accent-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-accent-700">Won</span>}
-                    <span className="w-12 text-right text-sm font-semibold tabular-nums text-slate-900">{pct(c.share)}</span>
-                    <span className="text-xs font-medium text-accent-600 opacity-0 transition group-hover:opacity-100">report →</span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </div>
-      </Surface>
 
       {/* Booth grid */}
       <Surface
@@ -236,6 +195,53 @@ export default function ElectionOverviewPage() {
             </div>
           </>
         )}
+      </Surface>
+
+      {election && <StrategyBrief electionId={electionId} candidates={election.candidates ?? []} />}
+
+      {/* Candidate results */}
+      <Surface title="Candidate results" subtitle="Form 20 totals across all polling stations.">
+        <div className="grid grid-cols-1 gap-8 lg:grid-cols-5">
+          <div className="lg:col-span-3">
+            <ResponsiveContainer width="100%" height={320}>
+              <BarChart data={candBars} margin={{ left: 8, right: 8, top: 8, bottom: 56 }}>
+                <CartesianGrid stroke="#e7e5de" vertical={false} />
+                <XAxis dataKey="name" tick={{ fontSize: 11 }} interval={0} angle={-22} textAnchor="end" height={80} />
+                <YAxis tick={{ fontSize: 11 }} />
+                <Tooltip formatter={(v) => num(v)} cursor={{ fill: '#f7f5f0' }} />
+                <Bar dataKey="votes">
+                  {candBars.map((c) => <Cell key={c.name} fill={colorFor(c.name)} />)}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="lg:col-span-2">
+            <ResponsiveContainer width="100%" height={170}>
+              <PieChart>
+                <Pie data={donut} dataKey="value" nameKey="name" innerRadius={48} outerRadius={80} paddingAngle={2}>
+                  {donut.map((d) => <Cell key={d.name} fill={colorFor(d.name)} />)}
+                </Pie>
+                <Tooltip formatter={(v, n) => [num(v), n]} />
+              </PieChart>
+            </ResponsiveContainer>
+            <ul className="mt-3 divide-y divide-slate-100">
+              {(election?.candidates ?? []).map((c, i) => (
+                <li key={c.name}>
+                  <Link
+                    to={`/elections/${electionId}/candidate/${encodeURIComponent(c.name)}`}
+                    className="group flex items-center gap-2.5 border-b border-slate-100 py-2.5 transition last:border-b-0 hover:bg-[#fbfaf7]"
+                  >
+                    <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: colorFor(c.name) }} />
+                    <span className="flex-1 truncate text-sm text-slate-700">{c.name}</span>
+                    {i === 0 && <span className="border border-accent-200 bg-accent-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-accent-700">Won</span>}
+                    <span className="w-12 text-right text-sm font-semibold tabular-nums text-slate-900">{pct(c.share)}</span>
+                    <span className="text-xs font-medium text-accent-600 opacity-0 transition group-hover:opacity-100">report →</span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
       </Surface>
 
       {/* Insights */}
