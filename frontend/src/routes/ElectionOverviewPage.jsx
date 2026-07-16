@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import BoothMap from '../components/analytics/BoothMap.jsx';
 import { useToast } from '../context/ToastContext.jsx';
@@ -11,6 +11,7 @@ import InsightsSection from '../components/analytics/InsightsSection.jsx';
 import StrategyBrief from '../components/analytics/StrategyBrief.jsx';
 import { PageHeader, StatCard, Surface, Pill, Button, Loading, ErrorBox } from '../components/ui/kit.jsx';
 import { api } from '../lib/api.js';
+import { partyColor } from '../components/elections/helpers.js';
 
 function colorFor(s) {
   if (!s) return '#94a3b8';
@@ -24,6 +25,7 @@ const num = (n) => (n ?? 0).toLocaleString();
 
 export default function ElectionOverviewPage() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const electionId = Number(id);
 
   const overviewQ = useQuery({
@@ -54,6 +56,14 @@ export default function ElectionOverviewPage() {
   const booths = boothQ.data?.items ?? [];
   const geocoded = boothQ.data?.geocoded ?? 0;
 
+  // Map each candidate to their party so BJP/INC keep their theme color everywhere.
+  const partyByName = useMemo(() => {
+    const m = {};
+    for (const c of election?.candidates ?? []) m[c.name] = c.party;
+    return m;
+  }, [election]);
+  const colorForName = (nm) => partyColor(partyByName[nm]) ?? colorFor(nm);
+
   const candBars = useMemo(
     () => (election?.candidates ?? []).map((c) => ({ name: c.name, votes: c.votes })),
     [election],
@@ -65,6 +75,19 @@ export default function ElectionOverviewPage() {
 
   const name = election ? `${election.assemblyName} ${election.electionYear ?? ''}`.trim() : 'Election';
 
+  // Other elections for this same constituency + election type — for the year switcher.
+  const yearOptions = useMemo(() => {
+    if (!election) return [];
+    return (data?.electionsList ?? [])
+      .filter(
+        (e) =>
+          e.assemblyNo === election.assemblyNo &&
+          e.assemblyName === election.assemblyName &&
+          e.electionType === election.electionType,
+      )
+      .sort((a, b) => (b.electionYear ?? 0) - (a.electionYear ?? 0));
+  }, [data, election]);
+
   return (
     <div className="space-y-6">
       <div>
@@ -75,6 +98,25 @@ export default function ElectionOverviewPage() {
           subtitle={election ? `${election.assemblyNo}-${election.assemblyName}${election.state ? ' · ' + election.state : ''}` : 'Loading…'}
           actions={
             <>
+              {election && yearOptions.length > 0 && (
+                <label
+                  className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-2.5 py-1 text-sm"
+                  title={`Switch year for ${election.electionType} · ${election.assemblyName}`}
+                >
+                  <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Year</span>
+                  <select
+                    value={electionId}
+                    onChange={(e) => navigate(`/elections/${e.target.value}`)}
+                    className="border-0 bg-transparent p-0 pr-1 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-0"
+                  >
+                    {yearOptions.map((e) => (
+                      <option key={e.id} value={e.id}>
+                        {e.electionYear ?? '—'}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
               <Link to="/segment">
                 <Button variant="secondary"><span className="text-slate-700">Voter search</span></Button>
               </Link>
@@ -155,7 +197,7 @@ export default function ElectionOverviewPage() {
               </div>
               {booths.map((ps) => {
                 const reported = (ps.totalValid ?? 0) > 0;
-                const c = colorFor(ps.leader);
+                const c = colorForName(ps.leader);
                 return (
                   <Link
                     key={ps.id}
@@ -188,7 +230,7 @@ export default function ElectionOverviewPage() {
             <div className="mt-4 flex flex-wrap gap-3 border-t border-slate-200 pt-4">
               {[...new Set(booths.filter((b) => b.leader).map((b) => b.leader))].map((l) => (
                 <span key={l} className="flex items-center gap-1.5 text-xs text-slate-600">
-                  <span className="inline-block h-3 w-3" style={{ background: colorFor(l) }} />
+                  <span className="inline-block h-3 w-3" style={{ background: colorForName(l) }} />
                   {l}
                 </span>
               ))}
@@ -210,7 +252,7 @@ export default function ElectionOverviewPage() {
                 <YAxis tick={{ fontSize: 11 }} />
                 <Tooltip formatter={(v) => num(v)} cursor={{ fill: '#f7f5f0' }} />
                 <Bar dataKey="votes">
-                  {candBars.map((c) => <Cell key={c.name} fill={colorFor(c.name)} />)}
+                  {candBars.map((c) => <Cell key={c.name} fill={colorForName(c.name)} />)}
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
@@ -219,7 +261,7 @@ export default function ElectionOverviewPage() {
             <ResponsiveContainer width="100%" height={170}>
               <PieChart>
                 <Pie data={donut} dataKey="value" nameKey="name" innerRadius={48} outerRadius={80} paddingAngle={2}>
-                  {donut.map((d) => <Cell key={d.name} fill={colorFor(d.name)} />)}
+                  {donut.map((d) => <Cell key={d.name} fill={colorForName(d.name)} />)}
                 </Pie>
                 <Tooltip formatter={(v, n) => [num(v), n]} />
               </PieChart>
@@ -231,7 +273,7 @@ export default function ElectionOverviewPage() {
                     to={`/elections/${electionId}/candidate/${encodeURIComponent(c.name)}`}
                     className="group flex items-center gap-2.5 border-b border-slate-100 py-2.5 transition last:border-b-0 hover:bg-[#fbfaf7]"
                   >
-                    <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: colorFor(c.name) }} />
+                    <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: colorForName(c.name) }} />
                     <span className="flex-1 truncate text-sm text-slate-700">{c.name}</span>
                     {i === 0 && <span className="border border-accent-200 bg-accent-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-accent-700">Won</span>}
                     <span className="w-12 text-right text-sm font-semibold tabular-nums text-slate-900">{pct(c.share)}</span>

@@ -9,6 +9,7 @@ import {
   GenderPictograph, AgeDistribution, CommunityDonut, HouseholdPictograph,
 } from '../components/analytics/DemographicVisuals.jsx';
 import { api } from '../lib/api.js';
+import { partyColor } from '../components/elections/helpers.js';
 
 function colorFor(s) {
   if (!s) return '#94a3b8';
@@ -116,6 +117,9 @@ export default function BoothDetailPage() {
   const electionId = Number(id);
   const q = useQuery({ queryKey: ['booth', psId], queryFn: () => api.boothDetail(psId) });
   const d = q.data;
+  const partyByName = {};
+  for (const c of d?.candidates ?? []) partyByName[c.name] = c.party;
+  const colorForName = (nm) => partyColor(partyByName[nm]) ?? colorFor(nm);
 
   const electionName = d ? `${d.election.assemblyName} ${d.election.electionYear ?? ''}`.trim() : 'Election';
   const dem = d?.demographics;
@@ -170,7 +174,7 @@ export default function BoothDetailPage() {
             <Kpi label="Turnout" value={pct(Math.min(d.turnout.pct, 1))} />
             <Kpi label="Valid votes" value={num(d.totalValid)} />
             <Kpi label="NOTA" value={num(d.ps.notaVotes)} />
-            <Kpi label="Leader" value={d.leader?.name ?? '—'} accent={colorFor(d.leader?.name)} sub={d.leader ? pct(d.leader.share) : ''} />
+            <Kpi label="Leader" value={d.leader?.name ?? '—'} accent={colorForName(d.leader?.name)} sub={d.leader ? pct(d.leader.share) : ''} />
           </div>
 
           {/* Recommendations */}
@@ -190,7 +194,7 @@ export default function BoothDetailPage() {
                   <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={140} />
                   <Tooltip formatter={(v) => num(v)} />
                   <Bar dataKey="votes">
-                    {candBars.map((c) => <Cell key={c.name} fill={colorFor(c.name)} />)}
+                    {candBars.map((c) => <Cell key={c.name} fill={colorForName(c.name)} />)}
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>

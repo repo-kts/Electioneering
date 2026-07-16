@@ -7,7 +7,7 @@ import {
 import Breadcrumbs from '../components/ui/Breadcrumbs.jsx';
 import { PageHeader, StatCard, Surface, Loading, ErrorBox } from '../components/ui/kit.jsx';
 import { api } from '../lib/api.js';
-import { colorFor, num, pct } from '../components/elections/helpers.js';
+import { colorForParty, num, pct } from '../components/elections/helpers.js';
 
 export default function PartyAnalyticsPage() {
   const { id } = useParams();
@@ -83,7 +83,7 @@ export default function PartyAnalyticsPage() {
                   <YAxis tick={{ fontSize: 11 }} width={56} tickFormatter={(v) => num(v)} />
                   <Tooltip formatter={(v) => [num(v), 'Votes']} cursor={{ fill: '#f7f5f0' }} />
                   <Bar dataKey="votes" radius={[4, 4, 0, 0]}>
-                    {bars.map((b) => <Cell key={b.name} fill={colorFor(b.name)} />)}
+                    {bars.map((b) => <Cell key={b.name} fill={colorForParty(b.name)} />)}
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
@@ -94,7 +94,7 @@ export default function PartyAnalyticsPage() {
               <ResponsiveContainer width="100%" height={190}>
                 <PieChart>
                   <Pie data={donut} dataKey="value" nameKey="name" innerRadius={52} outerRadius={84} paddingAngle={2}>
-                    {donut.map((d) => <Cell key={d.name} fill={colorFor(d.name)} stroke="#fff" strokeWidth={2} />)}
+                    {donut.map((d) => <Cell key={d.name} fill={colorForParty(d.name)} stroke="#fff" strokeWidth={2} />)}
                   </Pie>
                   <Tooltip formatter={(v, n) => [num(v), n]} />
                 </PieChart>
@@ -102,7 +102,7 @@ export default function PartyAnalyticsPage() {
               <ul className="mt-3 divide-y divide-slate-100">
                 {parties.slice(0, 8).map((p) => (
                   <li key={p.party} className="flex items-center gap-2.5 py-2">
-                    <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: colorFor(p.party) }} />
+                    <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: colorForParty(p.party) }} />
                     <span className="flex-1 truncate text-sm text-slate-700">{p.party}</span>
                     <span className="w-14 text-right text-sm font-semibold tabular-nums text-slate-900">{pct(p.share)}</span>
                   </li>
@@ -129,7 +129,7 @@ export default function PartyAnalyticsPage() {
                     className="grid grid-cols-[minmax(0,1.3fr)_110px_90px_110px_100px_minmax(0,1.2fr)] items-center gap-3 border-b border-slate-100 px-4 py-3 last:border-b-0"
                   >
                     <div className="flex items-center gap-2">
-                      <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: colorFor(p.party) }} />
+                      <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: colorForParty(p.party) }} />
                       <span className="truncate text-sm font-medium text-slate-900">{p.party}</span>
                       {i === 0 && <span className="border border-accent-200 bg-accent-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-accent-700">Lead</span>}
                     </div>
