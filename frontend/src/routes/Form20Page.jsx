@@ -36,10 +36,6 @@ export default function Form20Page() {
   const [selectedId, setSelectedId] = useState(null);
   const [preview, setPreview] = useState(null);
   const [historyQuery, setHistoryQuery] = useState('');
-  const [previewHeader, setPreviewHeader] = useState({
-    state: '', parlNo: '', parlName: '', assemblyNo: '', assemblyName: '',
-    electionType: 'Assembly Election', totalElectors: '',
-  });
   const { show } = useToast();
   const qc = useQueryClient();
 
@@ -70,16 +66,16 @@ export default function Form20Page() {
 
   const commitM = useMutation({
     mutationFn: (rows) => {
-      if (!previewHeader.assemblyNo || !previewHeader.assemblyName || !previewHeader.state) {
-        const err = new Error('Fill State, Assembly No and Assembly Name to commit');
+      const eid = preview?.electionId;
+      if (!eid) {
+        const err = new Error('No Election ID found in the sheet. Create the election in Master Data and put its ID in the Election ID column.');
         err.status = 400;
         throw err;
       }
       return api.commitForm20({
         fileName: preview.file,
         source: 'Form 20 Excel/CSV upload',
-        ...previewHeader,
-        totalElectors: previewHeader.totalElectors ? Number(previewHeader.totalElectors) : undefined,
+        electionId: eid,
         candidates: preview.candidates,
         rows,
       });
@@ -191,7 +187,7 @@ export default function Form20Page() {
               <Card>
                 <Card.Head
                   title="Upload Form 20 sheet"
-                  subtitle="Drop your Form 20 sheet — candidate columns are detected automatically. You'll set the election header before saving."
+                  subtitle="Drop your Form 20 sheet — candidate columns are detected automatically. The election comes from the sheet's Election ID column (created in Master Data)."
                 />
                 <Card.Body>
                   <Dropzone onFileAccepted={(f) => previewM.mutate(f)} />
@@ -216,30 +212,23 @@ export default function Form20Page() {
             <UploadPreview
               kind="form20"
               data={preview}
+              commitDisabled={!preview.electionId}
               onCancel={() => setPreview(null)}
               onCommit={(rows) => commitM.mutateAsync(rows)}
-              headerExtras={
-                <div className="mb-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-                  {[
-                    ['state', 'State *'],
-                    ['parlNo', 'Parl. No'],
-                    ['parlName', 'Parl. Name'],
-                    ['assemblyNo', 'Assembly No *'],
-                    ['assemblyName', 'Assembly Name *'],
-                    ['totalElectors', 'Total Electors'],
-                    ['electionType', 'Election Type'],
-                  ].map(([k, label]) => (
-                    <label key={k} className="flex flex-col gap-1">
-                      <span className="text-xs font-medium text-slate-500">{label}</span>
-                      <input
-                        type={k === 'totalElectors' ? 'number' : 'text'}
-                        value={previewHeader[k] ?? ''}
-                        onChange={(e) => setPreviewHeader({ ...previewHeader, [k]: e.target.value })}
-                      />
-                    </label>
-                  ))}
-                </div>
-              }
+              headerExtras={(() => {
+                const eid = preview.electionId;
+                const match = elections.find((e) => e.id === eid);
+                return eid ? (
+                  <div className="mb-3 rounded-sm border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+                    Election ID <span className="font-semibold">#{eid}</span> from the sheet
+                    {match ? <> · <span className="font-semibold">{match.assemblyNo}-{match.assemblyName} ({match.state})</span></> : ' · not found in Master Data — create it first'}
+                  </div>
+                ) : (
+                  <div className="mb-3 rounded-sm border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                    No <span className="font-semibold">Election ID</span> column detected. Add it to the sheet (create the election in Master Data → Elections).
+                  </div>
+                );
+              })()}
             />
           )}
         </>

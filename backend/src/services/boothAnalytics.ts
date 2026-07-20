@@ -4,7 +4,7 @@
 // opposition strongholds, and GOTV (favorable but low-turnout) booths.
 
 import { prisma } from '../lib/prisma.js';
-import { computePollingStationLeanings } from './inference.js';
+import { computeBoothLeanings } from './inference.js';
 
 export type BoothClass =
   | 'Safe-win'
@@ -94,11 +94,11 @@ export async function computeBoothTargets(
   requestedCandidate?: string,
 ): Promise<BoothTargetsResult> {
   const ourCandidate = await resolveOurCandidate(electionId, requestedCandidate);
-  const leanings = await computePollingStationLeanings(electionId);
-  const stations = await prisma.pollingStation.findMany({
+  const leanings = await computeBoothLeanings(electionId);
+  const stations = await prisma.booth.findMany({
     where: { electionId },
     orderBy: { serial: 'asc' },
-    include: { _count: { select: { voters: true } } },
+    include: { _count: { select: { boothVoters: true } } },
   });
 
   const items: BoothTarget[] = stations.map((ps) => {
@@ -120,7 +120,7 @@ export async function computeBoothTargets(
     }
 
     const totalPolled = totalValid + ps.rejectedVotes + ps.notaVotes;
-    const registered = ps._count.voters;
+    const registered = ps._count.boothVoters;
     const turnoutPct = registered > 0 ? totalPolled / registered : 0;
     const notaShare = totalPolled > 0 ? ps.notaVotes / totalPolled : 0;
     const margin = ourShare - topOpponentShare;
@@ -177,12 +177,12 @@ export interface SwingResult {
  */
 export async function computeSwing(electionA: number, electionB: number): Promise<SwingResult> {
   const [a, b] = await Promise.all([
-    computePollingStationLeanings(electionA),
-    computePollingStationLeanings(electionB),
+    computeBoothLeanings(electionA),
+    computeBoothLeanings(electionB),
   ]);
   const [psA, psB] = await Promise.all([
-    prisma.pollingStation.findMany({ where: { electionId: electionA }, select: { id: true, serial: true, name: true } }),
-    prisma.pollingStation.findMany({ where: { electionId: electionB }, select: { id: true, serial: true } }),
+    prisma.booth.findMany({ where: { electionId: electionA }, select: { id: true, serial: true, name: true } }),
+    prisma.booth.findMany({ where: { electionId: electionB }, select: { id: true, serial: true } }),
   ]);
   const serialToB = new Map(psB.map((p) => [p.serial, p.id]));
 

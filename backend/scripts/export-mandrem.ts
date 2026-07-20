@@ -23,9 +23,9 @@ async function main() {
     where: { assemblyNo: '1', assemblyName: 'Mandrem' },
     include: {
       candidates: { orderBy: { position: 'asc' } },
-      pollingStations: {
+      booths: {
         orderBy: { serial: 'asc' },
-        include: { voteResults: { include: { candidate: true } } },
+        include: { voteResults: { include: { candidate: true } }, pollingStation: true },
       },
     },
   });
@@ -38,32 +38,33 @@ async function main() {
     ...candNames,
     'Total Valid Votes', 'Rejected Votes', 'NOTA', 'Total Votes',
   ];
-  const f20Rows = election.pollingStations.map((ps) => {
+  const f20Rows = election.booths.map((b) => {
     const byCand: Record<string, number> = {};
     let valid = 0;
-    for (const vr of ps.voteResults) {
+    for (const vr of b.voteResults) {
       byCand[vr.candidate.name] = vr.votes;
       valid += vr.votes;
     }
     const row: Record<string, unknown> = {
-      'S.No': ps.serial,
-      'Polling Station': ps.name,
-      Latitude: ps.latitude ?? '',
-      Longitude: ps.longitude ?? '',
+      'S.No': b.serial,
+      'Polling Station': b.name ?? b.pollingStation?.name ?? '',
+      Latitude: b.pollingStation?.latitude ?? '',
+      Longitude: b.pollingStation?.longitude ?? '',
       'Total Valid Votes': valid,
-      'Rejected Votes': ps.rejectedVotes,
-      NOTA: ps.notaVotes,
-      'Total Votes': valid + ps.rejectedVotes + ps.notaVotes,
+      'Rejected Votes': b.rejectedVotes,
+      NOTA: b.notaVotes,
+      'Total Votes': valid + b.rejectedVotes + b.notaVotes,
     };
     for (const name of candNames) row[name] = byCand[name] ?? 0;
     return row;
   });
   writeFileSync(resolve(OUT, 'mandrem_form20.csv'), toCsv(f20Headers, f20Rows));
 
-  // ── Voter list sheet ───────────────────────────────────────────
-  const voters = await prisma.voter.findMany({
-    where: { assemblyNo: '1', assemblyName: 'Mandrem' },
-    orderBy: [{ partNumber: 'asc' }, { houseNumber: 'asc' }, { age: 'desc' }],
+  // ── Voter list sheet (this election's roll = BoothVoter rows) ──────
+  const roll = await prisma.boothVoter.findMany({
+    where: { electionId: election.id },
+    orderBy: [{ partNumber: 'asc' }, { houseNumber: 'asc' }],
+    include: { voter: true, booth: { include: { pollingStation: true } } },
   });
   const vHeaders = [
     'sr', 'fullName', 'firstName', 'lastName', 'relationType', 'relativeName',
@@ -71,8 +72,9 @@ async function main() {
     'mainTown', 'ward', 'panchayat', 'tehsil', 'district', 'pinCode', 'state',
     'religion', 'community', 'communityConfidence', 'communitySource', 'predictedLeader', 'predictedShare',
   ];
-  const vRows = voters.map((v, i) => {
-    const lean = (v.predictedLeaning ?? {}) as { leader?: string; leaderShare?: number };
+  const vRows = roll.map((bv, i) => {
+    const v = bv.voter;
+    const lean = (bv.predictedLeaning ?? {}) as { leader?: string; leaderShare?: number };
     return {
       sr: i + 1,
       fullName: v.fullName,
@@ -83,10 +85,10 @@ async function main() {
       age: v.age,
       gender: v.gender,
       epic: v.epic,
-      houseNumber: v.houseNumber,
-      pollingStationName: v.pollingStationName,
-      partNumber: v.partNumber,
-      partSerial: v.partSerial,
+      houseNumber: bv.houseNumber,
+      pollingStationName: bv.booth?.pollingStation?.name ?? bv.booth?.name ?? '',
+      partNumber: bv.partNumber,
+      partSerial: bv.partSerial,
       mainTown: v.mainTown,
       ward: v.ward,
       panchayat: v.panchayat,

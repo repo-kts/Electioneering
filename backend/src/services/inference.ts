@@ -1,14 +1,14 @@
 // Inference engine — predicts each voter's likely candidate preference from
-// the Form 20 vote-share of their polling station.
+// the Form 20 vote-share of their booth.
 //
-// v1: PS-share inheritance. Every voter assigned to a polling station inherits
-//     that station's normalized vote share per candidate.
+// v1: booth-share inheritance. Every voter placed on a booth (via BoothVoter)
+//     inherits that booth's normalized vote share per candidate.
 // v2 (later): demographic transfer — solve booth × demographic = vote-share via
 //     least-squares and redistribute per voter weighted by community/age/gender.
 //
-// Result is written to Voter.predictedLeaning (JSONB) as:
+// Result is written to BoothVoter.predictedLeaning (JSONB) as:
 //   { byCandidate: { "Name": share, ... }, leader: "Name", leaderShare: 0.74 }
-// plus Voter.predictedAt timestamp.
+// plus BoothVoter.predictedAt timestamp — i.e. per election, not on the voter.
 
 import { prisma } from '../lib/prisma.js';
 
@@ -19,25 +19,25 @@ export interface PSLeaning {
   totalValid: number;
 }
 
-/** Compute per-PS leaning for an election from VoteResult rows. */
-export async function computePollingStationLeanings(
+/** Compute per-booth leaning for an election from VoteResult rows. */
+export async function computeBoothLeanings(
   electionId: number,
 ): Promise<Map<number, PSLeaning>> {
-  const stations = await prisma.pollingStation.findMany({
+  const booths = await prisma.booth.findMany({
     where: { electionId },
     include: { voteResults: { include: { candidate: true } } },
   });
   const out = new Map<number, PSLeaning>();
-  for (const ps of stations) {
+  for (const booth of booths) {
     const byCandidate: Record<string, number> = {};
     let total = 0;
-    for (const vr of ps.voteResults) {
+    for (const vr of booth.voteResults) {
       total += vr.votes;
     }
     let leader: string | null = null;
     let leaderShare = 0;
     if (total > 0) {
-      for (const vr of ps.voteResults) {
+      for (const vr of booth.voteResults) {
         const share = vr.votes / total;
         byCandidate[vr.candidate.name] = share;
         if (share > leaderShare) {
@@ -46,33 +46,33 @@ export async function computePollingStationLeanings(
         }
       }
     }
-    out.set(ps.id, { byCandidate, leader, leaderShare, totalValid: total });
+    out.set(booth.id, { byCandidate, leader, leaderShare, totalValid: total });
   }
   return out;
 }
 
 /**
- * Recompute predictedLeaning for every Voter linked (via pollingStationId)
- * to a PollingStation in the given election.
+ * Recompute predictedLeaning for every BoothVoter placed on a booth in the
+ * given election.
  *
  * Returns counts.
  */
 export async function recomputePredictedLeaning(
   electionId: number,
-): Promise<{ stations: number; votersUpdated: number }> {
-  const leanings = await computePollingStationLeanings(electionId);
-  const psIds = Array.from(leanings.keys());
-  if (psIds.length === 0) return { stations: 0, votersUpdated: 0 };
+): Promise<{ booths: number; votersUpdated: number }> {
+  const leanings = await computeBoothLeanings(electionId);
+  const boothIds = Array.from(leanings.keys());
+  if (boothIds.length === 0) return { booths: 0, votersUpdated: 0 };
 
   const now = new Date();
   let updated = 0;
 
-  // Group voters by pollingStationId then bulk-update with the PS's leaning.
-  for (const psId of psIds) {
-    const lean = leanings.get(psId)!;
-    if (lean.totalValid === 0) continue; // no Form 20 data for this PS — skip
-    const result = await prisma.voter.updateMany({
-      where: { pollingStationId: psId },
+  // Group BoothVoters by boothId then bulk-update with the booth's leaning.
+  for (const boothId of boothIds) {
+    const lean = leanings.get(boothId)!;
+    if (lean.totalValid === 0) continue; // no Form 20 data for this booth — skip
+    const result = await prisma.boothVoter.updateMany({
+      where: { boothId },
       data: {
         predictedLeaning: lean as unknown as object,
         predictedAt: now,
@@ -80,7 +80,7 @@ export async function recomputePredictedLeaning(
     });
     updated += result.count;
   }
-  return { stations: psIds.length, votersUpdated: updated };
+  return { booths: boothIds.length, votersUpdated: updated };
 }
 
 export interface CommunityLeaning {
@@ -106,22 +106,22 @@ export async function computeCommunityLeaning(
   electionId: number,
   dimension: 'religion' | 'community' = 'religion',
 ): Promise<{ electionId: number; dimension: string; groups: CommunityLeaning[] }> {
-  const leanings = await computePollingStationLeanings(electionId);
-  const psIds = Array.from(leanings.keys()).filter((id) => (leanings.get(id)?.totalValid ?? 0) > 0);
-  if (psIds.length === 0) return { electionId, dimension, groups: [] };
+  const leanings = await computeBoothLeanings(electionId);
+  const boothIds = Array.from(leanings.keys()).filter((id) => (leanings.get(id)?.totalValid ?? 0) > 0);
+  if (boothIds.length === 0) return { electionId, dimension, groups: [] };
 
-  const voters = await prisma.voter.findMany({
-    where: { pollingStationId: { in: psIds } },
-    select: { pollingStationId: true, religion: true, community: true },
+  const roll = await prisma.boothVoter.findMany({
+    where: { boothId: { in: boothIds } },
+    select: { boothId: true, voter: { select: { religion: true, community: true } } },
   });
 
   // group → candidate → weighted vote mass; group → total weight (voters)
   const weighted = new Map<string, Map<string, number>>();
   const groupVoters = new Map<string, number>();
-  for (const v of voters) {
-    const label = (dimension === 'community' ? v.community : v.religion)?.trim();
-    if (!label || v.pollingStationId == null) continue;
-    const lean = leanings.get(v.pollingStationId);
+  for (const bv of roll) {
+    const label = (dimension === 'community' ? bv.voter.community : bv.voter.religion)?.trim();
+    if (!label) continue;
+    const lean = leanings.get(bv.boothId);
     if (!lean || lean.totalValid === 0) continue;
     groupVoters.set(label, (groupVoters.get(label) ?? 0) + 1);
     const cand = weighted.get(label) ?? new Map<string, number>();
@@ -150,26 +150,33 @@ export async function computeCommunityLeaning(
 }
 
 /**
- * Auto-link voters to a polling station within an election by matching
- * `Voter.pollingStationName` (case-insensitive trim) against
- * `PollingStation.name`. Useful when voters were created before Form 20.
+ * Fallback linker: re-point any BoothVoter rows in this election whose booth
+ * has no Form 20 results onto the booth that matches by `partSerial`/name.
+ *
+ * The primary roll↔booth join is structural (roll Part Number == Booth serial,
+ * done at voter-upload time). This exists only to reconcile rows uploaded
+ * before their Form 20 booth existed; it matches BoothVoter.partNumber to the
+ * booth serial within the election.
  */
-export async function linkVotersToPollingStations(electionId: number): Promise<number> {
-  const stations = await prisma.pollingStation.findMany({
+export async function linkRollToBooths(electionId: number): Promise<number> {
+  const booths = await prisma.booth.findMany({
     where: { electionId },
-    select: { id: true, name: true },
+    select: { id: true, serial: true },
+  });
+  const bySerial = new Map<string, number>();
+  for (const b of booths) bySerial.set(String(b.serial), b.id);
+
+  const orphans = await prisma.boothVoter.findMany({
+    where: { electionId },
+    select: { id: true, boothId: true, partNumber: true },
   });
   let linked = 0;
-  for (const ps of stations) {
-    if (!ps.name) continue;
-    const r = await prisma.voter.updateMany({
-      where: {
-        pollingStationName: { equals: ps.name, mode: 'insensitive' },
-        pollingStationId: null,
-      },
-      data: { pollingStationId: ps.id },
-    });
-    linked += r.count;
+  for (const bv of orphans) {
+    const want = bySerial.get(String(bv.partNumber ?? '').trim());
+    if (want != null && want !== bv.boothId) {
+      await prisma.boothVoter.update({ where: { id: bv.id }, data: { boothId: want } });
+      linked++;
+    }
   }
   return linked;
 }

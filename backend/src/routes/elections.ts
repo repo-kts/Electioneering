@@ -2,10 +2,8 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { asyncHandler } from '../lib/asyncHandler.js';
-import {
-  recomputePredictedLeaning,
-  linkVotersToPollingStations,
-} from '../services/inference.js';
+import { recomputePredictedLeaning, linkRollToBooths } from '../services/inference.js';
+import { upsertPollingStation, upsertBooth } from '../services/booths.js';
 import { requireAdmin } from '../middleware/auth.js';
 
 const router = Router();
@@ -16,7 +14,10 @@ const electionSchema = z.object({
   parlName: z.string().trim().min(1),
   assemblyNo: z.string().trim().min(1),
   assemblyName: z.string().trim().min(1),
+  assemblySeatType: z.string().trim().optional(),
+  parlSeatType: z.string().trim().optional(),
   electionType: z.string().trim().default('Assembly Election'),
+  electionYear: z.coerce.number().int().min(1950).max(2100).optional(),
   totalElectors: z.coerce.number().int().nonnegative().optional(),
 });
 
@@ -26,7 +27,7 @@ router.get(
   asyncHandler(async (_req, res) => {
     const items = await prisma.election.findMany({
       orderBy: { createdAt: 'desc' },
-      include: { _count: { select: { candidates: true, pollingStations: true } } },
+      include: { _count: { select: { candidates: true, booths: true } } },
     });
     res.json({ items });
   }),
@@ -41,9 +42,9 @@ router.get(
       where: { id },
       include: {
         candidates: { orderBy: { position: 'asc' } },
-        pollingStations: {
+        booths: {
           orderBy: { serial: 'asc' },
-          include: { voteResults: true },
+          include: { voteResults: true, pollingStation: true },
         },
       },
     });
@@ -91,6 +92,7 @@ router.delete(
 const candidateSchema = z.object({
   name: z.string().trim().min(1),
   party: z.string().trim().optional(),
+  alliance: z.string().trim().optional(),
   position: z.coerce.number().int().nonnegative().optional(),
 });
 
@@ -120,6 +122,7 @@ router.post(
         electionId,
         name: data.name,
         party: data.party,
+        alliance: data.alliance,
         position: data.position ?? (last ? last.position + 1 : 0),
       },
     });
@@ -179,22 +182,28 @@ router.put(
     const validCandIds = new Set(election.candidates.map((c) => c.id));
 
     await prisma.$transaction(async (tx) => {
-      // wipe existing PSs (cascades to VoteResult)
-      await tx.pollingStation.deleteMany({ where: { electionId } });
+      // Clear only the vote results (not booths — deleting booths would cascade
+      // away the BoothVoter roll mappings). Booths are re-upserted below.
+      const existingBooths = await tx.booth.findMany({ where: { electionId }, select: { id: true } });
+      await tx.voteResult.deleteMany({ where: { boothId: { in: existingBooths.map((b) => b.id) } } });
       for (const row of rows) {
-        const ps = await tx.pollingStation.create({
-          data: {
-            electionId,
-            serial: row.serial,
-            name: row.name,
-            rejectedVotes: row.rejectedVotes,
-            notaVotes: row.notaVotes,
-            tenderedVotes: row.tenderedVotes,
-          },
+        const pollingStationId = await upsertPollingStation(
+          tx,
+          { assemblyNo: election.assemblyNo, assemblyName: election.assemblyName, name: row.name },
+          row.serial,
+        );
+        const boothId = await upsertBooth(tx, {
+          electionId,
+          pollingStationId,
+          serial: row.serial,
+          name: row.name,
+          rejectedVotes: row.rejectedVotes,
+          notaVotes: row.notaVotes,
+          tenderedVotes: row.tenderedVotes,
         });
         const voteEntries = Object.entries(row.votes)
           .map(([cid, v]) => ({
-            pollingStationId: ps.id,
+            boothId,
             candidateId: Number(cid),
             votes: v,
           }))
@@ -205,9 +214,9 @@ router.put(
       }
     });
 
-    // Auto-link voters then recompute predicted leaning
+    // Reconcile roll→booth links then recompute predicted leaning
     try {
-      await linkVotersToPollingStations(electionId);
+      await linkRollToBooths(electionId);
       await recomputePredictedLeaning(electionId);
     } catch (err) {
       console.error('[inference] recompute failed', err);
@@ -217,9 +226,9 @@ router.put(
       where: { id: electionId },
       include: {
         candidates: { orderBy: { position: 'asc' } },
-        pollingStations: {
+        booths: {
           orderBy: { serial: 'asc' },
-          include: { voteResults: true },
+          include: { voteResults: true, pollingStation: true },
         },
       },
     });

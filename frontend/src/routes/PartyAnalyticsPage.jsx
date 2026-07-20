@@ -21,6 +21,7 @@ export default function PartyAnalyticsPage() {
   const el = q.data?.election;
   const totalValid = q.data?.totalValid ?? 0;
   const parties = q.data?.parties ?? [];
+  const alliances = q.data?.alliances ?? [];
 
   const bars = useMemo(() => parties.map((p) => ({ name: p.party, votes: p.votes })), [parties]);
   const donut = useMemo(
@@ -72,6 +73,24 @@ export default function PartyAnalyticsPage() {
             <StatCard label="Leading party" value={leader?.party ?? '—'} sub={leader ? `${pct(leader.share)} · ${num(leader.votes)}` : ''} tone="green" />
             <StatCard label="Booths led" value={num(leader?.boothsLed)} sub={leader ? `by ${leader.party}` : ''} />
           </div>
+
+          {/* Alliance rollup — a party's votes flow to its alliance */}
+          {alliances.length > 0 && (
+            <div className="border border-slate-300 bg-white">
+              <div className="border-b border-slate-200 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                By alliance
+              </div>
+              <div className="flex flex-wrap gap-x-6 gap-y-2 px-4 py-3 text-sm">
+                {alliances.map((a) => (
+                  <div key={a.alliance} className="flex items-baseline gap-2">
+                    <span className="font-semibold text-slate-900">{a.alliance}</span>
+                    <span className="text-slate-500">{pct(a.share)} · {num(a.votes)}</span>
+                    <span className="text-xs text-slate-400">({a.partyCount} {a.partyCount === 1 ? 'party' : 'parties'}, top {a.topParty})</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
             {/* Votes by party */}

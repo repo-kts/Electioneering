@@ -4,12 +4,13 @@
 // Form 20 VoteResult grid + PollingStation reject/NOTA tallies.
 
 import { prisma } from '../lib/prisma.js';
-import { computePollingStationLeanings } from './inference.js';
+import { computeBoothLeanings } from './inference.js';
 
 interface CandidateTotal {
   id: number;
   name: string;
   party: string | null;
+  alliance: string | null;
   votes: number;
   share: number; // votes / totalValid
 }
@@ -36,7 +37,7 @@ async function loadCandidateTotals(
   const withVotes = cands.map((c) => {
     const votes = sumById.get(c.id) ?? 0;
     totalValid += votes;
-    return { id: c.id, name: c.name, party: c.party, votes };
+    return { id: c.id, name: c.name, party: c.party, alliance: c.alliance, votes };
   });
   const candidates: CandidateTotal[] = withVotes
     .map((c) => ({ ...c, share: totalValid > 0 ? c.votes / totalValid : 0 }))
@@ -47,6 +48,10 @@ async function loadCandidateTotals(
 function partyKey(party: string | null | undefined): string {
   const p = party?.trim();
   return p && p.length ? p : 'Independent';
+}
+function allianceKey(alliance: string | null | undefined): string {
+  const a = alliance?.trim();
+  return a && a.length ? a : 'Unaligned';
 }
 
 // ─── 1. Party analytics ───────────────────────────────────────────────────
@@ -67,6 +72,13 @@ export interface PartyAnalyticsResult {
     boothsLed: number;
     topCandidate: { name: string; votes: number } | null;
   }>;
+  alliances: Array<{
+    alliance: string;
+    votes: number;
+    share: number;
+    partyCount: number;
+    topParty: string | null;
+  }>;
 }
 
 export async function computePartyAnalytics(electionId: number): Promise<PartyAnalyticsResult> {
@@ -81,7 +93,7 @@ export async function computePartyAnalytics(electionId: number): Promise<PartyAn
 
   // Booths led per party — from per-PS leaders (matched by candidate name).
   const nameToParty = new Map(candidates.map((c) => [c.name, partyKey(c.party)]));
-  const leanings = await computePollingStationLeanings(electionId);
+  const leanings = await computeBoothLeanings(electionId);
   const boothsLed = new Map<string, number>();
   for (const lean of leanings.values()) {
     if (!lean.leader || lean.totalValid === 0) continue;
@@ -114,6 +126,26 @@ export async function computePartyAnalytics(electionId: number): Promise<PartyAn
     }))
     .sort((a, b) => b.votes - a.votes);
 
+  // Aggregate candidates into alliances (a party's votes flow to its alliance).
+  const allianceAgg = new Map<string, { votes: number; parties: Set<string>; topParty: string | null; topVotes: number }>();
+  for (const c of candidates) {
+    const key = allianceKey(c.alliance);
+    const e = allianceAgg.get(key) ?? { votes: 0, parties: new Set<string>(), topParty: null, topVotes: -1 };
+    e.votes += c.votes;
+    e.parties.add(partyKey(c.party));
+    if (c.votes > e.topVotes) { e.topVotes = c.votes; e.topParty = partyKey(c.party); }
+    allianceAgg.set(key, e);
+  }
+  const alliances = Array.from(allianceAgg.entries())
+    .map(([alliance, e]) => ({
+      alliance,
+      votes: e.votes,
+      share: totalValid > 0 ? e.votes / totalValid : 0,
+      partyCount: e.parties.size,
+      topParty: e.topParty,
+    }))
+    .sort((a, b) => b.votes - a.votes);
+
   return {
     election: {
       id: election.id,
@@ -124,6 +156,7 @@ export async function computePartyAnalytics(electionId: number): Promise<PartyAn
     },
     totalValid,
     parties,
+    alliances,
   };
 }
 
@@ -137,10 +170,11 @@ export interface AssemblyTimelineResult {
     totalElectors: number | null;
     turnout: { voted: number; registered: number | null; pct: number };
     totalValid: number;
-    winner: { name: string; party: string | null; votes: number; share: number } | null;
-    runnerUp: { name: string; party: string | null; votes: number; share: number } | null;
+    winner: { name: string; party: string | null; alliance: string | null; votes: number; share: number } | null;
+    runnerUp: { name: string; party: string | null; alliance: string | null; votes: number; share: number } | null;
     margin: number;
     winnerParty: string | null;
+    winnerAlliance: string | null;
   }>;
 }
 
@@ -163,7 +197,7 @@ export async function computeAssemblyTimeline(opts: {
   const elections = await Promise.all(
     rows.map(async (e) => {
       const { candidates, totalValid } = await loadCandidateTotals(e.id);
-      const psAgg = await prisma.pollingStation.aggregate({
+      const psAgg = await prisma.booth.aggregate({
         where: { electionId: e.id },
         _sum: { rejectedVotes: true, notaVotes: true },
       });
@@ -185,18 +219,20 @@ export async function computeAssemblyTimeline(opts: {
         },
         totalValid,
         winner: winner
-          ? { name: winner.name, party: winner.party, votes: winner.votes, share: winner.share }
+          ? { name: winner.name, party: winner.party, alliance: winner.alliance, votes: winner.votes, share: winner.share }
           : null,
         runnerUp: runnerUp
           ? {
               name: runnerUp.name,
               party: runnerUp.party,
+              alliance: runnerUp.alliance,
               votes: runnerUp.votes,
               share: runnerUp.share,
             }
           : null,
         margin: (winner?.votes ?? 0) - (runnerUp?.votes ?? 0),
         winnerParty: winner?.party ?? null,
+        winnerAlliance: winner?.alliance ?? null,
       };
     }),
   );
@@ -253,7 +289,7 @@ export async function computeElectionsHierarchy(): Promise<ElectionsHierarchyRes
   const enriched = await Promise.all(
     elections.map(async (e) => {
       const { candidates } = await loadCandidateTotals(e.id);
-      const pollingStations = await prisma.pollingStation.count({ where: { electionId: e.id } });
+      const pollingStations = await prisma.booth.count({ where: { electionId: e.id } });
       const w = candidates[0] ?? null;
       return {
         election: e,

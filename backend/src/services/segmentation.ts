@@ -5,6 +5,9 @@ import type { Prisma } from '@prisma/client';
 import { z } from 'zod';
 
 export const segmentSchema = z.object({
+  // election context — resolves per-election attributes (booth, roll position,
+  // predicted leaning). Required for booth/leaning/roll filters + aggregates.
+  electionId: z.coerce.number().int().optional(),
   // geography
   state: z.string().optional(),
   parlNo: z.string().optional(),
@@ -13,7 +16,8 @@ export const segmentSchema = z.object({
   assemblyName: z.string().optional(),
   partNumber: z.string().optional(),
   pollingStationName: z.string().optional(),
-  pollingStationId: z.coerce.number().int().optional(),
+  boothId: z.coerce.number().int().optional(),
+  pollingStationId: z.coerce.number().int().optional(), // legacy alias for boothId
   // extended administrative geography
   ward: z.string().optional(),
   panchayat: z.string().optional(),
@@ -60,12 +64,22 @@ export function buildVoterWhere(c: SegmentCriteria): Prisma.VoterWhereInput {
   if (c.parlName) where.parlName = c.parlName;
   if (c.assemblyNo) where.assemblyNo = c.assemblyNo;
   if (c.assemblyName) where.assemblyName = c.assemblyName;
-  if (c.partNumber) where.partNumber = c.partNumber;
+
+  // Per-election roll / booth filters go through the BoothVoter relation.
+  // We collect them into a single `some` (scoped to electionId when given).
+  const bv: Prisma.BoothVoterWhereInput = {};
+  if (c.electionId) bv.electionId = c.electionId;
+  if (c.partNumber) bv.partNumber = c.partNumber;
+  const boothId = c.boothId ?? c.pollingStationId;
+  if (boothId) bv.boothId = boothId;
+  if (c.householdId) bv.householdId = c.householdId;
   if (c.pollingStationName) {
-    where.pollingStationName = { equals: c.pollingStationName, mode: 'insensitive' };
+    bv.booth = {
+      pollingStation: { name: { equals: c.pollingStationName, mode: 'insensitive' } },
+    };
   }
-  if (c.pollingStationId) where.pollingStationId = c.pollingStationId;
-  if (c.householdId) where.householdId = c.householdId;
+  if (Object.keys(bv).length) where.boothVoters = { some: bv };
+
   if (c.gender) where.gender = c.gender;
   if (c.ward) where.ward = { equals: c.ward, mode: 'insensitive' };
   if (c.panchayat) where.panchayat = { equals: c.panchayat, mode: 'insensitive' };
@@ -94,16 +108,17 @@ export function buildVoterWhere(c: SegmentCriteria): Prisma.VoterWhereInput {
     if (ageMax != null) (where.age as { lte?: number }).lte = ageMax;
   }
 
-  // turnout filters via relations
+  // turnout filters via the BoothVoter relation
   if (c.votedIn?.length) {
-    where.turnouts = {
-      some: { voted: true, electionId: { in: c.votedIn } },
-    };
+    where.AND = (where.AND ?? []) as Prisma.VoterWhereInput[];
+    (where.AND as Prisma.VoterWhereInput[]).push({
+      boothVoters: { some: { voted: true, electionId: { in: c.votedIn } } },
+    });
   }
   if (c.notVotedIn?.length) {
     where.AND = (where.AND ?? []) as Prisma.VoterWhereInput[];
     (where.AND as Prisma.VoterWhereInput[]).push({
-      NOT: { turnouts: { some: { voted: true, electionId: { in: c.notVotedIn } } } },
+      NOT: { boothVoters: { some: { voted: true, electionId: { in: c.notVotedIn } } } },
     });
   }
 
@@ -184,6 +199,57 @@ function toArray(m: Map<string, number>) {
     .sort((a, b) => b.count - a.count);
 }
 
+/** Per-election fields that live on BoothVoter, flattened onto a voter for
+ *  aggregation / leaning filtering. Use `attachElectionFields`. */
+export interface ElectionVoterFields {
+  pollingStationName?: string | null;
+  partNumber?: string | null;
+  partName?: string | null;
+  partSerial?: string | null;
+  houseNumber?: string | null;
+  householdId?: number | null;
+  predictedLeaning?: unknown;
+}
+
+type VoterWithBoothVoters = {
+  boothVoters?: Array<{
+    electionId: number;
+    partNumber?: string | null;
+    partName?: string | null;
+    partSerial?: string | null;
+    houseNumber?: string | null;
+    householdId?: number | null;
+    predictedLeaning?: unknown;
+    booth?: { pollingStation?: { name?: string | null } | null } | null;
+  }>;
+};
+
+/**
+ * Flatten each voter's per-election BoothVoter (for `electionId`, else the
+ * first) into top-level fields so `aggregate` / `passesLeaningFilter` can read
+ * them without knowing about the join. Pass voters queried with
+ * `include: { boothVoters: { where: { electionId }, include: { booth: { include: { pollingStation: true } } } } }`.
+ */
+export function attachElectionFields<T extends object>(
+  voters: T[],
+  electionId?: number,
+): Array<T & ElectionVoterFields> {
+  return voters.map((v) => {
+    const list = (v as VoterWithBoothVoters).boothVoters ?? [];
+    const bv = (electionId != null ? list.find((x) => x.electionId === electionId) : list[0]) ?? list[0];
+    return {
+      ...v,
+      pollingStationName: bv?.booth?.pollingStation?.name ?? null,
+      partNumber: bv?.partNumber ?? null,
+      partName: bv?.partName ?? null,
+      partSerial: bv?.partSerial ?? null,
+      houseNumber: bv?.houseNumber ?? null,
+      householdId: bv?.householdId ?? null,
+      predictedLeaning: bv?.predictedLeaning ?? null,
+    };
+  });
+}
+
 export function aggregate(
   voters: Array<{
     caste?: string | null;
@@ -194,7 +260,7 @@ export function aggregate(
     language: string | null;
     gender: string;
     age: number;
-    pollingStationName: string;
+    pollingStationName?: string | null;
     ward?: string | null;
     panchayat?: string | null;
     block?: string | null;

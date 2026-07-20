@@ -11,6 +11,7 @@ import analyticsRouter from './routes/analytics.js';
 import cohortsRouter from './routes/cohorts.js';
 import householdsRouter from './routes/households.js';
 import reportsRouter from './routes/reports.js';
+import masterRouter from './routes/master.js';
 import authRouter from './routes/auth.js';
 import { requireAuth, requireAdmin } from './middleware/auth.js';
 import { errorHandler } from './middleware/error.js';
@@ -46,6 +47,9 @@ export function createApp(): Express {
   app.use('/api/cohorts', requireAuth, requireAdmin, cohortsRouter);
   app.use('/api/households', requireAuth, requireAdmin, householdsRouter);
   app.use('/api/reports', requireAuth, requireAdmin, reportsRouter);
+
+  // Master data — reads for both roles (dropdowns), writes admin-only (in-router)
+  app.use('/api/master', requireAuth, masterRouter);
 
   app.use(errorHandler);
 

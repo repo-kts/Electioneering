@@ -29,7 +29,7 @@ router.get(
         orderBy: { size: 'desc' },
         take,
         skip,
-        include: { _count: { select: { voters: true } } },
+        include: { _count: { select: { members: true } } },
       }),
       prisma.household.count({ where }),
     ]);
@@ -44,7 +44,7 @@ router.get(
     const id = Number(req.params.id);
     const household = await prisma.household.findUnique({
       where: { id },
-      include: { voters: true },
+      include: { members: { include: { voter: true } } },
     });
     if (!household) {
       res.status(404).json({ error: 'NotFound' });

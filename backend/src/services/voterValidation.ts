@@ -44,6 +44,7 @@ export interface VoterClean {
   assemblyName: string;
   pollingStationName: string;
   pollingStationAddress: string | null;
+  boothName: string | null;
   partNumber: string;
   partName: string | null;
   partSerial: string;
@@ -141,6 +142,7 @@ export function validateVoter(raw: Record<string, unknown>): VoterValidation {
   const assemblyName = s('assemblyName');
   const pollingStationName = s('pollingStationName');
   const pollingStationAddress = s('pollingStationAddress') || null;
+  const boothName = s('boothName') || null;
   const partNumber = s('partNumber');
   const partSerial = s('partSerial');
   const partName = s('partName') || null;
@@ -221,6 +223,7 @@ export function validateVoter(raw: Record<string, unknown>): VoterValidation {
           assemblyName,
           pollingStationName,
           pollingStationAddress,
+          boothName,
           partNumber,
           partName,
           partSerial,

@@ -67,28 +67,36 @@ export async function geocodeElectionBooths(
     (e as Error & { status?: number }).status = 404;
     throw e;
   }
-  const stations = await prisma.pollingStation.findMany({
+  // Booths in this election, each carrying its physical building. Geocoding
+  // targets the building (PollingStation); dedupe so a shared building is
+  // resolved only once per run.
+  const booths = await prisma.booth.findMany({
     where: { electionId },
     orderBy: { serial: 'asc' },
+    include: { pollingStation: true },
   });
 
   let geocoded = 0;
   let failed = 0;
   let skipped = 0;
+  const done = new Set<number>();
 
-  for (const ps of stations) {
+  for (const booth of booths) {
+    const ps = booth.pollingStation;
+    if (done.has(ps.id)) continue;
+    done.add(ps.id);
     if (!force && ps.latitude != null && ps.longitude != null) {
       skipped += 1;
       continue;
     }
-    // Enrich with one mapped voter's location.
-    const v = await prisma.voter.findFirst({
-      where: { pollingStationId: ps.id },
-      select: { mainTown: true, district: true, state: true, assemblyName: true },
+    // Enrich with one voter placed on this booth.
+    const bv = await prisma.boothVoter.findFirst({
+      where: { boothId: booth.id },
+      select: { voter: { select: { mainTown: true, district: true, state: true } } },
     });
-    const town = v?.mainTown?.trim();
-    const district = v?.district?.trim() || election.assemblyName;
-    const state = v?.state?.trim() || election.state;
+    const town = bv?.voter.mainTown?.trim();
+    const district = bv?.voter.district?.trim() || election.assemblyName;
+    const state = bv?.voter.state?.trim() || election.state;
     const school = cleanName(ps.name);
     // Most specific → town level. Building names rarely sit in OSM; town does.
     const queries = [
@@ -101,7 +109,7 @@ export async function geocodeElectionBooths(
     try {
       const hit = await geocodeTiered(queries);
       if (hit) {
-        const j = jitter(ps.serial);
+        const j = jitter(booth.serial);
         await prisma.pollingStation.update({
           where: { id: ps.id },
           data: { latitude: hit.lat + j.dLat, longitude: hit.lon + j.dLon, geocodedAt: new Date() },
@@ -116,5 +124,5 @@ export async function geocodeElectionBooths(
     await sleep(DELAY_MS); // respect Nominatim rate limit
   }
 
-  return { electionId, total: stations.length, geocoded, failed, skipped };
+  return { electionId, total: done.size, geocoded, failed, skipped };
 }

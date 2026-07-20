@@ -76,10 +76,11 @@ export default function VoterDetailPage() {
 
   const commitPreviewM = useMutation({
     mutationFn: (rows) =>
+      // Everything (incl. the Election ID) comes from the sheet.
       api.commitVoters({ fileName: preview.file, source: 'Excel/CSV upload', rows }),
     onSuccess: (res) => {
-      const parts = [`${res.inserted} imported`];
-      if (res.duplicates) parts.push(`${res.duplicates} duplicates`);
+      const parts = [`${res.inserted} voters`];
+      if (res.linked != null) parts.push(`${res.linked} mapped to booths`);
       if (res.skipped) parts.push(`${res.skipped} skipped`);
       show(parts.join(' · '), res.skipped ? 'warn' : 'success');
       if (res.errors?.length) console.warn('upload errors', res.errors);

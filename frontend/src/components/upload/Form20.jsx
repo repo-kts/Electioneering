@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { CheckIcon, CloseIcon, PlusIcon } from '../ui/Icon.jsx';
 import Button from '../ui/Button.jsx';
 import Card from '../ui/Card.jsx';
@@ -48,6 +49,11 @@ export default function Form20({ electionId, onSubmit, onChangeElection }) {
   const [error, setError] = useState(null);
   const [newCandName, setNewCandName] = useState('');
   const [newCandParty, setNewCandParty] = useState('');
+  const [newCandAlliance, setNewCandAlliance] = useState('');
+
+  // Master-driven party + alliance options for candidate setup.
+  const partyQ = useQuery({ queryKey: ['master-options', 'party'], queryFn: () => api.masterOptions('party') });
+  const allianceQ = useQuery({ queryKey: ['master-options', 'alliance'], queryFn: () => api.masterOptions('alliance') });
 
   // Load existing election (if any)
   useEffect(() => {
@@ -59,13 +65,13 @@ export default function Form20({ electionId, onSubmit, onChangeElection }) {
         setElection(e);
         setCandidates(e.candidates);
         setRows(
-          e.pollingStations.map((ps) => {
+          (e.booths ?? []).map((ps) => {
             const votes = {};
             for (const v of ps.voteResults) votes[v.candidateId] = v.votes;
             return {
               id: ps.id,
               serial: ps.serial,
-              name: ps.name || '',
+              name: ps.name || ps.pollingStation?.name || '',
               votes,
               rejectedVotes: ps.rejectedVotes,
               notaVotes: ps.notaVotes,
@@ -110,10 +116,15 @@ export default function Form20({ electionId, onSubmit, onChangeElection }) {
 
   async function addCandidate() {
     if (!election || !newCandName.trim()) return;
-    const c = await api.addCandidate(election.id, { name: newCandName.trim(), party: newCandParty.trim() || undefined });
+    const c = await api.addCandidate(election.id, {
+      name: newCandName.trim(),
+      party: newCandParty || undefined,
+      alliance: newCandAlliance || undefined,
+    });
     setCandidates((cs) => [...cs, c]);
     setNewCandName('');
     setNewCandParty('');
+    setNewCandAlliance('');
   }
 
   async function removeCandidate(cid) {
@@ -345,13 +356,22 @@ export default function Form20({ electionId, onSubmit, onChangeElection }) {
               onChange={(e) => setNewCandName(e.target.value)}
               style={{ padding: 6 }}
             />
-            <input
-              type="text"
-              placeholder="Party (optional)"
+            <select
               value={newCandParty}
               onChange={(e) => setNewCandParty(e.target.value)}
               style={{ padding: 6, width: 140 }}
-            />
+            >
+              <option value="">Party…</option>
+              {(partyQ.data?.options ?? []).map((o) => <option key={o.id} value={o.label}>{o.label}</option>)}
+            </select>
+            <select
+              value={newCandAlliance}
+              onChange={(e) => setNewCandAlliance(e.target.value)}
+              style={{ padding: 6, width: 140 }}
+            >
+              <option value="">Alliance…</option>
+              {(allianceQ.data?.options ?? []).map((o) => <option key={o.id} value={o.label}>{o.label}</option>)}
+            </select>
             <Button leadingIcon={<PlusIcon />} onClick={addCandidate} disabled={!newCandName.trim()}>
               Add Candidate
             </Button>
@@ -401,6 +421,11 @@ export default function Form20({ electionId, onSubmit, onChangeElection }) {
                           onBlur={(e) => renameCandidate(c.id, e.target.value)}
                           style={{ width: '100%', fontSize: 12, padding: 2 }}
                         />
+                        {(c.party || c.alliance) && (
+                          <div style={{ fontSize: 10, color: '#64748b', marginTop: 2 }}>
+                            {c.party || '—'}{c.alliance ? ` · ${c.alliance}` : ''}
+                          </div>
+                        )}
                         <button
                           type="button"
                           className="row-delete"

@@ -7,9 +7,19 @@ import {
   buildVoterWhere,
   passesLeaningFilter,
   aggregate,
+  attachElectionFields,
 } from '../services/segmentation.js';
 
 const router = Router();
+
+// Include the per-election BoothVoter (booth + building) so roll-position and
+// predicted-leaning fields can be flattened onto each voter for the criteria.
+const boothVoterInclude = (electionId?: number) => ({
+  boothVoters: {
+    where: electionId ? { electionId } : undefined,
+    include: { booth: { include: { pollingStation: true } } },
+  },
+});
 
 const cohortSchema = z.object({
   name: z.string().trim().min(1),
@@ -38,8 +48,9 @@ interface VoterRow {
   age: number; gender: string; epic: string; mobile: string | null;
   state: string; parlNo: string; parlName: string;
   assemblyNo: string; assemblyName: string;
-  pollingStationName: string; partNumber: string; partName: string | null;
-  partSerial: string;
+  // per-election fields (flattened from BoothVoter — may be null)
+  pollingStationName?: string | null; partNumber?: string | null; partName?: string | null;
+  partSerial?: string | null;
   community: string | null;
   occupation: string | null; language: string | null;
   predictedLeaning?: unknown;
@@ -51,7 +62,7 @@ function rowToCsv(v: VoterRow): string {
     v.firstName, v.lastName, v.relFirstName, v.relLastName,
     String(v.age), v.gender, v.epic, v.mobile ?? '',
     v.state, v.parlNo, v.parlName, v.assemblyNo, v.assemblyName,
-    v.pollingStationName, v.partNumber, v.partName ?? '', v.partSerial,
+    v.pollingStationName ?? '', v.partNumber ?? '', v.partName ?? '', v.partSerial ?? '',
     v.community ?? '', v.occupation ?? '', v.language ?? '',
     lean?.leader ?? '', lean?.leaderShare != null ? lean.leaderShare.toFixed(3) : '',
   ];
@@ -148,11 +159,13 @@ router.get(
     }
     const c = segmentSchema.parse((cohort.criteria as object) ?? {});
     const where = buildVoterWhere(c);
-    const candidate = await prisma.voter.findMany({
+    const rows = await prisma.voter.findMany({
       where,
       orderBy: { createdAt: 'desc' },
       take: c.take + c.skip + 500,
+      include: boothVoterInclude(c.electionId),
     });
+    const candidate = attachElectionFields(rows, c.electionId);
     const filtered = candidate.filter((v) => passesLeaningFilter(v, c));
     const items = filtered.slice(c.skip, c.skip + c.take);
     res.json({
@@ -176,8 +189,12 @@ router.get(
     }
     const c = segmentSchema.parse((cohort.criteria as object) ?? {});
     const where = buildVoterWhere(c);
-    const candidate = await prisma.voter.findMany({ where, take: 10000 });
-    const filtered = candidate.filter((v) => passesLeaningFilter(v, c));
+    const rows = await prisma.voter.findMany({
+      where,
+      take: 10000,
+      include: boothVoterInclude(c.electionId),
+    });
+    const filtered = attachElectionFields(rows, c.electionId).filter((v) => passesLeaningFilter(v, c));
     const slug = cohort.name.toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 60);
     sendCsv(res, slug || 'cohort', filtered);
   }),
@@ -189,8 +206,12 @@ router.post(
   asyncHandler(async (req, res) => {
     const c = segmentSchema.parse(req.body ?? {});
     const where = buildVoterWhere(c);
-    const candidate = await prisma.voter.findMany({ where, take: 10000 });
-    const filtered = candidate.filter((v) => passesLeaningFilter(v, c));
+    const rows = await prisma.voter.findMany({
+      where,
+      take: 10000,
+      include: boothVoterInclude(c.electionId),
+    });
+    const filtered = attachElectionFields(rows, c.electionId).filter((v) => passesLeaningFilter(v, c));
     sendCsv(res, 'voters_export', filtered);
   }),
 );

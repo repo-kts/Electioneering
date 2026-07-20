@@ -6,20 +6,11 @@ export const EPIC_RE = /^[A-Z]{3}\d{7}$/;
 export const MOBILE_RE = /^[6-9]\d{9}$/;
 export const GENDERS = ['Male', 'Female', 'Other'];
 
-const REQUIRED_FIELDS = [
-  'firstName',
-  'lastName',
-  'relFirstName',
-  'relLastName',
-  'state',
-  'parlNo',
-  'parlName',
-  'assemblyNo',
-  'assemblyName',
-  'pollingStationName',
-  'partNumber',
-  'partSerial',
-];
+// Matches backend services/voterValidation.ts: only name is strictly required
+// (age/gender/epic checked below). Election identity is chosen in the UI, and
+// roll position (Part Number etc.) is optional — the backend maps a voter to a
+// booth when Part Number is a valid serial, but won't reject the row without it.
+const REQUIRED_FIELDS = ['firstName', 'lastName'];
 
 export function validateVoterRow(row) {
   const errors = {};

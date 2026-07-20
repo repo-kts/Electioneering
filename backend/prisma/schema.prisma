@@ -62,8 +62,8 @@ model Election {
   updatedAt       DateTime @updatedAt
 
   candidates      Candidate[]
-  pollingStations PollingStation[]
-  turnouts        VoterTurnout[]
+  booths          Booth[]
+  boothVoters     BoothVoter[]
 
   @@unique([assemblyNo, assemblyName, electionYear])
   @@index([state])
@@ -75,7 +75,8 @@ model Candidate {
   electionId  Int
   election    Election @relation(fields: [electionId], references: [id], onDelete: Cascade)
   name        String
-  party       String?
+  party       String?  // from master 'party' list
+  alliance    String?  // from master 'alliance' list — per election (alliances shift)
   position    Int      @default(0) // column order in Form 20
   createdAt   DateTime @default(now())
 
@@ -84,12 +85,10 @@ model Candidate {
   @@index([electionId])
 }
 
-// ─── Polling Station ────────────────────────────────────────────────────
+// ─── Polling Station (physical building / location, election-independent) ─
 model PollingStation {
   id            Int      @id @default(autoincrement())
-  electionId    Int
-  election      Election @relation(fields: [electionId], references: [id], onDelete: Cascade)
-  serial        Int      // PS # in Form 20 (1..N)
+  code          String   @unique // in-house generated, deterministic — dedups buildings across elections
   name          String?
   address       String?
   cityVillage   String?  // city / village
@@ -97,55 +96,75 @@ model PollingStation {
   tolaMohalla   String?  // tola / mohalla
   postOffice    String?
   policeStation String?
+  assemblyNo    String?  // scope anchor for the code
+  assemblyName  String?
   latitude      Float?   // geocoded from name/address
   longitude     Float?
   geocodedAt    DateTime?
-  rejectedVotes Int      @default(0)
-  notaVotes     Int      @default(0)
-  tenderedVotes Int      @default(0)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  voteResults   VoteResult[]
-  voters        Voter[]
-  households    Household[]
+  booths        Booth[]
+
+  @@index([assemblyNo])
+}
+
+// ─── Booth (per-election polling booth; the Form 20 result row) ──────────
+model Booth {
+  id               Int      @id @default(autoincrement())
+  electionId       Int
+  election         Election @relation(fields: [electionId], references: [id], onDelete: Cascade)
+  pollingStationId Int
+  pollingStation   PollingStation @relation(fields: [pollingStationId], references: [id])
+  serial           Int      // PS # in Form 20 (1..N) == roll Part Number
+  name             String?  // booth / PS name as printed
+  rejectedVotes    Int      @default(0)
+  notaVotes        Int      @default(0)
+  tenderedVotes    Int      @default(0)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  voteResults      VoteResult[]
+  boothVoters      BoothVoter[]
+  households       Household[]
 
   @@unique([electionId, serial])
   @@index([electionId])
+  @@index([pollingStationId])
 }
 
 // ─── Vote results (cells in Form 20 grid) ───────────────────────────────
 model VoteResult {
-  id               Int      @id @default(autoincrement())
-  pollingStationId Int
-  candidateId      Int
-  votes            Int      @default(0)
+  id          Int   @id @default(autoincrement())
+  boothId     Int
+  candidateId Int
+  votes       Int   @default(0)
 
-  pollingStation   PollingStation @relation(fields: [pollingStationId], references: [id], onDelete: Cascade)
-  candidate        Candidate      @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  booth       Booth     @relation(fields: [boothId], references: [id], onDelete: Cascade)
+  candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
 
-  @@unique([pollingStationId, candidateId])
+  @@unique([boothId, candidateId])
   @@index([candidateId])
 }
 
-// ─── Household (voters often share one) ─────────────────────────────────
+// ─── Household (per-election; voters often share one) ───────────────────
 model Household {
-  id               Int             @id @default(autoincrement())
-  headName         String?
-  headVoterId      Int?            // Voter.id of the inferred household head (scalar, no FK)
-  houseNumber      String?         // makan
-  assemblyNo       String?
-  size             Int             @default(0)
-  address          String?
-  partNumber       String?
-  pollingStationId Int?
-  pollingStation   PollingStation? @relation(fields: [pollingStationId], references: [id])
-  createdAt        DateTime        @default(now())
-  updatedAt        DateTime        @updatedAt
-  voters           Voter[]
+  id          Int      @id @default(autoincrement())
+  headName    String?
+  headVoterId Int?     // Voter.id of the inferred household head (scalar, no FK)
+  houseNumber String?  // makan
+  assemblyNo  String?
+  size        Int      @default(0)
+  address     String?
+  partNumber  String?
+  boothId     Int?
+  booth       Booth?   @relation(fields: [boothId], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  members     BoothVoter[]
 
   @@index([partNumber])
-  @@index([pollingStationId])
+  @@index([boothId])
   @@index([assemblyNo, partNumber, houseNumber])
 }
 
@@ -161,23 +180,17 @@ model Voter {
   relLastName        String
   age                Int
   gender             Gender
-  epic               String    @unique // EPIC No, e.g. TGK3378866
+  epic               String    @unique // EPIC No, e.g. TGK3378866 — stable mapping key across elections
   mobile             String?
 
-  // Geography — full administrative hierarchy off the electoral roll
+  // Stable geography — administrative hierarchy that does not change per election.
+  // Per-election roll position (pollingStation, partNumber, partSerial, houseNumber,
+  // sectionNo/Name) lives on BoothVoter instead.
   state              String
   parlNo             String
   parlName           String
   assemblyNo         String
   assemblyName       String
-  pollingStationName String
-  pollingStationAddress String?
-  partNumber         String
-  partName           String?
-  partSerial         String
-  houseNumber        String?   // makan
-  sectionNo          String?   // anubhag number
-  sectionName        String?   // anubhag name
   mainTown           String?
   ward               String?
   postOffice         String?
@@ -201,17 +214,8 @@ model Voter {
   occupation         String?
   language           String?
 
-  // Statistical inference output (recomputed from Form 20)
-  // shape: { partyA: 0.6, partyB: 0.3, ... }  votes summing ≤ 1
-  predictedLeaning   Json?
-  predictedAt        DateTime?
-
-  pollingStationId   Int?
-  pollingStation     PollingStation? @relation(fields: [pollingStationId], references: [id])
-  householdId        Int?
-  household          Household?       @relation(fields: [householdId], references: [id])
-
-  turnouts           VoterTurnout[]
+  // Per-election inference output and roll position now live on BoothVoter.
+  boothVoters        BoothVoter[]
 
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
@@ -224,28 +228,54 @@ model Voter {
   @@index([category])
   @@index([religion])
   @@index([occupation])
-  @@index([householdId])
   @@index([ward])
   @@index([panchayat])
   @@index([block])
   @@index([tehsil])
   @@index([district])
-  @@index([assemblyNo, partNumber, houseNumber])
 }
 
-// ─── VoterTurnout (per voter × election) ────────────────────────────────
-model VoterTurnout {
-  id         Int      @id @default(autoincrement())
-  voterId    Int
-  voter      Voter    @relation(fields: [voterId], references: [id], onDelete: Cascade)
-  electionId Int
-  election   Election @relation(fields: [electionId], references: [id], onDelete: Cascade)
-  voted      Boolean  @default(false)
-  polledAt   DateTime?
-  createdAt  DateTime @default(now())
+// ─── BoothVoter (per-election voter↔booth roll entry) ───────────────────
+// One row per (election, voter): where the voter is placed for that election,
+// their roll position, the booth-derived predicted leaning, and their turnout.
+model BoothVoter {
+  id               Int      @id @default(autoincrement())
+  electionId       Int      // denormalized for the (electionId, voterId) unique + fast filtering
+  election         Election @relation(fields: [electionId], references: [id], onDelete: Cascade)
+  boothId          Int
+  booth            Booth    @relation(fields: [boothId], references: [id], onDelete: Cascade)
+  voterId          Int
+  voter            Voter    @relation(fields: [voterId], references: [id], onDelete: Cascade)
 
-  @@unique([voterId, electionId])
-  @@index([electionId])
+  // Per-election roll position (moved off Voter)
+  partNumber       String?
+  partName         String?
+  partSerial       String?
+  houseNumber      String?  // makan
+  sectionNo        String?  // anubhag number
+  sectionName      String?  // anubhag name
+
+  // Statistical inference output (recomputed from Form 20)
+  // shape: { byCandidate: { "Name": share, ... }, leader, leaderShare, totalValid }
+  predictedLeaning Json?
+  predictedAt      DateTime?
+
+  // Turnout (merged from the old VoterTurnout model)
+  voted            Boolean  @default(false)
+  polledAt         DateTime?
+
+  householdId      Int?
+  household        Household? @relation(fields: [householdId], references: [id])
+
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@unique([electionId, voterId])
+  @@unique([boothId, voterId])
+  @@index([boothId])
+  @@index([voterId])
+  @@index([householdId])
+  @@index([electionId, voted])
 }
 
 // ─── Cohort (saved filter) ──────────────────────────────────────────────
@@ -275,4 +305,105 @@ model UploadHistory {
   createdAt    DateTime     @default(now())
 
   @@index([createdAt])
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Master data — referential lookup tables managed from the /all-master UI.
+// Geography is a real hierarchy (Country → State → Parliamentary → Assembly);
+// flat categorical sets (election type, party, community, …) live in the
+// generic MasterCategory / MasterOption engine. Election/Voter keep their
+// denormalized string fields; master feeds the dropdowns (non-breaking).
+// ═══════════════════════════════════════════════════════════════════════
+
+model Country {
+  id        Int      @id @default(autoincrement())
+  code      String   @unique // e.g. "IN"
+  name      String
+  sortOrder Int      @default(0)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  states    State[]
+}
+
+model State {
+  id        Int      @id @default(autoincrement())
+  countryId Int
+  country   Country  @relation(fields: [countryId], references: [id], onDelete: Cascade)
+  code      String?  // e.g. "BR"
+  name      String
+  sortOrder Int      @default(0)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  parliamentaryConstituencies ParliamentaryConstituency[]
+
+  @@unique([countryId, name])
+  @@index([countryId])
+}
+
+model ParliamentaryConstituency {
+  id        Int      @id @default(autoincrement())
+  stateId   Int
+  state     State    @relation(fields: [stateId], references: [id], onDelete: Cascade)
+  number    String   // parlNo
+  name      String   // parlName
+  seatType  String?  // reservation (GEN / SC / ST) — from seat_type master
+  sortOrder Int      @default(0)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  assemblies AssemblyConstituency[]
+
+  @@unique([stateId, number])
+  @@index([stateId])
+}
+
+model AssemblyConstituency {
+  id        Int      @id @default(autoincrement())
+  parlId    Int
+  parl      ParliamentaryConstituency @relation(fields: [parlId], references: [id], onDelete: Cascade)
+  number    String   // assemblyNo
+  name      String   // assemblyName
+  seatType  String?  // reservation (GEN / SC / ST) — from seat_type master
+  sortOrder Int      @default(0)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([parlId, number])
+  @@index([parlId])
+}
+
+// Generic lookup engine — one category ("election_type", "party", …) owns many
+// options. Add an entirely new list from the UI without a schema change.
+model MasterCategory {
+  id        Int      @id @default(autoincrement())
+  key       String   @unique // stable slug, e.g. "election_type"
+  label     String            // display, e.g. "Election Type"
+  system    Boolean  @default(false) // system categories can't be deleted/renamed-key
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  options   MasterOption[]
+}
+
+model MasterOption {
+  id         Int      @id @default(autoincrement())
+  categoryId Int
+  category   MasterCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  code       String?
+  label      String
+  sortOrder  Int      @default(0)
+  active     Boolean  @default(true)
+  meta       Json?    // optional extra attributes (e.g. party colour)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([categoryId, label])
+  @@index([categoryId])
 }

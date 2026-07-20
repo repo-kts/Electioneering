@@ -82,6 +82,7 @@ export const api = {
         return request(`/api/voters${q ? '?' + q : ''}`);
     },
     createVoter: (data) => request('/api/voters', { method: 'POST', body: data }),
+    updateVoter: (id, data) => request(`/api/voters/${id}`, { method: 'PUT', body: data }),
     bulkVoters: (voters) => request('/api/voters/bulk', { method: 'POST', body: { voters } }),
     deleteVoter: (id) => request(`/api/voters/${id}`, { method: 'DELETE' }),
 
@@ -90,6 +91,7 @@ export const api = {
     getElection: (id) => request(`/api/elections/${id}`),
     createElection: (data) => request('/api/elections', { method: 'POST', body: data }),
     updateElection: (id, data) => request(`/api/elections/${id}`, { method: 'PUT', body: data }),
+    deleteElection: (id) => request(`/api/elections/${id}`, { method: 'DELETE' }),
     addCandidate: (id, data) =>
         request(`/api/elections/${id}/candidates`, { method: 'POST', body: data }),
     updateCandidate: (id, cid, data) =>
@@ -185,6 +187,29 @@ export const api = {
         request(`/api/cohorts/${id}`, { method: 'PUT', body: data }),
     deleteCohort: (id) => request(`/api/cohorts/${id}`, { method: 'DELETE' }),
     cohortVoters: (id) => request(`/api/cohorts/${id}/voters`),
+
+    // ─── Master data (geography hierarchy + lookup lists) ──────
+    masterTree: () => request('/api/master/geography/tree'),
+    masterOptions: (key) => request(`/api/master/options/${key}`),
+    masterCategories: () => request('/api/master/categories'),
+    masterCategory: (key) => request(`/api/master/categories/${key}`),
+    // geography CRUD — level ∈ countries | states | parliamentary | assembly
+    masterGeoList: (level, params = {}) => {
+        const q = new URLSearchParams(params).toString();
+        return request(`/api/master/${level}${q ? '?' + q : ''}`);
+    },
+    masterGeoCreate: (level, data) => request(`/api/master/${level}`, { method: 'POST', body: data }),
+    masterGeoUpdate: (level, id, data) => request(`/api/master/${level}/${id}`, { method: 'PUT', body: data }),
+    masterGeoDelete: (level, id) => request(`/api/master/${level}/${id}`, { method: 'DELETE' }),
+    // category CRUD
+    masterCreateCategory: (data) => request('/api/master/categories', { method: 'POST', body: data }),
+    masterUpdateCategory: (id, data) => request(`/api/master/categories/${id}`, { method: 'PUT', body: data }),
+    masterDeleteCategory: (id) => request(`/api/master/categories/${id}`, { method: 'DELETE' }),
+    // option CRUD
+    masterCreateOption: (key, data) => request(`/api/master/categories/${key}/options`, { method: 'POST', body: data }),
+    masterUpdateOption: (id, data) => request(`/api/master/options/${id}`, { method: 'PUT', body: data }),
+    masterDeleteOption: (id) => request(`/api/master/options/${id}`, { method: 'DELETE' }),
+    masterSync: () => request('/api/master/sync', { method: 'POST' }),
 };
 
 // Direct download URLs (use as href / window.open) — only for PUBLIC endpoints
