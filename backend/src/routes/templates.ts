@@ -3,54 +3,78 @@ import * as XLSX from 'xlsx';
 
 const router = Router();
 
+// Standard per-row voter roll columns. Election identity (state / parliamentary
+// / assembly / year / type) is NOT here — it is chosen in the upload screen and
+// applied to the whole file. Headers use operator-friendly labels that the
+// importer recognizes (see services/parseUpload.ts VOTER_HEADER_MAP).
 const VOTER_HEADERS = [
-  'firstName',
-  'lastName',
-  'relFirstName',
-  'relLastName',
+  'Election ID',
+  'Name',
+  'Relation',
+  'Father Name',
+  'EPIC Number',
   'age',
   'gender',
-  'epic',
   'mobile',
-  'state',
-  'parlNo',
-  'parlName',
-  'assemblyNo',
-  'assemblyName',
-  'pollingStationName',
-  'partNumber',
-  'partName',
-  'partSerial',
-  'caste',
-  'community',
-  'category',
-  'occupation',
-  'language',
+  'House Number',
+  'Section No',
+  'Section Name',
+  'Part Number',
+  'Booth Name',
+  'Polling Station Name',
+  'Main Town',
+  'Ward',
+  'Post Office',
+  'Police Station',
+  'Panchayat',
+  'Block',
+  'Tehsil',
+  'Mandal',
+  'Revenue Division',
+  'Subdivision',
+  'District',
+  'Pin Code',
+  'Caste',
+  'Community',
+  'Category',
+  'Religion',
+  'Occupation',
+  'Language',
 ];
 
 const VOTER_SAMPLE: Record<string, string | number> = {
-  firstName: 'SAHIL',
-  lastName: 'SAXENA',
-  relFirstName: 'SANJAY',
-  relLastName: 'KUMAR',
-  age: 23,
+  'Election ID': 1,
+  Name: 'Sebastiao Xavier Fernandes',
+  Relation: 'Father',
+  'Father Name': 'Xavier Fernandes',
+  'EPIC Number': 'TRW0273011',
+  age: 78,
   gender: 'Male',
-  epic: 'TGK3378866',
   mobile: '9876543210',
-  state: 'Bihar',
-  parlNo: '29',
-  parlName: 'Nalanda',
-  assemblyNo: '172',
-  assemblyName: 'Biharsharif',
-  pollingStationName: 'Madarasa Ajijiya',
-  partNumber: '381',
-  partName: 'Madarasa Ajijaya Dakshini Bhag',
-  partSerial: '283',
-  caste: 'Kayastha',
-  community: 'Gen',
-  category: 'General',
-  occupation: 'Student',
-  language: 'Hindi',
+  'House Number': '3',
+  'Section No': '1',
+  'Section Name': 'Near Church, Tiracol',
+  'Part Number': '1',
+  'Booth Name': 'Booth 1 — Room A',
+  'Polling Station Name': 'Government Primary School, Tiracol',
+  'Main Town': 'TIRACOL',
+  Ward: '',
+  'Post Office': 'ARAMBOL',
+  'Police Station': 'MANDREM',
+  Panchayat: '',
+  Block: 'PERNEM',
+  Tehsil: '',
+  Mandal: '',
+  'Revenue Division': '',
+  Subdivision: 'PERNEM',
+  District: 'NORTH GOA',
+  'Pin Code': '403524',
+  Caste: '',
+  Community: 'Gen',
+  Category: '',
+  Religion: 'Christian',
+  Occupation: 'Fisherman',
+  Language: 'Konkani',
 };
 
 function csvEscape(s: string): string {
@@ -93,19 +117,18 @@ function sendSheet(
   res.send(buf);
 }
 
-// GET /api/templates/voter[?sample=1][&format=csv]
+// GET /api/templates/voter[?sample=1][&format=csv][&electionType=Assembly Election]
+// `electionType` is accepted so the download can be tailored per the UI's
+// selection. The per-row roll columns are the same across current election
+// types; the hook is here for future type-specific variations.
 router.get('/voter', (req, res) => {
   const sample = req.query.sample === '1';
   const format = String(req.query.format ?? '').toLowerCase();
+  const electionType = String(req.query.electionType ?? '').trim();
   const rows = sample ? [VOTER_SAMPLE] : [];
-  sendSheet(
-    res,
-    VOTER_HEADERS,
-    rows,
-    sample ? 'voters_sample' : 'voters_template',
-    format,
-    'Voters',
-  );
+  const slug = electionType ? electionType.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '') : '';
+  const base = sample ? 'voters_sample' : 'voters_template';
+  sendSheet(res, VOTER_HEADERS, rows, slug ? `${base}_${slug}` : base, format, 'Voters');
 });
 
 // GET /api/templates/form20[?candidates=A,B,C][&sample=1][&format=csv]
@@ -117,7 +140,9 @@ router.get('/form20', (req, res) => {
   const format = String(req.query.format ?? '').toLowerCase();
   const sample = req.query.sample === '1';
   const headers = [
+    'electionId',
     'serial',
+    'boothName',
     'pollingStation',
     ...candidates,
     'rejected',
@@ -129,8 +154,10 @@ router.get('/form20', (req, res) => {
   if (sample) {
     const validSum = 100 * candidates.length;
     rows.push({
+      electionId: 1,
       serial: 1,
-      pollingStation: 'PS-1',
+      boothName: 'Booth 1 — Room A',
+      pollingStation: 'Government Primary School, Tiracol',
       ...Object.fromEntries(candidates.map((c) => [c, 100])),
       rejected: 0,
       nota: 5,

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import BoothMap from '../components/analytics/BoothMap.jsx';
 import AllYearsAnalytics from '../components/analytics/AllYearsAnalytics.jsx';
@@ -29,7 +29,11 @@ export default function ElectionOverviewPage() {
   const entryId = Number(id); // election we arrived on (latest year of the constituency)
 
   // '' = all years (default). Otherwise the chosen year's viewId.
-  const [selectedYear, setSelectedYear] = useState('');
+  // Booth-wise entry (?booths=1) lands directly on the latest year's booth grid.
+  const [searchParams] = useSearchParams();
+  const [selectedYear, setSelectedYear] = useState(
+    searchParams.get('booths') ? String(entryId) : '',
+  );
   const showAll = selectedYear === '';
   const viewId = selectedYear ? Number(selectedYear) : entryId;
 
@@ -101,7 +105,15 @@ export default function ElectionOverviewPage() {
   return (
     <div className="space-y-6">
       <div>
-        <Breadcrumbs items={[{ label: 'Elections', to: '/elections' }, { label: constituency }]} />
+        <Breadcrumbs
+          items={[
+            {
+              label: election?.electionType || 'Elections',
+              to: election?.electionType === 'Lok Sabha Election' ? '/elections/lok-sabha' : '/elections/assembly',
+            },
+            { label: constituency },
+          ]}
+        />
         <PageHeader
           eyebrow={election ? election.electionType : 'Results'}
           title={headerTitle}

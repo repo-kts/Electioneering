@@ -14,9 +14,17 @@ const SECTIONS = [
   {
     title: 'Insights',
     items: [
-      { to: '/elections', label: 'Elections', roles: ['admin'] },
+      { to: '/elections/assembly', label: 'Assembly Election', roles: ['admin'] },
+      { to: '/elections/lok-sabha', label: 'Lok Sabha Election', roles: ['admin'] },
+      { to: '/elections/booths', label: 'Booth wise election', roles: ['admin'] },
       { to: '/households', label: 'Households', roles: ['admin'] },
       { to: '/segment', label: 'Voter search', roles: ['admin'] },
+    ],
+  },
+  {
+    title: 'Administration',
+    items: [
+      { to: '/all-master', label: 'Master Data', roles: ['admin'] },
     ],
   },
 ];

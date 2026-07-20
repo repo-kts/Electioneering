@@ -21,26 +21,24 @@ import {
  */
 
 const VOTER_COLUMNS = [
+  { key: 'electionId', label: 'Election ID', type: 'text', short: true },
   { key: 'firstName', label: 'First Name', type: 'text', required: true, uppercase: true },
   { key: 'lastName', label: 'Last Name', type: 'text', required: true, uppercase: true },
-  { key: 'relFirstName', label: 'Rel First', type: 'text', required: true, uppercase: true },
-  { key: 'relLastName', label: 'Rel Last', type: 'text', required: true, uppercase: true },
+  { key: 'relativeName', label: 'Father/Husband', type: 'text', long: true },
+  { key: 'relationType', label: 'Relation', type: 'text', short: true },
   { key: 'age', label: 'Age', type: 'number', required: true, short: true, min: 18, max: 120 },
   { key: 'gender', label: 'Gender', type: 'select', options: GENDERS, required: true, short: true },
   { key: 'epic', label: 'EPIC', type: 'text', required: true, uppercase: true, maxLength: 10 },
   { key: 'mobile', label: 'Mobile', type: 'tel', maxLength: 10, short: true },
-  { key: 'state', label: 'State', type: 'text', required: true },
-  { key: 'parlNo', label: 'Parl No', type: 'text', required: true, short: true },
-  { key: 'parlName', label: 'Parl Name', type: 'text', required: true },
-  { key: 'assemblyNo', label: 'Asm No', type: 'text', required: true, short: true },
-  { key: 'assemblyName', label: 'Asm Name', type: 'text', required: true },
-  { key: 'pollingStationName', label: 'Polling Station', type: 'text', required: true, long: true },
-  { key: 'partNumber', label: 'Part No', type: 'text', required: true, short: true },
-  { key: 'partName', label: 'Part Name', type: 'text', long: true },
-  { key: 'partSerial', label: 'Part Serial', type: 'text', required: true, short: true },
+  { key: 'partNumber', label: 'Part No', type: 'text', short: true },
+  { key: 'boothName', label: 'Booth Name', type: 'text', long: true },
+  { key: 'pollingStationName', label: 'Polling Station', type: 'text', long: true },
+  { key: 'houseNumber', label: 'House', type: 'text', short: true },
+  { key: 'district', label: 'District', type: 'text' },
   { key: 'caste', label: 'Caste', type: 'text' },
   { key: 'community', label: 'Community', type: 'text', short: true },
   { key: 'category', label: 'Category', type: 'text', short: true },
+  { key: 'religion', label: 'Religion', type: 'text', short: true },
   { key: 'occupation', label: 'Occupation', type: 'text' },
   { key: 'language', label: 'Language', type: 'text', short: true },
 ];
@@ -57,7 +55,7 @@ function flattenErrors(rows, max = 8) {
   return out;
 }
 
-export default function UploadPreview({ kind, data, onCancel, onCommit, headerExtras }) {
+export default function UploadPreview({ kind, data, onCancel, onCommit, headerExtras, commitDisabled = false }) {
   const [rows, setRows] = useState(() =>
     data.rows.map((r, i) => ({ __id: i, __errors: r.__errors || {}, ...r })),
   );
@@ -74,7 +72,8 @@ export default function UploadPreview({ kind, data, onCancel, onCommit, headerEx
     if (isVoter) return [];
     const m = [
       { kind: 'serial', label: 'PS #', short: true },
-      { kind: 'name', label: 'PS Name' },
+      { kind: 'boothName', label: 'Booth Name' },
+      { kind: 'name', label: 'Polling Station' },
     ];
     candidates.forEach((c) => m.push({ kind: 'cand', candidate: c, label: c, short: true }));
     m.push({ kind: 'valid', label: 'Valid', short: true, readonly: true });
@@ -113,6 +112,7 @@ export default function UploadPreview({ kind, data, onCancel, onCommit, headerEx
         const next = { ...r, votes: { ...(r.votes || {}) } };
         if (def.kind === 'serial') next.serial = Number(raw) || 0;
         else if (def.kind === 'name') next.name = String(raw);
+        else if (def.kind === 'boothName') next.boothName = String(raw);
         else if (def.kind === 'cand') next.votes[def.candidate] = Number(raw) || 0;
         else if (def.kind === 'rejectedVotes' || def.kind === 'notaVotes' || def.kind === 'tenderedVotes') {
           next[def.kind] = Number(raw) || 0;
@@ -131,7 +131,7 @@ export default function UploadPreview({ kind, data, onCancel, onCommit, headerEx
         const blankVoter = () =>
           Object.fromEntries(voterCols.map((c) => [c.key, ''])); // empty row
         const blankForm20 = () => ({
-          serial: 1, name: '', votes: {},
+          serial: 1, name: '', boothName: '', votes: {},
           rejectedVotes: 0, notaVotes: 0, tenderedVotes: 0, total: 0,
         });
 
@@ -161,6 +161,7 @@ export default function UploadPreview({ kind, data, onCancel, onCommit, headerEx
               if (!def || def.readonly) return;
               if (def.kind === 'serial') row.serial = Number(rawVal) || row.serial;
               else if (def.kind === 'name') row.name = String(rawVal ?? '').trim();
+              else if (def.kind === 'boothName') row.boothName = String(rawVal ?? '').trim();
               else if (def.kind === 'cand') row.votes[def.candidate] = Number(rawVal) || 0;
               else if (def.kind === 'rejectedVotes' || def.kind === 'notaVotes' || def.kind === 'tenderedVotes') {
                 row[def.kind] = Number(rawVal) || 0;
@@ -273,6 +274,7 @@ export default function UploadPreview({ kind, data, onCancel, onCommit, headerEx
     const value =
       def.kind === 'serial' ? row.serial :
       def.kind === 'name' ? (row.name ?? '') :
+      def.kind === 'boothName' ? (row.boothName ?? '') :
       def.kind === 'cand' ? (row.votes?.[def.candidate] ?? '') :
       def.kind === 'valid' ? rowValid(row) :
       def.kind === 'total' ? rowTotal(row) :
@@ -280,7 +282,7 @@ export default function UploadPreview({ kind, data, onCancel, onCommit, headerEx
     return (
       <td key={def.label + ci} className={cls} data-error={err || undefined}>
         <input
-          type={def.kind === 'name' ? 'text' : 'number'}
+          type={def.kind === 'name' || def.kind === 'boothName' ? 'text' : 'number'}
           min={def.kind === 'serial' ? 1 : 0}
           className={`cell-input ${def.short ? 'short' : ''}`}
           value={value ?? ''}
@@ -355,7 +357,7 @@ export default function UploadPreview({ kind, data, onCancel, onCommit, headerEx
               variant="primary"
               leadingIcon={<CheckIcon />}
               onClick={commit}
-              disabled={busy || rows.length === 0}
+              disabled={busy || rows.length === 0 || commitDisabled}
             >
               {busy ? 'Saving…' : `Save ${rows.length} record${rows.length === 1 ? '' : 's'}`}
             </Button>

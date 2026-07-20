@@ -1,12 +1,21 @@
 // Household clustering — voters who share a house (makan) within the same
-// part/booth are a family unit and tend to vote as a bloc. We group by
-// (assemblyNo, partNumber, houseNumber), create a Household, link its voters,
-// pick a head (eldest), and record the size.
+// part/booth are a family unit and tend to vote as a bloc. Households are
+// per-election: we group each election's roll (BoothVoter) by
+// (booth, partNumber, houseNumber), create a Household on that booth, link its
+// members, pick a head (eldest), and record the size.
 
 import { prisma } from '../lib/prisma.js';
 
-function keyOf(v: { assemblyNo: string; partNumber: string; houseNumber: string | null }): string {
-  return [v.assemblyNo, v.partNumber, (v.houseNumber ?? '').trim().toUpperCase()].join('|');
+interface RollRow {
+  id: number; // BoothVoter id
+  boothId: number;
+  partNumber: string | null;
+  houseNumber: string | null;
+  voter: { id: number; age: number; assemblyNo: string };
+}
+
+function keyOf(r: RollRow): string {
+  return [r.boothId, r.partNumber ?? '', (r.houseNumber ?? '').trim().toUpperCase()].join('|');
 }
 
 export interface HouseholdRebuildResult {
@@ -17,41 +26,37 @@ export interface HouseholdRebuildResult {
 }
 
 /**
- * Rebuild households for a scope (one assembly, or all voters when omitted).
+ * Rebuild households for a scope (one assembly, or all when omitted).
  * Idempotent: clears prior Household links for the scope, then regroups.
- * Only voters with a non-empty houseNumber are clustered.
+ * Only roll entries with a non-empty houseNumber are clustered.
  */
 export async function rebuildHouseholds(assemblyNo?: string): Promise<HouseholdRebuildResult> {
-  const where = assemblyNo ? { assemblyNo } : {};
-  const voters = await prisma.voter.findMany({
-    where,
+  const rows: RollRow[] = await prisma.boothVoter.findMany({
+    where: assemblyNo ? { voter: { assemblyNo } } : {},
     select: {
       id: true,
-      age: true,
-      relationType: true,
-      lastName: true,
-      assemblyNo: true,
+      boothId: true,
       partNumber: true,
       houseNumber: true,
-      pollingStationId: true,
+      voter: { select: { id: true, age: true, assemblyNo: true } },
     },
   });
 
-  // Group by household key; skip voters without a house number.
-  const groups = new Map<string, typeof voters>();
-  for (const v of voters) {
-    if (!v.houseNumber || !String(v.houseNumber).trim()) continue;
-    const k = keyOf(v);
+  // Group by household key; skip entries without a house number.
+  const groups = new Map<string, RollRow[]>();
+  for (const r of rows) {
+    if (!r.houseNumber || !String(r.houseNumber).trim()) continue;
+    const k = keyOf(r);
     const arr = groups.get(k);
-    if (arr) arr.push(v);
-    else groups.set(k, [v]);
+    if (arr) arr.push(r);
+    else groups.set(k, [r]);
   }
 
-  // Detach existing household links + delete stale households in scope so the
-  // rebuild is clean and idempotent.
-  const voterIds = voters.map((v) => v.id);
-  await prisma.voter.updateMany({
-    where: { id: { in: voterIds } },
+  // Detach existing links + delete stale households in scope so the rebuild is
+  // clean and idempotent.
+  const bvIds = rows.map((r) => r.id);
+  await prisma.boothVoter.updateMany({
+    where: { id: { in: bvIds } },
     data: { householdId: null },
   });
   await prisma.household.deleteMany({
@@ -63,21 +68,21 @@ export async function rebuildHouseholds(assemblyNo?: string): Promise<HouseholdR
   for (const [, members] of groups) {
     const first = members[0];
     // Head = eldest member (tie → first). Captures the likely roll head.
-    const head = members.reduce((a, b) => (b.age > a.age ? b : a), first);
+    const head = members.reduce((a, b) => (b.voter.age > a.voter.age ? b : a), first);
     const hh = await prisma.household.create({
       data: {
-        assemblyNo: first.assemblyNo,
+        assemblyNo: first.voter.assemblyNo,
         partNumber: first.partNumber,
         houseNumber: first.houseNumber,
-        headVoterId: head.id,
+        headVoterId: head.voter.id,
         headName: null,
         size: members.length,
-        pollingStationId: first.pollingStationId,
+        boothId: first.boothId,
       },
     });
     households += 1;
     const ids = members.map((m) => m.id);
-    const r = await prisma.voter.updateMany({
+    const r = await prisma.boothVoter.updateMany({
       where: { id: { in: ids } },
       data: { householdId: hh.id },
     });
@@ -86,7 +91,7 @@ export async function rebuildHouseholds(assemblyNo?: string): Promise<HouseholdR
 
   return {
     scope: assemblyNo ?? 'all',
-    voters: voters.length,
+    voters: rows.length,
     households,
     linked,
   };

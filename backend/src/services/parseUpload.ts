@@ -58,6 +58,10 @@ function parseDelimited(buffer: Buffer, delimiter: string): ParseResult {
 
 // ─── Column key normalization (header → canonical voter field) ───────
 const VOTER_HEADER_MAP: Record<string, string> = {
+  // Election link — created in All-Master, its id pasted into this column.
+  'election id': 'electionId',
+  electionid: 'electionId',
+  election_id: 'electionId',
   // Full name (real electoral roll has one Name column)
   name: 'fullName',
   'voter name': 'fullName',
@@ -126,6 +130,9 @@ const VOTER_HEADER_MAP: Record<string, string> = {
   polling_station_name: 'pollingStationName',
   'polling station address': 'pollingStationAddress',
   polling_station_address: 'pollingStationAddress',
+  'booth name': 'boothName',
+  boothname: 'boothName',
+  booth_name: 'boothName',
   partnumber: 'partNumber',
   'part number': 'partNumber',
   'part no': 'partNumber',
@@ -231,6 +238,9 @@ export function normalizeVoterRows(rows: ParsedRow[]): ParsedRow[] {
 // Expected columns: serial / PS#, then candidate-name columns, then
 // rejected, nota, total, tendered. Candidate names are dynamic.
 const FORM20_RESERVED = new Set([
+  'election id',
+  'electionid',
+  'election_id',
   'serial',
   'serial no',
   'serial no.',
@@ -239,9 +249,15 @@ const FORM20_RESERVED = new Set([
   'ps',
   'ps#',
   'ps no',
+  'booth name',
+  'boothname',
+  'booth_name',
   'polling station',
+  'pollingstation',
+  'polling_station',
   'polling station no',
   'polling station name',
+  'polling_station_name',
   'valid votes',
   'total valid',
   'no of valid votes',
@@ -259,9 +275,11 @@ const FORM20_RESERVED = new Set([
 
 export interface Form20Preview {
   candidates: string[];
+  electionId: number | null; // read from the sheet's Election ID column
   rows: Array<{
     serial: number;
-    name?: string;
+    name?: string;      // polling station (building) name
+    boothName?: string; // booth's own name (within the building)
     votes: Record<string, number>;
     rejectedVotes: number;
     notaVotes: number;
@@ -298,13 +316,15 @@ export function normalizeForm20(parsed: ParseResult): Form20Preview {
     return undefined;
   };
   const serialKey = findHeader('serial', 'serial no', 'sl', 'sl no', 'ps', 'ps#', 'ps no');
-  const psNameKey = findHeader('polling station', 'polling station name');
+  const boothNameKey = findHeader('booth name', 'boothname', 'booth_name');
+  const psNameKey = findHeader('polling station', 'pollingstation', 'polling_station', 'polling station name', 'polling_station_name');
   const rejectedKey = findHeader('rejected', 'rejected votes', 'no of rejected votes');
   const notaKey = findHeader('nota');
   const totalKey = findHeader('total', 'total votes');
   const tenderedKey = findHeader('tendered', 'tendered votes', 'no of tendered votes');
+  const electionIdKey = findHeader('election id', 'electionid', 'election_id');
   // Remove reserved keys from candidate cols
-  const reserved = new Set([serialKey, psNameKey, rejectedKey, notaKey, totalKey, tenderedKey].filter(Boolean) as string[]);
+  const reserved = new Set([serialKey, boothNameKey, psNameKey, rejectedKey, notaKey, totalKey, tenderedKey, electionIdKey].filter(Boolean) as string[]);
   // Also remove "valid votes" if present
   const validKey = findHeader('valid votes', 'total valid', 'no of valid votes');
   if (validKey) reserved.add(validKey);
@@ -361,6 +381,7 @@ export function normalizeForm20(parsed: ParseResult): Form20Preview {
     return {
       serial,
       name: psNameKey ? String(r[psNameKey] ?? '').trim() || undefined : undefined,
+      boothName: boothNameKey ? String(r[boothNameKey] ?? '').trim() || undefined : undefined,
       votes,
       rejectedVotes,
       notaVotes,
@@ -372,8 +393,18 @@ export function normalizeForm20(parsed: ParseResult): Form20Preview {
 
   const errorCount = rows.filter((r) => Object.keys(r.__errors).length > 0).length;
 
+  // Election ID comes from the sheet — take the first row that carries one.
+  let electionId: number | null = null;
+  if (electionIdKey) {
+    for (const r of parsed.rows) {
+      const n = num(r[electionIdKey]);
+      if (n > 0) { electionId = n; break; }
+    }
+  }
+
   return {
     candidates: cleanedCandidates,
+    electionId,
     rows,
     errorCount,
     validCount: rows.length - errorCount,

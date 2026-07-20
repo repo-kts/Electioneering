@@ -3,12 +3,12 @@ import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { asyncHandler } from '../lib/asyncHandler.js';
 import {
-  computePollingStationLeanings,
+  computeBoothLeanings,
   computeCommunityLeaning,
   recomputePredictedLeaning,
-  linkVotersToPollingStations,
+  linkRollToBooths,
 } from '../services/inference.js';
-import { aggregate } from '../services/segmentation.js';
+import { aggregate, attachElectionFields } from '../services/segmentation.js';
 import { computeBoothTargets, computeTurnoutGap, computeSwing } from '../services/boothAnalytics.js';
 import { assembleStrategyBrief } from '../services/strategy.js';
 import { geocodeElectionBooths } from '../services/geocode.js';
@@ -103,103 +103,104 @@ router.post(
     });
     let linked = 0;
     if (req.query.link === '1') {
-      linked = await linkVotersToPollingStations(electionId);
+      linked = await linkRollToBooths(electionId);
     }
     const r = await recomputePredictedLeaning(electionId);
     res.json({ electionId, linked, ...r });
   }),
 );
 
-// GET /api/analytics/booth/:psId
-// Everything about one polling station: candidate votes + share, turnout,
-// and the voter-roll demographics for that booth (community/religion/age/
-// gender/household) plus a voter sample. Powers the booth drill-down page.
+// GET /api/analytics/booth/:boothId
+// Everything about one booth: candidate votes + share, turnout, and the
+// voter-roll demographics for that booth (community/religion/age/gender/
+// household) plus a voter sample. Powers the booth drill-down page.
 router.get(
-  '/booth/:psId',
+  '/booth/:boothId',
   asyncHandler(async (req, res) => {
-    const psId = Number(req.params.psId);
-    const ps = await prisma.pollingStation.findUnique({
-      where: { id: psId },
+    const boothId = Number(req.params.boothId);
+    const booth = await prisma.booth.findUnique({
+      where: { id: boothId },
       include: {
         election: true,
+        pollingStation: true,
         voteResults: { include: { candidate: true } },
       },
     });
-    if (!ps) {
+    if (!booth) {
       res.status(404).json({ error: 'NotFound' });
       return;
     }
+    const ps = booth.pollingStation;
 
     let totalValid = 0;
-    for (const vr of ps.voteResults) totalValid += vr.votes;
-    const candidates = ps.voteResults
+    for (const vr of booth.voteResults) totalValid += vr.votes;
+    const candidates = booth.voteResults
       .map((vr) => ({
         id: vr.candidateId,
         name: vr.candidate.name,
         party: vr.candidate.party,
+        alliance: vr.candidate.alliance,
         votes: vr.votes,
         share: totalValid > 0 ? vr.votes / totalValid : 0,
       }))
       .sort((a, b) => b.votes - a.votes);
 
-    const voters = await prisma.voter.findMany({
-      where: { pollingStationId: psId },
-      orderBy: [{ houseNumber: 'asc' }, { age: 'desc' }],
+    // Roll for this booth (per-election), with the linked voter.
+    const roll = await prisma.boothVoter.findMany({
+      where: { boothId },
+      orderBy: [{ houseNumber: 'asc' }],
+      include: { voter: true },
     });
-    const registered = voters.length;
-    const voted = registered
-      ? await prisma.voterTurnout.count({
-          where: {
-            electionId: ps.electionId,
-            voted: true,
-            voter: { pollingStationId: psId },
-          },
-        })
-      : 0;
+    const voters = attachElectionFields(
+      roll.map((bv) => ({ ...bv.voter, boothVoters: [{ ...bv, booth }] })),
+      booth.electionId,
+    );
+    const registered = roll.length;
+    const voted = roll.reduce((n, bv) => n + (bv.voted ? 1 : 0), 0);
 
-    const totalPolled = totalValid + ps.rejectedVotes + ps.notaVotes;
+    const totalPolled = totalValid + booth.rejectedVotes + booth.notaVotes;
     const leader = candidates[0] ?? null;
     const runnerUp = candidates[1] ?? null;
     const demographics = aggregate(voters);
 
     // Booth classification + concrete campaign recommendations.
-    const reco = await computeBoothRecommendations(ps.electionId, ps.id, {
+    const reco = await computeBoothRecommendations(booth.electionId, booth.id, {
       leader: leader ? { name: leader.name, share: leader.share } : null,
       runnerUp: runnerUp ? { name: runnerUp.name, share: runnerUp.share } : null,
       totalValid,
-      notaShare: totalPolled > 0 ? ps.notaVotes / totalPolled : 0,
+      notaShare: totalPolled > 0 ? booth.notaVotes / totalPolled : 0,
       demographics,
       registered,
     });
 
     res.json({
       election: {
-        id: ps.election.id,
-        assemblyNo: ps.election.assemblyNo,
-        assemblyName: ps.election.assemblyName,
-        assemblySeatType: ps.election.assemblySeatType,
-        parlNo: ps.election.parlNo,
-        parlName: ps.election.parlName,
-        parlSeatType: ps.election.parlSeatType,
-        state: ps.election.state,
-        electionType: ps.election.electionType,
-        electionYear: ps.election.electionYear,
+        id: booth.election.id,
+        assemblyNo: booth.election.assemblyNo,
+        assemblyName: booth.election.assemblyName,
+        assemblySeatType: booth.election.assemblySeatType,
+        parlNo: booth.election.parlNo,
+        parlName: booth.election.parlName,
+        parlSeatType: booth.election.parlSeatType,
+        state: booth.election.state,
+        electionType: booth.election.electionType,
+        electionYear: booth.election.electionYear,
       },
       ps: {
-        id: ps.id,
-        serial: ps.serial,
-        name: ps.name,
-        address: ps.address,
-        cityVillage: ps.cityVillage,
-        ward: ps.ward,
-        tolaMohalla: ps.tolaMohalla,
-        postOffice: ps.postOffice,
-        policeStation: ps.policeStation,
-        latitude: ps.latitude,
-        longitude: ps.longitude,
-        rejectedVotes: ps.rejectedVotes,
-        notaVotes: ps.notaVotes,
-        tenderedVotes: ps.tenderedVotes,
+        id: booth.id,
+        serial: booth.serial,
+        name: booth.name ?? ps?.name ?? null,
+        address: ps?.address ?? null,
+        cityVillage: ps?.cityVillage ?? null,
+        ward: ps?.ward ?? null,
+        tolaMohalla: ps?.tolaMohalla ?? null,
+        postOffice: ps?.postOffice ?? null,
+        policeStation: ps?.policeStation ?? null,
+        latitude: ps?.latitude ?? null,
+        longitude: ps?.longitude ?? null,
+        rejectedVotes: booth.rejectedVotes,
+        notaVotes: booth.notaVotes,
+        tenderedVotes: booth.tenderedVotes,
       },
       candidates,
       leader,
@@ -215,21 +216,21 @@ router.get(
       priority: reco.priority,
       recommendations: reco.recommendations,
       demographics,
-      voters: voters.slice(0, 500).map((v) => ({
-        id: v.id,
-        fullName: v.fullName,
-        firstName: v.firstName,
-        lastName: v.lastName,
-        age: v.age,
-        gender: v.gender,
-        religion: v.religion,
-        caste: v.caste,
-        community: v.community,
-        category: v.category,
-        houseNumber: v.houseNumber,
-        epic: v.epic,
-        relationType: v.relationType,
-        relativeName: v.relativeName,
+      voters: roll.slice(0, 500).map((bv) => ({
+        id: bv.voter.id,
+        fullName: bv.voter.fullName,
+        firstName: bv.voter.firstName,
+        lastName: bv.voter.lastName,
+        age: bv.voter.age,
+        gender: bv.voter.gender,
+        religion: bv.voter.religion,
+        caste: bv.voter.caste,
+        community: bv.voter.community,
+        category: bv.voter.category,
+        houseNumber: bv.houseNumber,
+        epic: bv.voter.epic,
+        relationType: bv.voter.relationType,
+        relativeName: bv.voter.relativeName,
       })),
     });
   }),
@@ -244,21 +245,21 @@ router.get(
     const { electionId } = z.object({ electionId: z.coerce.number().int() }).parse({
       electionId: req.query.electionId,
     });
-    const stations = await prisma.pollingStation.findMany({
+    const booths = await prisma.booth.findMany({
       where: { electionId },
       orderBy: { serial: 'asc' },
-      include: { _count: { select: { voters: true } } },
+      include: { pollingStation: true, _count: { select: { boothVoters: true } } },
     });
-    const leanings = await computePollingStationLeanings(electionId);
-    const items = stations.map((ps) => {
-      const lean = leanings.get(ps.id);
+    const leanings = await computeBoothLeanings(electionId);
+    const items = booths.map((b) => {
+      const lean = leanings.get(b.id);
       return {
-        id: ps.id,
-        serial: ps.serial,
-        name: ps.name,
-        latitude: ps.latitude,
-        longitude: ps.longitude,
-        registeredVoters: ps._count.voters,
+        id: b.id,
+        serial: b.serial,
+        name: b.name ?? b.pollingStation?.name ?? null,
+        latitude: b.pollingStation?.latitude ?? null,
+        longitude: b.pollingStation?.longitude ?? null,
+        registeredVoters: b._count.boothVoters,
         totalValid: lean?.totalValid ?? 0,
         leader: lean?.leader ?? null,
         leaderShare: lean?.leaderShare ?? 0,
@@ -328,7 +329,18 @@ router.get(
       voterWhere.assemblyNo = election.assemblyNo;
       voterWhere.assemblyName = election.assemblyName;
     }
-    const voters = await prisma.voter.findMany({ where: voterWhere });
+    const voterRows = await prisma.voter.findMany({
+      where: voterWhere,
+      include: election
+        ? {
+            boothVoters: {
+              where: { electionId: election.id },
+              include: { booth: { include: { pollingStation: true } } },
+            },
+          }
+        : undefined,
+    });
+    const voters = attachElectionFields(voterRows, election?.id);
     const voterAggs = aggregate(voters);
 
     // Election candidate totals + per-PS leanings
@@ -343,13 +355,13 @@ router.get(
       totalValid: number;
     }> = [];
     if (election) {
-      const ps = await prisma.pollingStation.findMany({
+      const ps = await prisma.booth.findMany({
         where: { electionId: election.id },
         include: {
           voteResults: { include: { candidate: true } },
         },
       });
-      const candTotals = new Map<number, { id: number; name: string; party: string | null; votes: number }>();
+      const candTotals = new Map<number, { id: number; name: string; party: string | null; alliance: string | null; votes: number }>();
       let totalValid = 0;
       let totalRejected = 0;
       let totalNota = 0;
@@ -367,6 +379,7 @@ router.get(
               id: vr.candidateId,
               name: vr.candidate.name,
               party: vr.candidate.party,
+              alliance: vr.candidate.alliance,
               votes: vr.votes,
             });
         }
@@ -375,10 +388,10 @@ router.get(
         .map((c) => ({ ...c, share: totalValid > 0 ? c.votes / totalValid : 0 }))
         .sort((a, b) => b.votes - a.votes);
 
-      // Turnout for this election from VoterTurnout (where Voter is in scope)
+      // Turnout for this election from BoothVoter (where Voter is in scope)
       const voterIds = voters.map((v) => v.id);
       const voted = voterIds.length
-        ? await prisma.voterTurnout.count({
+        ? await prisma.boothVoter.count({
             where: { electionId: election.id, voterId: { in: voterIds }, voted: true },
           })
         : 0;
@@ -414,11 +427,11 @@ router.get(
       });
       for (const e of sameAssembly) {
         const v = voterIds.length
-          ? await prisma.voterTurnout.count({
+          ? await prisma.boothVoter.count({
               where: { electionId: e.id, voterId: { in: voterIds }, voted: true },
             })
           : 0;
-        const psE = await prisma.pollingStation.findMany({
+        const psE = await prisma.booth.findMany({
           where: { electionId: e.id },
           include: { voteResults: true },
         });

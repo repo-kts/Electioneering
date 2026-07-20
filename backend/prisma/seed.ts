@@ -1,6 +1,9 @@
 import { PrismaClient, Gender, Role } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import { classifyName } from '../src/services/nameClassifier.js';
+import { upsertPollingStation, upsertBooth, upsertBoothVoter } from '../src/services/booths.js';
+import { recomputePredictedLeaning } from '../src/services/inference.js';
+import { syncMasterFromData } from '../src/services/master.js';
 
 const prisma = new PrismaClient();
 
@@ -22,6 +25,67 @@ async function seedUsers() {
     });
     console.log(`[seed] user "${u.username}" → ${u.role}`);
   }
+}
+
+// ─── Booth seeding helper (building → booth → voteResults) ─────────────
+interface BoothMeta {
+  name: string | null;
+  address?: string | null;
+  cityVillage?: string | null;
+  ward?: string | null;
+  tolaMohalla?: string | null;
+  postOffice?: string | null;
+  policeStation?: string | null;
+  rejected: number;
+  nota: number;
+  tendered: number;
+  votes: number[];
+}
+
+/** Wipe an election's booths, then (re)create building → booth → voteResults.
+ *  Returns the booth id per serial (index 0 = serial 1). */
+async function seedBooths(
+  electionId: number,
+  assemblyNo: string,
+  assemblyName: string,
+  candIds: number[],
+  rows: readonly number[][],
+  meta: (i: number, row: readonly number[]) => BoothMeta,
+): Promise<number[]> {
+  await prisma.booth.deleteMany({ where: { electionId } });
+  const boothIds: number[] = [];
+  for (let i = 0; i < rows.length; i++) {
+    const m = meta(i, rows[i]);
+    const pollingStationId = await upsertPollingStation(
+      prisma,
+      {
+        assemblyNo,
+        assemblyName,
+        name: m.name,
+        address: m.address,
+        cityVillage: m.cityVillage,
+        ward: m.ward,
+        tolaMohalla: m.tolaMohalla,
+        postOffice: m.postOffice,
+        policeStation: m.policeStation,
+      },
+      i + 1,
+    );
+    const boothId = await upsertBooth(prisma, {
+      electionId,
+      pollingStationId,
+      serial: i + 1,
+      name: m.name,
+      rejectedVotes: m.rejected,
+      notaVotes: m.nota,
+      tenderedVotes: m.tendered,
+    });
+    await prisma.voteResult.createMany({
+      data: candIds.map((cid, j) => ({ boothId, candidateId: cid, votes: m.votes[j] })),
+    });
+    boothIds.push(boothId);
+  }
+  return boothIds;
 }
 
 // ─── Form 20 (Biharsharif 172, year 2025) ──────────────────────────
@@ -108,13 +172,13 @@ function deterministic(seed: number, max: number): number {
   return Math.abs(Math.sin(seed * 9301.3 + 49297) * 233280) % max | 0;
 }
 
+/** Stable identity + demographics for a generated Biharsharif voter. */
 function makeVoter(i: number) {
   const isMale = i % 2 === 0;
   const fn = isMale ? pick(FIRST_NAMES_M, i) : pick(FIRST_NAMES_F, i);
   const ln = pick(LAST_NAMES, i + 3);
   const relFn = pick(FIRST_NAMES_M, i + 5);
   const relLn = ln;
-  const psSerial = (i % 5) + 1;
   const epicCode = `BHS${(3000000 + i * 137).toString().padStart(7, '0').slice(-7)}`;
   return {
     firstName: fn,
@@ -130,15 +194,20 @@ function makeVoter(i: number) {
     parlName: 'Nalanda',
     assemblyNo: '172',
     assemblyName: 'Biharsharif',
-    pollingStationName: `PS-${psSerial}`,
-    partNumber: `${380 + psSerial}`,
-    partName: `Part of PS-${psSerial}`,
-    partSerial: `${i + 1}`,
     caste: pick(CASTES, i),
     community: pick(RESERVATION, i),
     category: pick(CATEGORIES, i),
     occupation: pick(OCCUPATIONS, i + 2),
     language: pick(LANGUAGES, i + 1),
+  };
+}
+
+/** Per-election roll position for a generated Biharsharif voter. */
+function makeVoterRoll(i: number, psSerial: number) {
+  return {
+    partNumber: `${psSerial}`, // == booth serial (structural join)
+    partName: `Part of PS-${psSerial}`,
+    partSerial: `${i + 1}`,
   };
 }
 
@@ -209,39 +278,31 @@ async function seedGoa() {
         electionType: 'Lok Sabha Election', electionYear: 2024, totalElectors: 26000,
       },
     }));
-  await prisma.pollingStation.deleteMany({ where: { electionId: election.id } });
+  await prisma.booth.deleteMany({ where: { electionId: election.id } });
   await prisma.candidate.deleteMany({ where: { electionId: election.id } });
 
   const candIds: number[] = [];
   for (let i = 0; i < GOA_CANDIDATES.length; i++) {
-    const party = GOA_CANDIDATES[i].includes('Shripad') ? 'BJP'
-      : GOA_CANDIDATES[i].includes('Ramakant') ? 'INC' : 'IND';
+    const isBjp = GOA_CANDIDATES[i].includes('Shripad');
+    const isInc = GOA_CANDIDATES[i].includes('Ramakant');
+    const party = isBjp ? 'BJP' : isInc ? 'INC' : 'IND';
+    const alliance = isBjp ? 'NDA' : isInc ? 'INDIA' : 'Independent';
     const c = await prisma.candidate.create({
-      data: { electionId: election.id, name: GOA_CANDIDATES[i], position: i, party },
+      data: { electionId: election.id, name: GOA_CANDIDATES[i], position: i, party, alliance },
     });
     candIds.push(c.id);
   }
-  const psIds: number[] = [];
-  for (let i = 0; i < GOA_FORM20.length; i++) {
-    const row = GOA_FORM20[i];
-    const ps = await prisma.pollingStation.create({
-      data: {
-        electionId: election.id, serial: i + 1,
-        name: `${i + 1} - Government Primary School, Tiracol`,
-        address: `Tiracol, Pernem, North Goa`,
-        cityVillage: 'Tiracol', ward: `${i + 1}`, tolaMohalla: 'Querim',
-        postOffice: 'Pernem', policeStation: 'Pernem',
-        rejectedVotes: row[8], notaVotes: row[9],
-      },
-    });
-    psIds.push(ps.id);
-    await prisma.voteResult.createMany({
-      data: candIds.map((cid, j) => ({ pollingStationId: ps.id, candidateId: cid, votes: row[j] })),
-    });
-  }
-  console.log('[seed] Goa Mandrem form20 →', GOA_FORM20.length, 'PS');
+  const boothIds = await seedBooths(election.id, '1', 'Mandrem', candIds, GOA_FORM20, (i, row) => ({
+    name: `${i + 1} - Government Primary School, Tiracol`,
+    address: 'Tiracol, Pernem, North Goa',
+    cityVillage: 'Tiracol', ward: `${i + 1}`, tolaMohalla: 'Querim',
+    postOffice: 'Pernem', policeStation: 'Pernem',
+    rejected: row[8], nota: row[9], tendered: 0, votes: row.slice(0, 8),
+  }));
+  console.log('[seed] Goa Mandrem form20 →', GOA_FORM20.length, 'booths');
 
-  // Wipe prior Goa voters (TRW/CDM EPIC prefixes + generated GOA prefix).
+  // Wipe prior Goa roll links + voters (TRW/CDM/GOA EPIC prefixes).
+  await prisma.boothVoter.deleteMany({ where: { electionId: election.id } });
   await prisma.voter.deleteMany({
     where: { OR: [{ epic: { startsWith: 'TRW' } }, { epic: { startsWith: 'CDM' } }, { epic: { startsWith: 'GOA' } }] },
   });
@@ -252,49 +313,58 @@ async function seedGoa() {
   };
 
   let made = 0;
-  // Tiracol roll → PS-1
+  // Tiracol roll → booth serial 1
   for (let i = 0; i < TIRACOL.length; i++) {
     const [full, sex, age, epic, makan] = TIRACOL[i];
     const { first, last } = splitName(full);
     const c = classifyName(first.toUpperCase(), last.toUpperCase());
-    await prisma.voter.create({
-      data: {
+    const voter = await prisma.voter.upsert({
+      where: { epic: epic as string },
+      update: {},
+      create: {
         ...geo,
         fullName: full, firstName: first.toUpperCase(), lastName: last.toUpperCase(),
         relationType: sex === 'Female' ? 'Husband' : 'Father', relativeName: null,
         relFirstName: '', relLastName: '',
         age: age as number, gender: sex as Gender, epic: epic as string,
-        pollingStationName: '1 - Government Primary School, Tiracol',
-        pollingStationId: psIds[0], partNumber: '1', partSerial: `${i + 1}`,
-        houseNumber: makan as string,
         religion: c.religion, caste: c.community, communityConfidence: c.confidence,
         communitySource: 'inferred',
       },
     });
+    await upsertBoothVoter(prisma, {
+      electionId: election.id, boothId: boothIds[0], voterId: voter.id,
+      roll: { partNumber: '1', partSerial: `${i + 1}`, houseNumber: makan as string },
+      voted: true,
+    });
     made++;
   }
-  // Generated voters spread across PS-2..6
+  // Generated voters spread across booths 2..6
   for (let i = 0; i < GOA_GEN_NAMES.length; i++) {
     const { first, last } = splitName(GOA_GEN_NAMES[i]);
     const c = classifyName(first.toUpperCase(), last.toUpperCase());
-    const psIdx = 1 + (i % (psIds.length - 1)); // 1..5
+    const boothIdx = 1 + (i % (boothIds.length - 1)); // 1..5
     const isF = /a$|i$/.test(first.toLowerCase());
-    await prisma.voter.create({
-      data: {
+    const epic = `GOA${(4000000 + i * 311).toString().slice(-7)}`;
+    const voter = await prisma.voter.upsert({
+      where: { epic },
+      update: {},
+      create: {
         ...geo,
         fullName: GOA_GEN_NAMES[i], firstName: first.toUpperCase(), lastName: last.toUpperCase(),
         relationType: isF ? 'Husband' : 'Father', relFirstName: '', relLastName: '',
-        age: 22 + ((i * 7) % 55), gender: isF ? Gender.Female : Gender.Male,
-        epic: `GOA${(4000000 + i * 311).toString().slice(-7)}`,
-        pollingStationName: `${psIdx + 1} - Government Primary School, Tiracol`,
-        pollingStationId: psIds[psIdx], partNumber: `${psIdx + 1}`, partSerial: `${i + 1}`,
-        houseNumber: `${10 + (i % 6)}`,
+        age: 22 + ((i * 7) % 55), gender: isF ? Gender.Female : Gender.Male, epic,
         religion: c.religion, caste: c.community, communityConfidence: c.confidence,
         communitySource: 'inferred',
       },
     });
+    await upsertBoothVoter(prisma, {
+      electionId: election.id, boothId: boothIds[boothIdx], voterId: voter.id,
+      roll: { partNumber: `${boothIdx + 1}`, partSerial: `${i + 1}`, houseNumber: `${10 + (i % 6)}` },
+      voted: deterministic(voter.id * 5, 100) < 62,
+    });
     made++;
   }
+  await recomputePredictedLeaning(election.id);
   console.log('[seed] Goa voters created =', made);
 }
 
@@ -322,9 +392,7 @@ async function main() {
     }));
   console.log('[seed] election 2025 id =', e2025.id);
 
-  await prisma.pollingStation.deleteMany({ where: { electionId: e2025.id } });
   await prisma.candidate.deleteMany({ where: { electionId: e2025.id } });
-
   const candIds2025: number[] = [];
   for (let i = 0; i < FORM20_CANDIDATES.length; i++) {
     const c = await prisma.candidate.create({
@@ -332,29 +400,11 @@ async function main() {
     });
     candIds2025.push(c.id);
   }
-  const ps2025: number[] = [];
-  for (let i = 0; i < FORM20_RAW.length; i++) {
-    const row = FORM20_RAW[i];
-    const ps = await prisma.pollingStation.create({
-      data: {
-        electionId: e2025.id,
-        serial: i + 1,
-        name: `PS-${i + 1}`,
-        rejectedVotes: row[10],
-        notaVotes: row[11],
-        tenderedVotes: row[12],
-      },
-    });
-    ps2025.push(ps.id);
-    await prisma.voteResult.createMany({
-      data: candIds2025.map((cid, j) => ({
-        pollingStationId: ps.id,
-        candidateId: cid,
-        votes: row[j],
-      })),
-    });
-  }
-  console.log('[seed] form20 2025 →', FORM20_RAW.length, 'polling stations');
+  const booths2025 = await seedBooths(e2025.id, '172', 'Biharsharif', candIds2025, FORM20_RAW, (i, row) => ({
+    name: `PS-${i + 1}`,
+    rejected: row[10], nota: row[11], tendered: row[12], votes: row.slice(0, 10),
+  }));
+  console.log('[seed] form20 2025 →', FORM20_RAW.length, 'booths');
 
   // ─── Election (2020) ──────────────────────────────────────────
   const e2020 =
@@ -375,7 +425,6 @@ async function main() {
     }));
   console.log('[seed] election 2020 id =', e2020.id);
 
-  await prisma.pollingStation.deleteMany({ where: { electionId: e2020.id } });
   await prisma.candidate.deleteMany({ where: { electionId: e2020.id } });
   const candIds2020: number[] = [];
   for (let i = 0; i < FORM20_CANDIDATES.length; i++) {
@@ -384,52 +433,55 @@ async function main() {
     });
     candIds2020.push(c.id);
   }
-  for (let i = 0; i < FORM20_2020_RAW.length; i++) {
-    const row = FORM20_2020_RAW[i];
-    const ps = await prisma.pollingStation.create({
-      data: {
-        electionId: e2020.id,
-        serial: i + 1,
-        name: `PS-${i + 1}`,
-        rejectedVotes: row[10],
-        notaVotes: row[11],
-        tenderedVotes: row[12],
-      },
-    });
-    await prisma.voteResult.createMany({
-      data: candIds2020.map((cid, j) => ({
-        pollingStationId: ps.id,
-        candidateId: cid,
-        votes: row[j],
-      })),
-    });
-  }
-  console.log('[seed] form20 2020 →', FORM20_2020_RAW.length, 'polling stations');
+  const booths2020 = await seedBooths(e2020.id, '172', 'Biharsharif', candIds2020, FORM20_2020_RAW, (i, row) => ({
+    name: `PS-${i + 1}`,
+    rejected: row[10], nota: row[11], tendered: row[12], votes: row.slice(0, 10),
+  }));
+  console.log('[seed] form20 2020 →', FORM20_2020_RAW.length, 'booths');
 
-  // ─── Voters (50 in Biharsharif) ──────────────────────────────
-  // Wipe existing seeded voters by EPIC prefix to keep idempotent.
+  // ─── Voters (50 in Biharsharif) — election-independent, placed on a booth
+  //     in BOTH elections via BoothVoter (turnout ~70% 2020, ~55% 2025). ──
+  await prisma.boothVoter.deleteMany({
+    where: { electionId: { in: [e2025.id, e2020.id] }, voter: { epic: { startsWith: 'BHS' } } },
+  });
   await prisma.voter.deleteMany({ where: { epic: { startsWith: 'BHS' } } });
 
-  const voters: Array<{ id: number; psSerial: number }> = [];
+  let turn2020 = 0;
+  let turn2025 = 0;
   for (let i = 0; i < 50; i++) {
     const v = makeVoter(i);
     const psSerial = (i % 5) + 1;
-    const created = await prisma.voter.create({
-      data: { ...v, pollingStationId: ps2025[psSerial - 1] },
-    });
-    voters.push({ id: created.id, psSerial });
-  }
-  console.log('[seed] voters created =', voters.length);
+    const created = await prisma.voter.create({ data: v });
 
-  // Plus the original demo voters (non-Biharsharif)
+    const did2025 = deterministic(created.id * 11, 100) < 55;
+    const did2020 = deterministic(created.id * 7, 100) < 70;
+    await upsertBoothVoter(prisma, {
+      electionId: e2025.id, boothId: booths2025[psSerial - 1], voterId: created.id,
+      roll: makeVoterRoll(i, psSerial), voted: did2025,
+      polledAt: did2025 ? new Date('2025-11-05T10:00:00Z') : null,
+    });
+    await upsertBoothVoter(prisma, {
+      electionId: e2020.id, boothId: booths2020[psSerial - 1], voterId: created.id,
+      roll: makeVoterRoll(i, psSerial), voted: did2020,
+      polledAt: did2020 ? new Date('2020-11-07T11:00:00Z') : null,
+    });
+    if (did2025) turn2025++;
+    if (did2020) turn2020++;
+  }
+  console.log('[seed] voters created = 50');
+  console.log(`[seed] turnouts → 2020: ${turn2020}, 2025: ${turn2025}`);
+
+  // Recompute per-booth predicted leaning onto BoothVoter for both years.
+  await recomputePredictedLeaning(e2025.id);
+  await recomputePredictedLeaning(e2020.id);
+
+  // Plus the original demo voters (non-Biharsharif, no booth placement)
   const DEMO_OUTSIDE = [
     {
       firstName: 'PRIYA', lastName: 'SHARMA', relFirstName: 'RAJESH', relLastName: 'SHARMA',
       age: 28, gender: Gender.Female, epic: 'DEL5827493', mobile: '9123456780',
       state: 'Delhi', parlNo: '5', parlName: 'North East Delhi',
       assemblyNo: '64', assemblyName: 'Karawal Nagar',
-      pollingStationName: 'Government School Block A', partNumber: '142',
-      partName: 'Karawal Nagar Block A', partSerial: '47',
       caste: 'Brahmin', community: 'Gen', category: 'General', occupation: 'Teacher', language: 'Hindi',
     },
     {
@@ -437,8 +489,6 @@ async function main() {
       age: 35, gender: Gender.Male, epic: 'GUJ1029384', mobile: '9988776655',
       state: 'Gujarat', parlNo: '7', parlName: 'Gandhinagar',
       assemblyNo: '33', assemblyName: 'Sabarmati',
-      pollingStationName: 'Municipal Primary School', partNumber: '98',
-      partName: 'Sabarmati North Ward', partSerial: '215',
       caste: 'Patel', community: 'OBC', category: 'Backward', occupation: 'Business', language: 'Gujarati',
     },
   ];
@@ -447,41 +497,7 @@ async function main() {
   }
   console.log('[seed] demo outside voters added');
 
-  // ─── VoterTurnout — ~70% in 2020, ~55% in 2025 ───────────────
-  await prisma.voterTurnout.deleteMany({
-    where: { voter: { epic: { startsWith: 'BHS' } } },
-  });
-  let turn2020 = 0;
-  let turn2025 = 0;
-  for (const { id } of voters) {
-    const did2020 = deterministic(id * 7, 100) < 70;
-    const did2025 = deterministic(id * 11, 100) < 55;
-    if (did2020) {
-      await prisma.voterTurnout.create({
-        data: {
-          voterId: id,
-          electionId: e2020.id,
-          voted: true,
-          polledAt: new Date('2020-11-07T11:00:00Z'),
-        },
-      });
-      turn2020++;
-    }
-    if (did2025) {
-      await prisma.voterTurnout.create({
-        data: {
-          voterId: id,
-          electionId: e2025.id,
-          voted: true,
-          polledAt: new Date('2025-11-05T10:00:00Z'),
-        },
-      });
-      turn2025++;
-    }
-  }
-  console.log(`[seed] turnouts → 2020: ${turn2020}, 2025: ${turn2025}`);
-
-  // ─── Sample cohort ────────────────────────────────────────────
+  // ─── Sample cohorts ───────────────────────────────────────────
   await prisma.cohort.deleteMany({});
   await prisma.cohort.create({
     data: {
@@ -505,12 +521,16 @@ async function main() {
         assemblyName: 'Biharsharif',
         caste: 'Pasmanda Muslim',
         gender: 'Female',
-        votedIn: [2025],
-        notVotedIn: [2020],
+        votedIn: [e2025.id],
+        notVotedIn: [e2020.id],
       },
     },
   });
   console.log('[seed] sample cohorts created');
+
+  // ─── Master data (geography hierarchy + lookup lists) ─────────────
+  const master = await syncMasterFromData();
+  console.log('[seed] master synced →', JSON.stringify(master));
 
   console.log('[seed] done.');
 }

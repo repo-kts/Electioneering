@@ -88,8 +88,14 @@ export async function assembleStrategyBrief(
   const [mappedVoters, votersMissingMobile, votersMissingHouse, votersMissingPs] = await Promise.all([
     prisma.voter.count({ where: votersWhere }),
     prisma.voter.count({ where: { ...votersWhere, OR: [{ mobile: null }, { mobile: '' }] } }),
-    prisma.voter.count({ where: { ...votersWhere, OR: [{ houseNumber: null }, { houseNumber: '' }] } }),
-    prisma.voter.count({ where: { ...votersWhere, pollingStationId: null } }),
+    // Roll entries for this election with no house number.
+    prisma.boothVoter.count({
+      where: { electionId, voter: votersWhere, OR: [{ houseNumber: null }, { houseNumber: '' }] },
+    }),
+    // Voters in this assembly not placed on any booth for this election.
+    prisma.voter.count({
+      where: { ...votersWhere, NOT: { boothVoters: { some: { electionId } } } },
+    }),
   ]);
 
   const swing = targets.items

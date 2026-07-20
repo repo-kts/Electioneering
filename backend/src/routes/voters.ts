@@ -7,6 +7,7 @@ import {
   buildVoterWhere,
   passesLeaningFilter,
   aggregate,
+  attachElectionFields,
 } from '../services/segmentation.js';
 import { classifyName } from '../services/nameClassifier.js';
 import { normalizeCommunity } from '../services/voterValidation.js';
@@ -100,6 +101,32 @@ const bulkSchema = z.object({
   voters: z.array(voterSchema).min(1),
 });
 
+// Drop per-election roll fields (now on BoothVoter) before writing a Voter.
+// Single/bulk manual entry has no election context, so we persist stable
+// identity + demographics only.
+function stripRollFields<T extends Record<string, unknown>>(v: T) {
+  const {
+    pollingStationName,
+    pollingStationAddress,
+    partNumber,
+    partName,
+    partSerial,
+    houseNumber,
+    sectionNo,
+    sectionName,
+    ...voter
+  } = v;
+  void pollingStationName;
+  void pollingStationAddress;
+  void partNumber;
+  void partName;
+  void partSerial;
+  void houseNumber;
+  void sectionNo;
+  void sectionName;
+  return voter;
+}
+
 // GET /api/voters
 router.get(
   '/',
@@ -138,12 +165,20 @@ router.post(
     const where = buildVoterWhere(c);
     // Pull a generous slice; predicted-leaning filter applied in JS.
     // For huge datasets, push down via raw SQL later.
-    const candidate = await prisma.voter.findMany({
+    const rows = await prisma.voter.findMany({
       where,
       orderBy: { createdAt: 'desc' },
       take: c.take + c.skip + 500, // headroom for leaning filter
       skip: 0,
+      include: {
+        boothVoters: {
+          where: c.electionId ? { electionId: c.electionId } : undefined,
+          include: { booth: { include: { pollingStation: true } } },
+        },
+      },
     });
+    // Flatten each voter's per-election booth attributes for the selected election.
+    const candidate = attachElectionFields(rows, c.electionId);
     const filtered = candidate.filter((v) => passesLeaningFilter(v, c));
     const total = filtered.length;
     const items = filtered.slice(c.skip, c.skip + c.take);
@@ -170,7 +205,7 @@ router.get(
 router.post(
   '/',
   asyncHandler(async (req, res) => {
-    const data = enrichVoter(voterSchema.parse(req.body));
+    const data = stripRollFields(enrichVoter(voterSchema.parse(req.body)));
     const voter = await prisma.voter.create({ data });
     res.status(201).json(voter);
   }),
@@ -182,7 +217,7 @@ router.post(
   asyncHandler(async (req, res) => {
     const { voters } = bulkSchema.parse(req.body);
     const result = await prisma.voter.createMany({
-      data: voters.map(enrichVoter),
+      data: voters.map((v) => stripRollFields(enrichVoter(v))),
       skipDuplicates: true,
     });
     res.status(201).json({ inserted: result.count, requested: voters.length });
@@ -228,7 +263,7 @@ router.put(
   '/:id',
   asyncHandler(async (req, res) => {
     const id = Number(req.params.id);
-    const data = voterSchema.partial().parse(req.body);
+    const data = stripRollFields(voterSchema.partial().parse(req.body));
     const voter = await prisma.voter.update({ where: { id }, data });
     res.json(voter);
   }),
