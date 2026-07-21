@@ -2,15 +2,8 @@ import { useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { MapContainer, TileLayer, CircleMarker, Tooltip, Popup, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
-
-function colorFor(s) {
-  if (!s) return '#94a3b8';
-  let h = 0;
-  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
-  return `hsl(${h % 360} 65% 50%)`;
-}
-const pct = (n) => `${((n ?? 0) * 100).toFixed(1)}%`;
-const num = (n) => (n ?? 0).toLocaleString();
+// Share the app-wide palette/formatters so the map matches every other chart.
+import { colorFor, pct, num } from '../elections/helpers.js';
 
 function FitBounds({ points }) {
   const map = useMap();

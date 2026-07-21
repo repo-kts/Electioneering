@@ -125,7 +125,15 @@ router.get('/voter', (req, res) => {
   const sample = req.query.sample === '1';
   const format = String(req.query.format ?? '').toLowerCase();
   const electionType = String(req.query.electionType ?? '').trim();
-  const rows = sample ? [VOTER_SAMPLE] : [];
+  const electionId = Number(req.query.electionId);
+  const hasElectionId = Number.isFinite(electionId) && electionId > 0;
+  // Blank template with only the Election ID pre-filled in row 2 (unless a full
+  // sample was explicitly requested).
+  const rows = sample
+    ? [hasElectionId ? { ...VOTER_SAMPLE, 'Election ID': electionId } : VOTER_SAMPLE]
+    : hasElectionId
+      ? [{ 'Election ID': electionId }]
+      : [];
   const slug = electionType ? electionType.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '') : '';
   const base = sample ? 'voters_sample' : 'voters_template';
   sendSheet(res, VOTER_HEADERS, rows, slug ? `${base}_${slug}` : base, format, 'Voters');
@@ -139,11 +147,12 @@ router.get('/form20', (req, res) => {
     .filter(Boolean);
   const format = String(req.query.format ?? '').toLowerCase();
   const sample = req.query.sample === '1';
+  const electionIdParam = Number(req.query.electionId);
+  const hasElectionId = Number.isFinite(electionIdParam) && electionIdParam > 0;
+  const electionId = hasElectionId ? electionIdParam : 1;
   const headers = [
     'electionId',
     'serial',
-    'boothName',
-    'pollingStation',
     ...candidates,
     'rejected',
     'nota',
@@ -154,16 +163,17 @@ router.get('/form20', (req, res) => {
   if (sample) {
     const validSum = 100 * candidates.length;
     rows.push({
-      electionId: 1,
+      electionId,
       serial: 1,
-      boothName: 'Booth 1 — Room A',
-      pollingStation: 'Government Primary School, Tiracol',
       ...Object.fromEntries(candidates.map((c) => [c, 100])),
       rejected: 0,
       nota: 5,
       total: validSum + 5,
       tendered: 0,
     });
+  } else if (hasElectionId) {
+    // Blank template with only the Election ID pre-filled in row 2.
+    rows.push({ electionId });
   }
   sendSheet(res, headers, rows, sample ? 'form20_sample' : 'form20_template', format, 'Form20');
 });

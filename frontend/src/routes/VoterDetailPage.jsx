@@ -34,6 +34,7 @@ export default function VoterDetailPage() {
   const [tab, setTab] = useState('voters');
   const [historyQuery, setHistoryQuery] = useState('');
   const [preview, setPreview] = useState(null);
+  const [uploadProgress, setUploadProgress] = useState(null); // { done, total } during a batched import
   const { show } = useToast();
   const { hasRole } = useAuth();
   const qc = useQueryClient();
@@ -74,22 +75,46 @@ export default function VoterDetailPage() {
     onError: (e) => show(e.message || 'Upload failed', 'error'),
   });
 
+  // Large rolls (30k+) are committed in batches so no single request is huge and
+  // the user sees live progress. Everything (incl. Election ID) is in the rows.
+  const BATCH = 2000;
   const commitPreviewM = useMutation({
-    mutationFn: (rows) =>
-      // Everything (incl. the Election ID) comes from the sheet.
-      api.commitVoters({ fileName: preview.file, source: 'Excel/CSV upload', rows }),
+    mutationFn: async (rows) => {
+      let inserted = 0, linked = 0, skipped = 0, electionId = null;
+      setUploadProgress({ done: 0, total: rows.length });
+      for (let i = 0; i < rows.length; i += BATCH) {
+        const chunk = rows.slice(i, i + BATCH);
+        const isLast = i + BATCH >= rows.length;
+        const res = await api.commitVoters({
+          fileName: preview.file,
+          source: 'Excel/CSV upload',
+          rows: chunk,
+          finalize: isLast,
+          totalRows: rows.length,
+        });
+        inserted += res.inserted || 0;
+        linked += res.linked || 0;
+        skipped += res.skipped || 0;
+        electionId = res.electionId;
+        setUploadProgress({ done: Math.min(i + BATCH, rows.length), total: rows.length });
+      }
+      return { inserted, linked, skipped, electionId };
+    },
     onSuccess: (res) => {
-      const parts = [`${res.inserted} voters`];
+      const parts = [`${res.inserted} voters added`];
       if (res.linked != null) parts.push(`${res.linked} mapped to booths`);
       if (res.skipped) parts.push(`${res.skipped} skipped`);
       show(parts.join(' · '), res.skipped ? 'warn' : 'success');
-      if (res.errors?.length) console.warn('upload errors', res.errors);
+      setUploadProgress(null);
       setPreview(null);
       qc.invalidateQueries({ queryKey: ['voters', 'list'] });
       qc.invalidateQueries({ queryKey: ['uploads', 'history'] });
       setTab('voters');
     },
-    onError: (e) => show(e.message || 'Commit failed', 'error'),
+    onError: (e) => {
+      setUploadProgress(null);
+      show(e.message || 'Commit failed', 'error');
+    },
   });
 
   const history = historyQ.data ?? [];
@@ -177,6 +202,22 @@ export default function VoterDetailPage() {
                 <FormatCard kind="voter" />
               </div>
             </>
+          )}
+          {uploadProgress && (
+            <div className="rounded-sm border border-slate-300 bg-white p-4">
+              <div className="mb-2 flex items-center justify-between text-sm">
+                <span className="font-medium text-slate-800">Importing voters…</span>
+                <span className="tabular-nums text-slate-500">
+                  {uploadProgress.done.toLocaleString()} / {uploadProgress.total.toLocaleString()}
+                </span>
+              </div>
+              <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
+                <div
+                  className="h-full rounded-full bg-slate-900 transition-all"
+                  style={{ width: `${uploadProgress.total ? Math.round((uploadProgress.done / uploadProgress.total) * 100) : 0}%` }}
+                />
+              </div>
+            </div>
           )}
           {preview && (
             <UploadPreview

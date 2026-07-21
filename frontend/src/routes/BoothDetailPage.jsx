@@ -11,6 +11,7 @@ import FilterableTable from '../components/analytics/FilterableTable.jsx';
 import DraggablePanel from '../components/analytics/DraggablePanel.jsx';
 import { api } from '../lib/api.js';
 import { partyColor, colorForParty, benchmarkFor } from '../components/elections/helpers.js';
+import { boothStory } from '../components/analytics/narrative.js';
 
 function colorFor(s) {
   if (!s) return '#94a3b8';
@@ -100,6 +101,18 @@ function Recommendations({ benchmark, priority, recommendations }) {
         </div>
       )}
     </Panel>
+  );
+}
+
+// Plain-language read of the booth — the first thing an advisor should see.
+function BoothBanner({ d }) {
+  const s = boothStory(d);
+  if (!s.headline) return null;
+  return (
+    <div className="mb-4 border border-slate-200 border-l-4 border-l-accent-500 bg-[#fbfaf7] px-4 py-3">
+      <div className="text-sm font-semibold text-slate-900">{s.headline}</div>
+      {s.detail && <div className="mt-0.5 text-sm text-slate-600">{s.detail}</div>}
+    </div>
   );
 }
 
@@ -195,7 +208,10 @@ export default function BoothDetailPage() {
     <div>
       <Breadcrumbs
         items={[
-          { label: 'Elections', to: '/elections' },
+          {
+            label: d?.election?.electionType || 'Elections',
+            to: d?.election?.electionType === 'Lok Sabha Election' ? '/elections/lok-sabha' : '/elections/assembly',
+          },
           { label: electionName, to: `/elections/${electionId}` },
           { label: d ? `PS-${d.ps.serial}` : 'Booth' },
         ]}
@@ -208,6 +224,14 @@ export default function BoothDetailPage() {
 
       {d && (
         <>
+          {/* Plain-language read + action first, so the "what to do" leads. */}
+          <BoothBanner d={d} />
+          <Recommendations
+            benchmark={benchmark}
+            priority={d.priority}
+            recommendations={d.recommendations}
+          />
+
           {/* Hero — booth details on the left, location map on the right */}
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(320px,0.85fr)]">
             <div className="flex flex-col border border-slate-300 bg-white">
@@ -388,12 +412,6 @@ export default function BoothDetailPage() {
             />
           </DraggablePanel>
 
-          {/* Recommendations — last */}
-          <Recommendations
-            benchmark={benchmark}
-            priority={d.priority}
-            recommendations={d.recommendations}
-          />
         </>
       )}
     </div>

@@ -10,7 +10,7 @@ import {
 } from '../services/parseUpload.js';
 import { validateVoter, type VoterClean } from '../services/voterValidation.js';
 import { recomputePredictedLeaning, linkRollToBooths } from '../services/inference.js';
-import { upsertPollingStation, upsertBooth, upsertBoothVoter } from '../services/booths.js';
+import { upsertPollingStation, upsertBooth } from '../services/booths.js';
 
 const router = Router();
 
@@ -93,15 +93,20 @@ function splitVoter(v: VoterClean) {
   };
 }
 
-// POST /api/uploads/voters/commit  → persist preview rows.
+// POST /api/uploads/voters/commit  → persist a BATCH of preview rows.
 // Everything comes from the sheet. Each row carries an `electionId` column
-// (created in All-Master). Voters are upserted by stable EPIC (details refreshed
-// on re-upload); their fixed geography is backfilled from the election; and each
-// is placed on a Booth (by roll Part Number == booth serial) via a BoothVoter.
+// (created in All-Master). Large rolls (30k+) are sent from the client in
+// batches; each call bulk-inserts one batch. Voters are CREATE-ONLY here (new
+// EPICs added, existing left as-is — corrections use the Edit form); their fixed
+// geography is backfilled from the election; and each is placed on a Booth (by
+// roll Part Number == booth serial) via a BoothVoter. `finalize` (default true,
+// set by the client only on the last batch) recomputes leaning + logs history.
 const voterCommitSchema = z.object({
   fileName: z.string(),
   source: z.string().default('Excel · API'),
   rows: z.array(z.record(z.string(), z.any())),
+  finalize: z.boolean().optional(),
+  totalRows: z.coerce.number().int().optional(), // grand total across batches (for history)
 });
 
 /** Pull the single election id shared by all rows (from the sheet column). */
@@ -125,7 +130,8 @@ function resolveElectionIdFromRows(rows: Array<Record<string, unknown>>): number
 router.post(
   '/voters/commit',
   asyncHandler(async (req, res) => {
-    const { fileName, source, rows } = voterCommitSchema.parse(req.body);
+    const { fileName, source, rows, totalRows } = voterCommitSchema.parse(req.body);
+    const finalize = req.body?.finalize ?? true;
 
     const electionId = resolveElectionIdFromRows(rows as Array<Record<string, unknown>>);
     const election = await prisma.election.findUnique({ where: { id: electionId } });
@@ -134,21 +140,7 @@ router.post(
       return;
     }
 
-    const cleaned: VoterClean[] = [];
-    const errors: Array<{ row: number; field: string; message: string }> = [];
-
-    rows.forEach((r, i) => {
-      const v = validateVoter(r as Record<string, unknown>);
-      if (v.ok && v.value) {
-        cleaned.push(v.value);
-      } else {
-        for (const [field, msg] of Object.entries(v.errors)) {
-          errors.push({ row: i + 1, field, message: msg });
-        }
-      }
-    });
-
-    // Fixed-for-the-file geography comes from the election, not per-row columns.
+    // Validate + split each row into stable voter data, station, and roll.
     const geo = {
       state: election.state,
       parlNo: election.parlNo,
@@ -156,64 +148,86 @@ router.post(
       assemblyNo: election.assemblyNo,
       assemblyName: election.assemblyName,
     };
-
-    let inserted = 0;
-    let linked = 0;
-    for (const c of cleaned) {
-      const { voter, station, roll } = splitVoter(c);
-      const voterData = { ...voter, ...geo };
-      const saved = await prisma.voter.upsert({
-        where: { epic: voter.epic },
-        create: voterData,
-        update: voterData,
-        select: { id: true },
-      });
-      inserted++;
-
+    const voterData: Array<Record<string, unknown>> = [];
+    const perRow: Array<{ epic: string; serial: number | null; station: { name: string | null; boothName: string | null; address: string | null }; roll: Record<string, string | null> }> = [];
+    let rowErrors = 0;
+    for (const r of rows) {
+      const v = validateVoter(r as Record<string, unknown>);
+      if (!v.ok || !v.value) { rowErrors++; continue; }
+      const { voter, station, roll } = splitVoter(v.value);
+      voterData.push({ ...voter, ...geo });
       const serial = Number(roll.partNumber);
-      if (Number.isInteger(serial) && serial >= 1) {
-        const pollingStationId = await upsertPollingStation(
-          prisma,
-          {
-            assemblyNo: election.assemblyNo,
-            assemblyName: election.assemblyName,
-            name: station.name,
-            address: station.address,
-          },
-          serial,
-        );
-        const boothId = await upsertBooth(prisma, { electionId, pollingStationId, serial, name: station.boothName || station.name });
-        await upsertBoothVoter(prisma, { electionId, boothId, voterId: saved.id, roll });
-        linked++;
+      perRow.push({ epic: voter.epic, serial: Number.isInteger(serial) && serial >= 1 ? serial : null, station, roll });
+    }
+
+    // ── Resolve booths ONCE (cached by serial), creating only missing ones ──
+    const serialToBooth = new Map<number, number>();
+    for (const b of await prisma.booth.findMany({ where: { electionId }, select: { id: true, serial: true } })) {
+      serialToBooth.set(b.serial, b.id);
+    }
+    const newSerials = new Map<number, typeof perRow[number]['station']>();
+    for (const r of perRow) {
+      if (r.serial == null || serialToBooth.has(r.serial) || newSerials.has(r.serial)) continue;
+      newSerials.set(r.serial, r.station);
+    }
+    for (const [serial, station] of newSerials) {
+      const pollingStationId = await upsertPollingStation(
+        prisma,
+        { assemblyNo: election.assemblyNo, assemblyName: election.assemblyName, name: station.name, address: station.address },
+        serial,
+      );
+      const boothId = await upsertBooth(prisma, { electionId, pollingStationId, serial, name: station.boothName || station.name });
+      serialToBooth.set(serial, boothId);
+    }
+
+    // ── Bulk create voters (new EPICs only), then resolve epic→id ──
+    const created = await prisma.voter.createMany({ data: voterData as never, skipDuplicates: true });
+    const epics = [...new Set(perRow.map((r) => r.epic))];
+    const found = await prisma.voter.findMany({ where: { epic: { in: epics } }, select: { id: true, epic: true } });
+    const epicToId = new Map(found.map((v) => [v.epic, v.id]));
+
+    // ── Bulk create the per-election booth links ──
+    const bvData = perRow
+      .filter((r) => r.serial != null && serialToBooth.has(r.serial) && epicToId.has(r.epic))
+      .map((r) => ({
+        electionId,
+        boothId: serialToBooth.get(r.serial as number) as number,
+        voterId: epicToId.get(r.epic) as number,
+        partNumber: r.roll.partNumber || null,
+        partName: r.roll.partName || null,
+        partSerial: r.roll.partSerial || null,
+        houseNumber: r.roll.houseNumber || null,
+        sectionNo: r.roll.sectionNo || null,
+        sectionName: r.roll.sectionName || null,
+      }));
+    const linkedRes = bvData.length ? await prisma.boothVoter.createMany({ data: bvData, skipDuplicates: true }) : { count: 0 };
+
+    let history = null;
+    if (finalize) {
+      history = await prisma.uploadHistory.create({
+        data: {
+          fileName,
+          source,
+          kind: 'voter',
+          records: totalRows ?? created.count,
+          constituency: `${election.assemblyNo}-${election.assemblyName}`,
+          status: 'validated',
+        },
+      });
+      try {
+        await recomputePredictedLeaning(electionId);
+      } catch (err) {
+        console.error('[inference] recompute after voter upload failed', err);
       }
     }
 
-    const history = await prisma.uploadHistory.create({
-      data: {
-        fileName,
-        source,
-        kind: 'voter',
-        records: inserted,
-        constituency: `${election.assemblyNo}-${election.assemblyName}`,
-        status: errors.length === 0 ? 'validated' : 'failed',
-        errorMsg: errors.length ? `${errors.length} field error(s) across ${rows.length - cleaned.length} row(s)` : null,
-      },
-    });
-
-    // Recompute predicted leaning if Form 20 already exists for this election.
-    try {
-      await recomputePredictedLeaning(electionId);
-    } catch (err) {
-      console.error('[inference] recompute after voter upload failed', err);
-    }
-
     res.status(201).json({
-      inserted,
+      inserted: created.count,   // NEW voters in this batch
+      linked: linkedRes.count,   // new booth links in this batch
       requested: rows.length,
-      skipped: rows.length - cleaned.length,
-      linked,
+      skipped: rowErrors,
       electionId,
-      errors,
+      finalized: finalize,
       history,
     });
   }),
@@ -228,11 +242,12 @@ const form20CommitSchema = z.object({
   source: z.string().default('Form 20 Excel · API'),
   electionId: z.coerce.number().int(),
   candidates: z.array(z.string().trim().min(1)).min(1),
+  // Form 20 rows carry only serial (= booth number) + per-candidate votes +
+  // tallies. Booth name / polling station come from the voter roll, matched by
+  // this serial — they are NOT in the Form 20 sheet.
   rows: z.array(
     z.object({
       serial: z.coerce.number().int().min(1),
-      name: z.string().optional(),      // polling station (building) name
-      boothName: z.string().optional(), // booth's own name
       votes: z.record(z.string(), z.coerce.number().int().nonnegative()),
       rejectedVotes: z.coerce.number().int().nonnegative().default(0),
       notaVotes: z.coerce.number().int().nonnegative().default(0),
@@ -267,21 +282,35 @@ router.post(
       }
 
       for (const row of body.rows) {
-        // Building = polling station name; booth = booth name (falls back to it).
-        const pollingStationId = await upsertPollingStation(
-          tx,
-          { assemblyNo: election.assemblyNo, assemblyName: election.assemblyName, name: row.name },
-          row.serial,
-        );
-        const boothId = await upsertBooth(tx, {
-          electionId: election.id,
-          pollingStationId,
-          serial: row.serial,
-          name: row.boothName || row.name,
+        // Match the booth by (election, serial). The voter roll owns the booth
+        // name + building — so we NEVER overwrite them here; we only set the
+        // vote tallies. If the booth doesn't exist yet (Form 20 uploaded before
+        // the roll), create it with a serial-based placeholder building that the
+        // voter upload later refines.
+        const tallies = {
           rejectedVotes: row.rejectedVotes,
           notaVotes: row.notaVotes,
           tenderedVotes: row.tenderedVotes,
+        };
+        const existing = await tx.booth.findUnique({
+          where: { electionId_serial: { electionId: election.id, serial: row.serial } },
+          select: { id: true },
         });
+        let boothId: number;
+        if (existing) {
+          await tx.booth.update({ where: { id: existing.id }, data: tallies });
+          boothId = existing.id;
+        } else {
+          const pollingStationId = await upsertPollingStation(
+            tx,
+            { assemblyNo: election.assemblyNo, assemblyName: election.assemblyName, name: null },
+            row.serial,
+          );
+          const created = await tx.booth.create({
+            data: { electionId: election.id, pollingStationId, serial: row.serial, ...tallies },
+          });
+          boothId = created.id;
+        }
         const voteEntries = Object.entries(row.votes)
           .map(([candName, v]) => ({
             boothId,

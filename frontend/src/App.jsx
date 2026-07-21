@@ -6,7 +6,7 @@ import LoginPage from './routes/LoginPage.jsx';
 import VoterDetailPage from './routes/VoterDetailPage.jsx';
 import Form20Page from './routes/Form20Page.jsx';
 import SegmentPage from './routes/SegmentPage.jsx';
-import ConstituencyListPage from './routes/ConstituencyListPage.jsx';
+import GeographyExplorer from './routes/GeographyExplorer.jsx';
 import ElectionOverviewPage from './routes/ElectionOverviewPage.jsx';
 import BoothDetailPage from './routes/BoothDetailPage.jsx';
 import CandidateReportPage from './routes/CandidateReportPage.jsx';
@@ -39,9 +39,9 @@ export default function App() {
         <Route path="/form-20" element={<ProtectedRoute roles={DATA_ROLES}><Form20Page /></ProtectedRoute>} />
 
         {/* Results & insights — three entry points, then per-constituency drill-down */}
-        <Route path="/elections/assembly" element={<ProtectedRoute roles={ADMIN}><ConstituencyListPage title="Assembly Election" subtitle="All assembly constituencies on record. Open one to see its results across every year — switch years from the dropdown inside." matchType="Assembly Election" /></ProtectedRoute>} />
-        <Route path="/elections/lok-sabha" element={<ProtectedRoute roles={ADMIN}><ConstituencyListPage title="Lok Sabha Election" subtitle="All Lok Sabha segments on record. Open one to see its results across every year — switch years from the dropdown inside." matchType="Lok Sabha Election" /></ProtectedRoute>} />
-        <Route path="/elections/booths" element={<ProtectedRoute roles={ADMIN}><ConstituencyListPage title="Booth wise election" subtitle="Pick a constituency to jump straight into its booth-by-booth results. Choose any year from the dropdown once inside." boothMode /></ProtectedRoute>} />
+        <Route path="/elections/assembly" element={<ProtectedRoute roles={ADMIN}><GeographyExplorer title="Assembly Election" subtitle="Drill from state to seat to constituency. Open one to see its results across every year — switch years from the dropdown inside." matchType="Assembly Election" /></ProtectedRoute>} />
+        <Route path="/elections/lok-sabha" element={<ProtectedRoute roles={ADMIN}><GeographyExplorer title="Lok Sabha Election" subtitle="Drill from state to parliamentary seat. Open one to see its results across every year — switch years from the dropdown inside." matchType="Lok Sabha Election" /></ProtectedRoute>} />
+        <Route path="/elections/booths" element={<ProtectedRoute roles={ADMIN}><GeographyExplorer title="Booth wise election" subtitle="Drill to a constituency to jump straight into its booth-by-booth results. Choose any year from the dropdown once inside." boothMode /></ProtectedRoute>} />
         <Route path="/elections/:id" element={<ProtectedRoute roles={ADMIN}><ElectionOverviewPage /></ProtectedRoute>} />
         <Route path="/elections/:id/booth/:psId" element={<ProtectedRoute roles={ADMIN}><BoothDetailPage /></ProtectedRoute>} />
         <Route path="/elections/:id/candidate/:name" element={<ProtectedRoute roles={ADMIN}><CandidateReportPage /></ProtectedRoute>} />

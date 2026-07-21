@@ -27,8 +27,6 @@ const VOTER_FIELDS = [
 const FORM20_FIELDS = [
   ['electionId', 'number * (from Master Data → Elections)', '1'],
   ['serial', 'number * (= booth / PS #)', '1'],
-  ['boothName', 'text (booth’s own name)', 'Booth 1 — Room A'],
-  ['pollingStation', 'text (building it sits in)', 'Govt Primary School, Tiracol'],
   ['<candidate name>', 'one number column per candidate', '369'],
   ['rejected', 'number', '0'],
   ['nota', 'number', '13'],
@@ -50,10 +48,11 @@ const VOTER_NOTES = (
 const FORM20_NOTES = (
   <>
     Put the <strong>Election ID</strong> (from Master Data → Elections) in every
-    row. Each candidate gets its own column — the header becomes the candidate
-    name. <code>serial</code> is the booth / polling-station number. Candidate{' '}
-    <strong>party &amp; alliance</strong> are mapped afterwards in{' '}
-    <strong>Master Data → Candidates</strong>. Supported:{' '}
+    row. <code>serial</code> is the booth number — the booth name &amp; polling
+    station come from the voter roll (matched by this serial), so they aren't in
+    this sheet. Each candidate gets its own column — the header becomes the
+    candidate name. Candidate <strong>party &amp; alliance</strong> are mapped
+    afterwards in <strong>Master Data → Candidates</strong>. Supported:{' '}
     <code>.xlsx .xlsm .xlsb .xls .ods .fods .csv .tsv</code>.
   </>
 );

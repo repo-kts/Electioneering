@@ -91,8 +91,9 @@ router.delete(
 // ─── Candidates (dynamic per election) ────────────────────────────────
 const candidateSchema = z.object({
   name: z.string().trim().min(1),
-  party: z.string().trim().optional(),
-  alliance: z.string().trim().optional(),
+  // nullable so the UI can both set and CLEAR party/alliance
+  party: z.string().trim().nullish(),
+  alliance: z.string().trim().nullish(),
   position: z.coerce.number().int().nonnegative().optional(),
 });
 

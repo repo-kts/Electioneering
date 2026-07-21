@@ -39,12 +39,19 @@ async function request(path, { method = 'GET', body, headers = {}, signal } = {}
         signal,
     });
     if (!res.ok) {
-        let detail = '';
+        // Prefer the backend's plain-language `message`; never surface raw JSON,
+        // status codes, or technical error names to the user.
+        let message = '';
         try {
             const j = await res.json();
-            detail = j.message || j.error || JSON.stringify(j);
+            if (j && typeof j.message === 'string') message = j.message;
         } catch {
-            detail = await res.text();
+            /* non-JSON body — ignore, fall back below */
+        }
+        if (!message) {
+            message = res.status >= 500
+                ? 'Something went wrong. Please try again.'
+                : "Couldn't complete that request. Please check your input and try again.";
         }
         if (res.status === 401 && !NO_REDIRECT_PATHS.has(path)) {
             try {
@@ -57,7 +64,7 @@ async function request(path, { method = 'GET', body, headers = {}, signal } = {}
                 window.location.href = `/login?next=${next}`;
             }
         }
-        const err = new Error(`${res.status} ${res.statusText}${detail ? ' — ' + detail : ''}`);
+        const err = new Error(message);
         err.status = res.status;
         throw err;
     }
@@ -215,17 +222,19 @@ export const api = {
 // Direct download URLs (use as href / window.open) — only for PUBLIC endpoints
 // (no Authorization header is sent by the browser for plain anchors).
 export const downloadUrls = {
-    voterTemplate: (sample = false, format = '') => {
+    voterTemplate: (sample = false, format = '', electionId = null) => {
         const p = new URLSearchParams();
         if (format) p.set('format', format);
         if (sample) p.set('sample', '1');
+        if (electionId != null) p.set('electionId', String(electionId));
         const qs = p.toString();
         return `${BASE}/api/templates/voter${qs ? '?' + qs : ''}`;
     },
-    form20Template: (sample = false, format = '') => {
+    form20Template: (sample = false, format = '', electionId = null) => {
         const p = new URLSearchParams();
         if (format) p.set('format', format);
         if (sample) p.set('sample', '1');
+        if (electionId != null) p.set('electionId', String(electionId));
         const qs = p.toString();
         return `${BASE}/api/templates/form20${qs ? '?' + qs : ''}`;
     },
@@ -246,14 +255,14 @@ export async function downloadBlob(path, filename, { method = 'GET', body } = {}
         body: isForm ? body : body == null ? undefined : JSON.stringify(body),
     });
     if (!res.ok) {
-        let detail = '';
+        let message = '';
         try {
             const j = await res.json();
-            detail = j.message || j.error || JSON.stringify(j);
+            if (j && typeof j.message === 'string') message = j.message;
         } catch {
-            detail = await res.text();
+            /* ignore non-JSON body */
         }
-        const err = new Error(`${res.status} ${res.statusText}${detail ? ' — ' + detail : ''}`);
+        const err = new Error(message || "Couldn't download that file. Please try again.");
         err.status = res.status;
         throw err;
     }

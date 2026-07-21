@@ -3,6 +3,7 @@ import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import Breadcrumbs from '../components/ui/Breadcrumbs.jsx';
 import { PageHeader, Surface, StatCard, Loading, ErrorBox } from '../components/ui/kit.jsx';
+import ActionPlan from '../components/analytics/ActionPlan.jsx';
 import { api } from '../lib/api.js';
 
 const num = (n) => Math.round(n ?? 0).toLocaleString();
@@ -14,11 +15,13 @@ const PRIORITY = {
 const FAVORABLE = ['Safe-win', 'Marginal-win', 'Swing'];
 const FLIPPABLE = ['Swing', 'Marginal-loss'];
 
-export default function StrategyPage() {
-  const { id } = useParams();
-  const electionId = Number(id);
-  const [params] = useSearchParams();
-  const [candidate, setCandidate] = useState(params.get('candidate') || '');
+/**
+ * The "Win plan" — a plain-language action plan on top, then a live result
+ * simulator and the full strategy brief. Rendered as a standalone page (default)
+ * and inside the constituency page's "Win plan" tab (StrategyContent).
+ */
+export function StrategyContent({ electionId, initialCandidate = '' }) {
+  const [candidate, setCandidate] = useState(initialCandidate);
 
   const electionQ = useQuery({ queryKey: ['election', electionId], queryFn: () => api.getElection(electionId) });
   const targetsQ = useQuery({
@@ -81,7 +84,6 @@ export default function StrategyPage() {
     [items, medianTurnout],
   );
 
-  const electionName = electionQ.data ? `${electionQ.data.assemblyName} ${electionQ.data.electionYear ?? ''}`.trim() : 'Election';
   const won = sim.projMargin > 0;
   const flipped = sim.baseMargin <= 0 && sim.projMargin > 0;
 
@@ -102,20 +104,21 @@ export default function StrategyPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <Breadcrumbs items={[{ label: 'Elections', to: '/elections' }, { label: electionName, to: `/elections/${electionId}` }, { label: 'Win plan' }]} />
-        <PageHeader
-          eyebrow="Path to victory"
-          title="Win plan"
-          subtitle="Pick swing booths to flip and a turnout lift — see the projected result update live. A planning model, not a prediction."
-          actions={
-            <select value={candidate} onChange={(e) => { setCandidate(e.target.value); reset(); }} className="w-auto">
-              <option value="">Auto (leader)</option>
-              {candidates.map((c) => <option key={c.id ?? c.name} value={c.name}>{c.name}</option>)}
-            </select>
-          }
-        />
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="max-w-2xl text-sm text-slate-600">
+          Pick swing booths to flip and a turnout lift — see the projected result update live. A planning model, not a prediction.
+        </p>
+        <label className="flex items-center gap-2 text-sm">
+          <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Candidate</span>
+          <select value={candidate} onChange={(e) => { setCandidate(e.target.value); reset(); }} className="w-auto">
+            <option value="">Auto (leader)</option>
+            {candidates.map((c) => <option key={c.id ?? c.name} value={c.name}>{c.name}</option>)}
+          </select>
+        </label>
       </div>
+
+      {/* ── Plain-language action plan first ── */}
+      <ActionPlan electionId={electionId} candidate={candidate || undefined} />
 
       {targetsQ.isError && <ErrorBox message={targetsQ.error.message} onRetry={() => targetsQ.refetch()} />}
       {targetsQ.isPending && <Loading className="h-40" />}
@@ -253,6 +256,24 @@ export default function StrategyPage() {
           )}
         </>
       )}
+    </div>
+  );
+}
+
+export default function StrategyPage() {
+  const { id } = useParams();
+  const electionId = Number(id);
+  const [params] = useSearchParams();
+  const electionQ = useQuery({ queryKey: ['election', electionId], queryFn: () => api.getElection(electionId) });
+  const electionName = electionQ.data ? `${electionQ.data.assemblyName} ${electionQ.data.electionYear ?? ''}`.trim() : 'Election';
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <Breadcrumbs items={[{ label: 'Elections', to: '/elections' }, { label: electionName, to: `/elections/${electionId}` }, { label: 'Win plan' }]} />
+        <PageHeader eyebrow="Path to victory" title="Win plan" />
+      </div>
+      <StrategyContent electionId={electionId} initialCandidate={params.get('candidate') || ''} />
     </div>
   );
 }

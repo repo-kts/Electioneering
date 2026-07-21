@@ -1,39 +1,40 @@
 import { useMemo, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import BoothMap from '../components/analytics/BoothMap.jsx';
+import { useQuery } from '@tanstack/react-query';
 import AllYearsAnalytics from '../components/analytics/AllYearsAnalytics.jsx';
-import { useToast } from '../context/ToastContext.jsx';
 import {
   BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer,
 } from 'recharts';
 import Breadcrumbs from '../components/ui/Breadcrumbs.jsx';
 import InsightsSection from '../components/analytics/InsightsSection.jsx';
-import StrategyBrief from '../components/analytics/StrategyBrief.jsx';
+import ActionPlan from '../components/analytics/ActionPlan.jsx';
+import BoothExplorer from '../components/analytics/BoothExplorer.jsx';
+import { TimelineContent } from './AssemblyTimelinePage.jsx';
+import { PartyContent } from './PartyAnalyticsPage.jsx';
+import { StrategyContent } from './StrategyPage.jsx';
 import { PageHeader, StatCard, Surface, Button, Loading, ErrorBox } from '../components/ui/kit.jsx';
 import { api } from '../lib/api.js';
-import { partyColor } from '../components/elections/helpers.js';
+import { partyColor, colorFor, pct, num } from '../components/elections/helpers.js';
+import { constituencyStory } from '../components/analytics/narrative.js';
 
-function colorFor(s) {
-  if (!s) return '#94a3b8';
-  const palette = ['#24594b', '#6f4e37', '#5f6f52', '#7a4e57', '#3f5f75', '#8a6f2a', '#574b63', '#6b6f76'];
-  let h = 0;
-  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
-  return palette[h % palette.length];
-}
-const pct = (n) => `${((n ?? 0) * 100).toFixed(1)}%`;
-const num = (n) => (n ?? 0).toLocaleString();
+const TABS = [
+  ['overview', 'Overview'],
+  ['booths', 'Booths'],
+  ['trends', 'Trends'],
+  ['parties', 'Parties'],
+  ['winplan', 'Win plan'],
+];
 
 export default function ElectionOverviewPage() {
   const { id } = useParams();
   const entryId = Number(id); // election we arrived on (latest year of the constituency)
 
-  // '' = all years (default). Otherwise the chosen year's viewId.
-  // Booth-wise entry (?booths=1) lands directly on the latest year's booth grid.
   const [searchParams] = useSearchParams();
+  // '' = all years (default). Otherwise the chosen year's viewId.
   const [selectedYear, setSelectedYear] = useState(
     searchParams.get('booths') ? String(entryId) : '',
   );
+  const [tab, setTab] = useState(searchParams.get('booths') ? 'booths' : (searchParams.get('tab') || 'overview'));
   const showAll = selectedYear === '';
   const viewId = selectedYear ? Number(selectedYear) : entryId;
 
@@ -41,30 +42,21 @@ export default function ElectionOverviewPage() {
     queryKey: ['analytics', 'overview', viewId],
     queryFn: () => api.analyticsOverview(viewId),
   });
-  const boothQ = useQuery({
-    enabled: !showAll,
-    queryKey: ['analytics', 'boothLeaning', viewId],
-    queryFn: () => api.boothLeaning(viewId),
-  });
-
-  const qc = useQueryClient();
-  const { show } = useToast();
-  const [boothView, setBoothView] = useState('grid'); // 'grid' | 'map'
-  const geocode = useMutation({
-    mutationFn: () => api.geocodeBooths(viewId),
-    onSuccess: (r) => {
-      show(`Geocoded ${r.geocoded} of ${r.total} booths`, r.failed ? 'warn' : 'success');
-      qc.invalidateQueries({ queryKey: ['analytics', 'boothLeaning', viewId] });
-      setBoothView('map');
-    },
-    onError: (e) => show(e.message || 'Geocoding failed', 'error'),
-  });
 
   const data = overviewQ.data;
   const election = data?.election;
   const voters = data?.voters;
-  const booths = boothQ.data?.items ?? [];
-  const geocoded = boothQ.data?.geocoded ?? 0;
+
+  // Narrative across every recorded year of this constituency+type.
+  const timelineQ = useQuery({
+    enabled: !!election,
+    queryKey: ['assemblyTimeline', election?.assemblyNo, election?.assemblyName],
+    queryFn: () => api.assemblyTimeline({ assemblyNo: election.assemblyNo, assemblyName: election.assemblyName }),
+  });
+  const story = useMemo(
+    () => constituencyStory(timelineQ.data?.elections ?? [], { electionType: election?.electionType }),
+    [timelineQ.data, election],
+  );
 
   // Map each candidate to their party so BJP/INC keep their theme color everywhere.
   const partyByName = useMemo(() => {
@@ -84,12 +76,10 @@ export default function ElectionOverviewPage() {
   );
 
   const constituency = election ? election.assemblyName : 'Constituency';
-  // Header reflects the mode: constituency name for all-years, name + year otherwise.
   const headerTitle = election
     ? (showAll ? election.assemblyName : `${election.assemblyName} ${election.electionYear ?? ''}`.trim())
     : 'Constituency';
 
-  // Other elections for this same constituency + election type — for the year switcher.
   const yearOptions = useMemo(() => {
     if (!election) return [];
     return (data?.electionsList ?? [])
@@ -101,6 +91,8 @@ export default function ElectionOverviewPage() {
       )
       .sort((a, b) => (b.electionYear ?? 0) - (a.electionYear ?? 0));
   }, [data, election]);
+
+  const viewYear = election?.electionYear;
 
   return (
     <div className="space-y-6">
@@ -121,20 +113,9 @@ export default function ElectionOverviewPage() {
             ? `${election.assemblyNo}-${election.assemblyName}${election.state ? ' · ' + election.state : ''}${showAll ? ` · all ${yearOptions.length || 1} ${yearOptions.length === 1 ? 'year' : 'years'}` : ''}`
             : 'Loading…'}
           actions={
-            <>
-              <Link to="/segment">
-                <Button variant="secondary"><span className="text-slate-700">Voter search</span></Button>
-              </Link>
-              <Link to={`/elections/${viewId}/parties`}>
-                <Button variant="secondary"><span className="text-slate-700">Party analytics →</span></Button>
-              </Link>
-              <Link to={`/elections/${viewId}/timeline`}>
-                <Button variant="secondary"><span className="text-slate-700">Yearly trends →</span></Button>
-              </Link>
-              <Link to={`/elections/${viewId}/strategy`}>
-                <Button variant="primary">Win plan →</Button>
-              </Link>
-            </>
+            <Link to="/segment">
+              <Button variant="secondary"><span className="text-slate-700">Voter search</span></Button>
+            </Link>
           }
         />
 
@@ -165,185 +146,145 @@ export default function ElectionOverviewPage() {
             )}
           </div>
         )}
+
+        {/* Tab nav */}
+        {election && (
+          <div className="mt-4 flex flex-wrap gap-1 border-b border-slate-200">
+            {TABS.map(([key, label]) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setTab(key)}
+                className={`-mb-px border-b-2 px-3.5 py-2 text-sm font-medium transition ${
+                  tab === key
+                    ? 'border-slate-900 text-slate-900'
+                    : 'border-transparent text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {overviewQ.isError && <ErrorBox message={overviewQ.error.message} onRetry={() => overviewQ.refetch()} />}
       {overviewQ.isPending && <Loading className="h-28" />}
 
-      {/* Default view — all-year analytics for the whole constituency */}
-      {election && showAll && (
-        <AllYearsAnalytics
-          electionId={viewId}
-          currentElectionId={viewId}
-          assemblyNo={election.assemblyNo}
-          assemblyName={election.assemblyName}
-        />
-      )}
-
-      {/* Single-year detail — shown when a specific year is picked */}
-      {!showAll && (
-        <div className="space-y-6">
-      {/* KPIs */}
-      {election && (
-        <div className="grid grid-cols-2 border border-slate-300 bg-white md:grid-cols-3 lg:grid-cols-6">
-          <StatCard label="Total voters" value={num(voters?.total)} />
-          <StatCard label="Turnout" value={pct(election.turnout.pct)} sub={`${num(election.turnout.voted)} / ${num(election.turnout.registered)}`} />
-          <StatCard label="Valid votes" value={num(election.totalValid)} />
-          <StatCard label="NOTA" value={num(election.totalNota)} sub={election.totalCast ? pct(election.totalNota / election.totalCast) : ''} />
-          <StatCard label="Leader" value={election.leader?.name ?? '—'} sub={election.leader ? `${pct(election.leader.share)} · ${num(election.leader.votes)}` : ''} tone="green" />
-          <StatCard label="Margin" value={election.leader && election.runnerUp ? num(election.leader.votes - election.runnerUp.votes) : '—'} sub={election.runnerUp ? `over ${election.runnerUp.name}` : ''} />
+      {/* When drilling a single-year analysis while "All years" is selected, we
+          fall back to the latest year — say so plainly. */}
+      {election && showAll && tab !== 'overview' && tab !== 'trends' && (
+        <div className="border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-800">
+          Showing the latest election ({viewYear ?? '—'}) — pick a year above to analyse a different one.
         </div>
       )}
 
-      {/* Booth grid */}
-      <Surface
-        title="Polling stations"
-        subtitle="Leading candidate and valid vote count by booth."
-        right={
-          <div className="flex items-center gap-2">
-            <div className="inline-flex overflow-hidden rounded-md border border-slate-300">
-              {['grid', 'map'].map((v) => (
-                <button
-                  key={v}
-                  onClick={() => setBoothView(v)}
-                  className={`px-3 py-1 text-xs font-medium capitalize transition ${boothView === v ? 'bg-slate-900 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}
-                >
-                  {v}
-                </button>
-              ))}
-            </div>
-            {boothView === 'map' && geocoded < booths.length && (
-              <button
-                onClick={() => geocode.mutate()}
-                disabled={geocode.isPending}
-                className="rounded-md border border-slate-300 bg-white px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-              >
-                {geocode.isPending ? 'Geocoding…' : `Geocode booths (${geocoded}/${booths.length})`}
-              </button>
-            )}
-          </div>
-        }
-      >
-        {boothView === 'map' ? (
-          <BoothMap items={booths} electionId={viewId} />
-        ) : boothQ.isError ? (
-          <ErrorBox message={boothQ.error.message} onRetry={() => boothQ.refetch()} />
-        ) : boothQ.isPending ? (
-          <div className="divide-y divide-slate-200 border border-slate-200">
-            {Array.from({ length: 6 }).map((_, i) => <Loading key={i} className="h-24" />)}
-          </div>
-        ) : (
-          <>
-            <div className="overflow-hidden border border-slate-200">
-              <div className="grid grid-cols-[88px_minmax(0,1fr)_minmax(120px,0.8fr)_120px] gap-3 border-b border-slate-200 bg-[#fbfaf7] px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500 max-md:hidden">
-                <div>Booth</div>
-                <div>Polling station</div>
-                <div>Leader</div>
-                <div className="text-right">Valid</div>
-              </div>
-              {booths.map((ps) => {
-                const reported = (ps.totalValid ?? 0) > 0;
-                const c = colorForName(ps.leader);
-                return (
-                  <Link
-                    key={ps.id}
-                    to={`/elections/${viewId}/booth/${ps.id}`}
-                    className="group grid gap-2 border-b border-slate-100 px-3 py-3 transition last:border-b-0 hover:bg-[#fbfaf7] md:grid-cols-[88px_minmax(0,1fr)_minmax(120px,0.8fr)_120px] md:items-center md:gap-3"
-                  >
-                    <div className="flex items-center gap-2">
-                      <span className="h-2.5 w-2.5 shrink-0" style={{ background: reported ? c : '#cbd5e1' }} />
-                      <span className="text-sm font-semibold text-slate-900">PS-{ps.serial}</span>
-                    </div>
-                    <div className="truncate text-sm text-slate-600" title={ps.name ?? ''}>{ps.name ?? '—'}</div>
-                    {reported ? (
-                      <>
-                        <div className="truncate text-sm font-medium" style={{ color: c }}>{ps.leader ?? '—'} <span className="text-xs font-normal text-slate-500">({pct(ps.leaderShare)})</span></div>
-                        <div className="flex items-center justify-between gap-3 text-sm tabular-nums text-slate-700 md:justify-end">
-                          <span>{num(ps.totalValid)}</span>
-                          <span className="text-slate-400 transition group-hover:text-slate-950">→</span>
-                        </div>
-                      </>
-                    ) : (
-                      <>
-                        <div className="text-sm text-slate-400">No Form 20 data</div>
-                        <div className="text-right text-slate-400">—</div>
-                      </>
-                    )}
-                  </Link>
-                );
-              })}
-            </div>
-            <div className="mt-4 flex flex-wrap gap-3 border-t border-slate-200 pt-4">
-              {[...new Set(booths.filter((b) => b.leader).map((b) => b.leader))].map((l) => (
-                <span key={l} className="flex items-center gap-1.5 text-xs text-slate-600">
-                  <span className="inline-block h-3 w-3" style={{ background: colorForName(l) }} />
-                  {l}
-                </span>
-              ))}
-            </div>
-          </>
-        )}
-      </Surface>
-
-      {election && <StrategyBrief electionId={viewId} candidates={election.candidates ?? []} />}
-
-      {/* Candidate results */}
-      <Surface title="Candidate results" subtitle="Form 20 totals across all polling stations.">
-        <div className="grid grid-cols-1 gap-8 lg:grid-cols-5">
-          <div className="lg:col-span-3">
-            <ResponsiveContainer width="100%" height={320}>
-              <BarChart data={candBars} margin={{ left: 8, right: 8, top: 8, bottom: 56 }}>
-                <CartesianGrid stroke="#e7e5de" vertical={false} />
-                <XAxis dataKey="name" tick={{ fontSize: 11 }} interval={0} angle={-22} textAnchor="end" height={80} />
-                <YAxis tick={{ fontSize: 11 }} />
-                <Tooltip formatter={(v) => num(v)} cursor={{ fill: '#f7f5f0' }} />
-                <Bar dataKey="votes">
-                  {candBars.map((c) => <Cell key={c.name} fill={colorForName(c.name)} />)}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-          <div className="lg:col-span-2">
-            <ResponsiveContainer width="100%" height={170}>
-              <PieChart>
-                <Pie data={donut} dataKey="value" nameKey="name" innerRadius={48} outerRadius={80} paddingAngle={2}>
-                  {donut.map((d) => <Cell key={d.name} fill={colorForName(d.name)} />)}
-                </Pie>
-                <Tooltip formatter={(v, n) => [num(v), n]} />
-              </PieChart>
-            </ResponsiveContainer>
-            <ul className="mt-3 divide-y divide-slate-100">
-              {(election?.candidates ?? []).map((c, i) => (
-                <li key={c.name}>
-                  <Link
-                    to={`/elections/${viewId}/candidate/${encodeURIComponent(c.name)}`}
-                    className="group flex items-center gap-2.5 border-b border-slate-100 py-2.5 transition last:border-b-0 hover:bg-[#fbfaf7]"
-                  >
-                    <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: colorForName(c.name) }} />
-                    <span className="flex-1 truncate text-sm text-slate-700">{c.name}</span>
-                    {i === 0 && <span className="border border-accent-200 bg-accent-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-accent-700">Won</span>}
-                    <span className="w-12 text-right text-sm font-semibold tabular-nums text-slate-900">{pct(c.share)}</span>
-                    <span className="text-xs font-medium text-accent-600 opacity-0 transition group-hover:opacity-100">report →</span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </div>
-      </Surface>
-
-      {/* Insights */}
-      {election && (
-        <Surface title="Insights" subtitle="Religion mix, community leaning estimates, and swing vs the last election.">
-          <InsightsSection
+      {/* ── Overview tab ── */}
+      {election && tab === 'overview' && showAll && (
+        <>
+          {story.length > 0 && (
+            <Surface eyebrow="At a glance" title="What the record shows">
+              <ul className="space-y-2">
+                {story.map((s, i) => (
+                  <li key={i} className="flex gap-2.5 text-sm text-slate-700">
+                    <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-accent-500" />
+                    {s}
+                  </li>
+                ))}
+              </ul>
+            </Surface>
+          )}
+          <AllYearsAnalytics
             electionId={viewId}
-            religionData={voters?.byReligion ?? []}
-            turnoutHistory={data?.turnoutHistory ?? []}
+            currentElectionId={viewId}
+            assemblyNo={election.assemblyNo}
+            assemblyName={election.assemblyName}
           />
-        </Surface>
+        </>
       )}
+
+      {election && tab === 'overview' && !showAll && (
+        <div className="space-y-6">
+          {/* KPIs */}
+          <div className="grid grid-cols-2 border border-slate-300 bg-white md:grid-cols-3 lg:grid-cols-6">
+            <StatCard label="Total voters" value={num(voters?.total)} />
+            <StatCard label="Turnout" value={pct(election.turnout.pct)} sub={`${num(election.turnout.voted)} / ${num(election.turnout.registered)}`} />
+            <StatCard label="Valid votes" value={num(election.totalValid)} />
+            <StatCard label="NOTA" value={num(election.totalNota)} sub={election.totalCast ? pct(election.totalNota / election.totalCast) : ''} />
+            <StatCard label="Leader" value={election.leader?.name ?? '—'} sub={election.leader ? `${pct(election.leader.share)} · ${num(election.leader.votes)}` : ''} tone="green" />
+            <StatCard label="Margin" value={election.leader && election.runnerUp ? num(election.leader.votes - election.runnerUp.votes) : '—'} sub={election.runnerUp ? `over ${election.runnerUp.name}` : ''} />
+          </div>
+
+          {/* Prescriptive action plan — the "so what / do this" */}
+          <ActionPlan electionId={viewId} />
+
+          {/* Candidate results */}
+          <Surface title="Candidate results" subtitle="Form 20 totals across all polling stations.">
+            <div className="grid grid-cols-1 gap-8 lg:grid-cols-5">
+              <div className="lg:col-span-3">
+                <ResponsiveContainer width="100%" height={320}>
+                  <BarChart data={candBars} margin={{ left: 8, right: 8, top: 8, bottom: 56 }}>
+                    <CartesianGrid stroke="#e7e5de" vertical={false} />
+                    <XAxis dataKey="name" tick={{ fontSize: 11 }} interval={0} angle={-22} textAnchor="end" height={80} />
+                    <YAxis tick={{ fontSize: 11 }} />
+                    <Tooltip formatter={(v) => num(v)} cursor={{ fill: '#f7f5f0' }} />
+                    <Bar dataKey="votes">
+                      {candBars.map((c) => <Cell key={c.name} fill={colorForName(c.name)} />)}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="lg:col-span-2">
+                <ResponsiveContainer width="100%" height={170}>
+                  <PieChart>
+                    <Pie data={donut} dataKey="value" nameKey="name" innerRadius={48} outerRadius={80} paddingAngle={2}>
+                      {donut.map((d) => <Cell key={d.name} fill={colorForName(d.name)} />)}
+                    </Pie>
+                    <Tooltip formatter={(v, n) => [num(v), n]} />
+                  </PieChart>
+                </ResponsiveContainer>
+                <ul className="mt-3 divide-y divide-slate-100">
+                  {(election?.candidates ?? []).map((c, i) => (
+                    <li key={c.name}>
+                      <Link
+                        to={`/elections/${viewId}/candidate/${encodeURIComponent(c.name)}`}
+                        className="group flex items-center gap-2.5 border-b border-slate-100 py-2.5 transition last:border-b-0 hover:bg-[#fbfaf7]"
+                      >
+                        <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: colorForName(c.name) }} />
+                        <span className="flex-1 truncate text-sm text-slate-700">{c.name}</span>
+                        {i === 0 && <span className="border border-accent-200 bg-accent-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-accent-700">Won</span>}
+                        <span className="w-12 text-right text-sm font-semibold tabular-nums text-slate-900">{pct(c.share)}</span>
+                        <span className="text-xs font-medium text-accent-600 opacity-0 transition group-hover:opacity-100">report →</span>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </Surface>
+
+          {/* Insights */}
+          <Surface title="Insights" subtitle="Religion mix, community leaning estimates, and swing vs the last election.">
+            <InsightsSection
+              electionId={viewId}
+              religionData={voters?.byReligion ?? []}
+              turnoutHistory={data?.turnoutHistory ?? []}
+            />
+          </Surface>
         </div>
       )}
+
+      {/* ── Booths tab ── */}
+      {election && tab === 'booths' && <BoothExplorer electionId={viewId} />}
+
+      {/* ── Trends tab ── */}
+      {election && tab === 'trends' && <TimelineContent electionId={viewId} />}
+
+      {/* ── Parties tab ── */}
+      {election && tab === 'parties' && <PartyContent electionId={viewId} />}
+
+      {/* ── Win plan tab ── */}
+      {election && tab === 'winplan' && <StrategyContent electionId={viewId} />}
     </div>
   );
 }

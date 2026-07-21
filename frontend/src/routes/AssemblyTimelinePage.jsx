@@ -11,9 +11,11 @@ import { colorFor, colorForParty, colorForCandidate, num } from '../components/e
 
 const p1 = (n) => `${((n ?? 0) * 100).toFixed(1)}%`; // fraction → percent string
 
-export default function AssemblyTimelinePage() {
-  const { id } = useParams();
-  const electionId = Number(id);
+/**
+ * Year-over-year history for a constituency. Rendered both as a standalone page
+ * (default export) and inside the constituency page's "Trends" tab (TimelineContent).
+ */
+export function TimelineContent({ electionId }) {
   const [range, setRange] = useState('all'); // 'all' | 'recent'
 
   const electionQ = useQuery({
@@ -28,7 +30,6 @@ export default function AssemblyTimelinePage() {
     queryFn: () => api.assemblyTimeline({ assemblyNo: el.assemblyNo, assemblyName: el.assemblyName }),
   });
 
-  const assembly = timelineQ.data?.assembly;
   const allElections = timelineQ.data?.elections ?? []; // year DESC
   const rows = useMemo(
     () => (range === 'recent' ? allElections.slice(0, 5) : allElections),
@@ -50,48 +51,26 @@ export default function AssemblyTimelinePage() {
     [rows],
   );
 
-  const name = el
-    ? `${el.assemblyNo != null ? el.assemblyNo + '-' : ''}${el.assemblyName}`
-    : 'Assembly';
-
   const latest = rows[0];
 
   return (
     <div className="space-y-6">
-      <div>
-        <Breadcrumbs
-          items={[
-            { label: 'Elections', to: '/elections' },
-            { label: el ? `${el.assemblyName} ${el.electionYear ?? ''}`.trim() : 'Election', to: `/elections/${electionId}` },
-            { label: 'Yearly timeline' },
-          ]}
-        />
-        <PageHeader
-          eyebrow="Constituency history"
-          title={`${el?.assemblyName ?? 'Assembly'} — yearly timeline`}
-          subtitle={
-            assembly
-              ? `${name}${assembly.state ? ' · ' + assembly.state : ''} · ${num(allElections.length)} recorded ${allElections.length === 1 ? 'election' : 'elections'}`
-              : 'Loading…'
-          }
-          actions={
-            <div className="inline-flex overflow-hidden rounded-md border border-slate-300">
-              {[
-                ['recent', 'Last 5 years'],
-                ['all', 'All years'],
-              ].map(([v, label]) => (
-                <button
-                  key={v}
-                  type="button"
-                  onClick={() => setRange(v)}
-                  className={`px-3 py-1.5 text-xs font-medium transition ${range === v ? 'bg-slate-900 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          }
-        />
+      <div className="flex items-center justify-end">
+        <div className="inline-flex overflow-hidden rounded-md border border-slate-300">
+          {[
+            ['recent', 'Last 5 years'],
+            ['all', 'All years'],
+          ].map(([v, label]) => (
+            <button
+              key={v}
+              type="button"
+              onClick={() => setRange(v)}
+              className={`px-3 py-1.5 text-xs font-medium transition ${range === v ? 'bg-slate-900 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {(electionQ.isError || timelineQ.isError) && (
@@ -226,6 +205,34 @@ export default function AssemblyTimelinePage() {
           </Surface>
         </>
       )}
+    </div>
+  );
+}
+
+export default function AssemblyTimelinePage() {
+  const { id } = useParams();
+  const electionId = Number(id);
+  const electionQ = useQuery({ queryKey: ['election', electionId], queryFn: () => api.getElection(electionId) });
+  const el = electionQ.data;
+  const name = el ? `${el.assemblyNo != null ? el.assemblyNo + '-' : ''}${el.assemblyName}` : 'Assembly';
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <Breadcrumbs
+          items={[
+            { label: 'Elections', to: '/elections' },
+            { label: el ? `${el.assemblyName} ${el.electionYear ?? ''}`.trim() : 'Election', to: `/elections/${electionId}` },
+            { label: 'Yearly timeline' },
+          ]}
+        />
+        <PageHeader
+          eyebrow="Constituency history"
+          title={`${el?.assemblyName ?? 'Assembly'} — yearly timeline`}
+          subtitle={el ? `${name}${el.state ? ' · ' + el.state : ''}` : 'Loading…'}
+        />
+      </div>
+      <TimelineContent electionId={electionId} />
     </div>
   );
 }

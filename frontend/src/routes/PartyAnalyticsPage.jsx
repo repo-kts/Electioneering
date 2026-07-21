@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
   BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer,
@@ -9,16 +9,16 @@ import { PageHeader, StatCard, Surface, Loading, ErrorBox } from '../components/
 import { api } from '../lib/api.js';
 import { colorForParty, num, pct } from '../components/elections/helpers.js';
 
-export default function PartyAnalyticsPage() {
-  const { id } = useParams();
-  const electionId = Number(id);
-
+/**
+ * Party & alliance breakdown for one election. Rendered as a standalone page
+ * (default) and inside the constituency page's "Parties" tab (PartyContent).
+ */
+export function PartyContent({ electionId }) {
   const q = useQuery({
     queryKey: ['partyAnalytics', electionId],
     queryFn: () => api.partyAnalytics(electionId),
   });
 
-  const el = q.data?.election;
   const totalValid = q.data?.totalValid ?? 0;
   const parties = q.data?.parties ?? [];
   const alliances = q.data?.alliances ?? [];
@@ -28,33 +28,10 @@ export default function PartyAnalyticsPage() {
     () => parties.slice(0, 8).map((p) => ({ name: p.party, value: p.votes })),
     [parties],
   );
-
-  const name = el
-    ? `${el.assemblyName ?? 'Election'} ${el.electionYear ?? ''}`.trim()
-    : 'Election';
   const leader = parties[0];
 
   return (
     <div className="space-y-6">
-      <div>
-        <Breadcrumbs
-          items={[
-            { label: 'Elections', to: '/elections' },
-            { label: name, to: `/elections/${electionId}` },
-            { label: 'Party analytics' },
-          ]}
-        />
-        <PageHeader
-          eyebrow="Party performance"
-          title={`${name} — party analytics`}
-          subtitle={
-            el
-              ? `${el.assemblyNo != null ? el.assemblyNo + '-' : ''}${el.assemblyName} · ${el.electionType ?? ''} · ${num(parties.length)} ${parties.length === 1 ? 'party' : 'parties'}`
-              : 'Loading…'
-          }
-        />
-      </div>
-
       {q.isError && <ErrorBox message={q.error.message} onRetry={() => q.refetch()} />}
       {q.isPending && <Loading className="h-28" />}
 
@@ -169,14 +146,36 @@ export default function PartyAnalyticsPage() {
               </div>
             </div>
           </Surface>
-
-          <div>
-            <Link to={`/elections/${electionId}`} className="text-sm font-medium text-accent-700 hover:underline">
-              ← Back to election overview
-            </Link>
-          </div>
         </>
       )}
+    </div>
+  );
+}
+
+export default function PartyAnalyticsPage() {
+  const { id } = useParams();
+  const electionId = Number(id);
+  const q = useQuery({ queryKey: ['partyAnalytics', electionId], queryFn: () => api.partyAnalytics(electionId) });
+  const el = q.data?.election;
+  const name = el ? `${el.assemblyName ?? 'Election'} ${el.electionYear ?? ''}`.trim() : 'Election';
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <Breadcrumbs
+          items={[
+            { label: 'Elections', to: '/elections' },
+            { label: name, to: `/elections/${electionId}` },
+            { label: 'Party analytics' },
+          ]}
+        />
+        <PageHeader
+          eyebrow="Party performance"
+          title={`${name} — party analytics`}
+          subtitle={el ? `${el.assemblyNo != null ? el.assemblyNo + '-' : ''}${el.assemblyName} · ${el.electionType ?? ''}` : 'Loading…'}
+        />
+      </div>
+      <PartyContent electionId={electionId} />
     </div>
   );
 }

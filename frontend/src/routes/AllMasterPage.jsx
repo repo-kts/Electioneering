@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { api } from '../lib/api.js';
+import { api, downloadUrls } from '../lib/api.js';
 import { useToast } from '../context/ToastContext.jsx';
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -29,6 +29,7 @@ function IconBtn({ title, onClick, children, danger }) {
 }
 const PencilIcon = () => (<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>);
 const TrashIcon = () => (<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m2 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" /></svg>);
+const DownloadIcon = () => (<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><path d="M7 10l5 5 5-5" /><path d="M12 15V3" /></svg>);
 
 // ─── Geography ────────────────────────────────────────────────────────────
 
@@ -354,6 +355,153 @@ function ListsTab() {
 
 // ─── Elections (create → get ID for the sheets) ─────────────────────────────
 
+// Inline edit of an existing election — cascading State → Parliamentary →
+// Assembly dropdowns plus a Type dropdown, mirroring the "New election" form.
+// Geography selections are pre-filled by matching the election's stored
+// names/numbers against the master lists.
+function ElectionEditForm({ election, onDone }) {
+  const { show } = useToast();
+  const qc = useQueryClient();
+
+  // Same cascading geography + type sources as the create form.
+  const statesQ = useQuery({ queryKey: ['master-geo', 'states', 'root'], queryFn: () => api.masterGeoList('states') });
+  const [stateId, setStateId] = useState('');
+  const parlQ = useQuery({ queryKey: ['master-geo', 'parliamentary', stateId], queryFn: () => api.masterGeoList('parliamentary', { stateId }), enabled: !!stateId });
+  const [parlId, setParlId] = useState('');
+  const asmQ = useQuery({ queryKey: ['master-geo', 'assembly', parlId], queryFn: () => api.masterGeoList('assembly', { parlId }), enabled: !!parlId });
+  const [asmId, setAsmId] = useState('');
+  const typesQ = useQuery({ queryKey: ['master-options', 'election_type'], queryFn: () => api.masterOptions('election_type') });
+  const [electionType, setElectionType] = useState(election.electionType ?? '');
+  const [year, setYear] = useState(election.electionYear != null ? String(election.electionYear) : '');
+  const [electors, setElectors] = useState(election.totalElectors != null ? String(election.totalElectors) : '');
+
+  // Pre-select each level from the election's stored values once its list loads.
+  useEffect(() => {
+    if (stateId || !statesQ.data) return;
+    const s = (statesQ.data.items ?? []).find((x) => x.name === election.state);
+    if (s) setStateId(String(s.id));
+  }, [statesQ.data, stateId, election.state]);
+  useEffect(() => {
+    if (!stateId || parlId || !parlQ.data) return;
+    const p = (parlQ.data.items ?? []).find(
+      (x) => x.name === election.parlName && String(x.number) === String(election.parlNo),
+    );
+    if (p) setParlId(String(p.id));
+  }, [parlQ.data, stateId, parlId, election.parlName, election.parlNo]);
+  useEffect(() => {
+    if (!parlId || asmId || !asmQ.data) return;
+    const a = (asmQ.data.items ?? []).find(
+      (x) => x.name === election.assemblyName && String(x.number) === String(election.assemblyNo),
+    );
+    if (a) setAsmId(String(a.id));
+  }, [asmQ.data, parlId, asmId, election.assemblyName, election.assemblyNo]);
+
+  const save = useMutation({
+    mutationFn: () => {
+      const state = (statesQ.data?.items ?? []).find((s) => String(s.id) === String(stateId));
+      const parl = (parlQ.data?.items ?? []).find((p) => String(p.id) === String(parlId));
+      const asm = (asmQ.data?.items ?? []).find((a) => String(a.id) === String(asmId));
+      if (!state || !parl || !asm || !electionType || !year) {
+        throw new Error('Pick state, parliamentary, assembly, type and year');
+      }
+      return api.updateElection(election.id, {
+        state: state.name,
+        parlNo: String(parl.number), parlName: parl.name, parlSeatType: parl.seatType || undefined,
+        assemblyNo: String(asm.number), assemblyName: asm.name, assemblySeatType: asm.seatType || undefined,
+        electionType,
+        electionYear: year ? Number(year) : undefined,
+        totalElectors: electors ? Number(electors) : undefined,
+      });
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['elections'] }); show(`Election #${election.id} updated`, 'success'); onDone(); },
+    onError: (e) => show(e.message, 'error'),
+  });
+
+  const unmatched = statesQ.data && !stateId; // geography not found in master lists
+
+  return (
+    <tr className="border-t border-slate-100 bg-slate-50">
+      <td className="px-3 py-2 align-top font-mono text-xs text-slate-500">#{election.id}</td>
+      <td className="px-3 py-2" colSpan={6}>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+          <select className={input} value={stateId} onChange={(e) => { setStateId(e.target.value); setParlId(''); setAsmId(''); }}>
+            <option value="">State…</option>
+            {(statesQ.data?.items ?? []).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
+          <select className={input} value={parlId} disabled={!stateId} onChange={(e) => { setParlId(e.target.value); setAsmId(''); }}>
+            <option value="">Parliamentary…</option>
+            {(parlQ.data?.items ?? []).map((p) => <option key={p.id} value={p.id}>{p.number} — {p.name}</option>)}
+          </select>
+          <select className={input} value={asmId} disabled={!parlId} onChange={(e) => setAsmId(e.target.value)}>
+            <option value="">Assembly…</option>
+            {(asmQ.data?.items ?? []).map((a) => <option key={a.id} value={a.id}>{a.number} — {a.name}</option>)}
+          </select>
+          <select className={input} value={electionType} onChange={(e) => setElectionType(e.target.value)}>
+            <option value="">Type…</option>
+            {(typesQ.data?.options ?? []).map((o) => <option key={o.id} value={o.label}>{o.label}</option>)}
+          </select>
+          <input className={input} type="number" placeholder="Year" value={year} onChange={(e) => setYear(e.target.value)} />
+          <input className={input} type="number" placeholder="Total electors" value={electors} onChange={(e) => setElectors(e.target.value)} />
+        </div>
+        {unmatched && (
+          <p className="mt-1.5 text-xs text-amber-700">
+            This election’s geography ({election.state} · {election.parlName} · {election.assemblyName}) isn’t in Master → Geography yet. Add it there, or pick the closest match above.
+          </p>
+        )}
+        <div className="mt-2 flex gap-1.5">
+          <button className={btnPrimary} disabled={save.isPending} onClick={() => save.mutate()}>{save.isPending ? 'Saving…' : 'Save'}</button>
+          <button className={btnGhost} onClick={onDone}>Cancel</button>
+        </div>
+      </td>
+    </tr>
+  );
+}
+
+function ElectionRow({ election, onDelete }) {
+  const { show } = useToast();
+  const [editing, setEditing] = useState(false);
+  if (editing) return <ElectionEditForm election={election} onDone={() => setEditing(false)} />;
+  return (
+    <tr className="border-t border-slate-100">
+      <td className="px-3 py-2">
+        <button
+          type="button"
+          title="Copy ID"
+          onClick={() => { navigator.clipboard?.writeText(String(election.id)); show(`Copied election ID ${election.id}`, 'success'); }}
+          className="rounded-sm bg-slate-100 px-2 py-0.5 font-mono text-xs font-semibold text-slate-800 hover:bg-slate-200"
+        >
+          #{election.id} ⧉
+        </button>
+      </td>
+      <td className="px-3 py-2 text-slate-800">{election.assemblyNo}-{election.assemblyName}</td>
+      <td className="px-3 py-2 text-slate-600">{election.electionYear ?? '—'}</td>
+      <td className="px-3 py-2 text-slate-600">{election.electionType}</td>
+      <td className="px-3 py-2 text-slate-600">{election.state}</td>
+      <td className="px-3 py-2 text-slate-600">{election._count?.booths ?? 0}</td>
+      <td className="px-3 py-2">
+        <div className="flex items-center justify-end gap-1">
+          <a
+            href={downloadUrls.voterTemplate(false, '', election.id)}
+            className={`${btnGhost} px-2 py-1`}
+            title={`Download voters sheet (Election ID ${election.id} pre-filled)`}
+          >
+            <DownloadIcon /> Voters
+          </a>
+          <a
+            href={downloadUrls.form20Template(false, '', election.id)}
+            className={`${btnGhost} px-2 py-1`}
+            title={`Download Form 20 sheet (Election ID ${election.id} pre-filled)`}
+          >
+            <DownloadIcon /> Form 20
+          </a>
+          <IconBtn title="Edit election" onClick={() => setEditing(true)}><PencilIcon /></IconBtn>
+          <IconBtn title="Delete election" danger onClick={() => { if (confirm(`Delete election #${election.id} (${election.assemblyName})? This removes its booths & results.`)) onDelete(election.id); }}><TrashIcon /></IconBtn>
+        </div>
+      </td>
+    </tr>
+  );
+}
+
 function ElectionsTab() {
   const { show } = useToast();
   const qc = useQueryClient();
@@ -446,26 +594,7 @@ function ElectionsTab() {
           </thead>
           <tbody>
             {elections.map((e) => (
-              <tr key={e.id} className="border-t border-slate-100">
-                <td className="px-3 py-2">
-                  <button
-                    type="button"
-                    title="Copy ID"
-                    onClick={() => { navigator.clipboard?.writeText(String(e.id)); show(`Copied election ID ${e.id}`, 'success'); }}
-                    className="rounded-sm bg-slate-100 px-2 py-0.5 font-mono text-xs font-semibold text-slate-800 hover:bg-slate-200"
-                  >
-                    #{e.id} ⧉
-                  </button>
-                </td>
-                <td className="px-3 py-2 text-slate-800">{e.assemblyNo}-{e.assemblyName}</td>
-                <td className="px-3 py-2 text-slate-600">{e.electionYear ?? '—'}</td>
-                <td className="px-3 py-2 text-slate-600">{e.electionType}</td>
-                <td className="px-3 py-2 text-slate-600">{e.state}</td>
-                <td className="px-3 py-2 text-slate-600">{e._count?.booths ?? 0}</td>
-                <td className="px-3 py-2 text-right">
-                  <IconBtn title="Delete election" danger onClick={() => { if (confirm(`Delete election #${e.id} (${e.assemblyName})? This removes its booths & results.`)) del.mutate(e.id); }}><TrashIcon /></IconBtn>
-                </td>
-              </tr>
+              <ElectionRow key={e.id} election={e} onDelete={(id) => del.mutate(id)} />
             ))}
             {elections.length === 0 && <tr><td colSpan={7} className="px-3 py-6 text-center text-slate-400">No elections yet.</td></tr>}
           </tbody>

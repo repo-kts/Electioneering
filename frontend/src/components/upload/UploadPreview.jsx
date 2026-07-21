@@ -20,6 +20,10 @@ import {
  * - Top banner lists the first 8 errors so the user has a punch list.
  */
 
+// Only ever render this many rows — a 30k-row grid (30k × ~20 inputs) freezes
+// the browser. The full set is still validated + committed; this is display only.
+const RENDER_CAP = 500;
+
 const VOTER_COLUMNS = [
   { key: 'electionId', label: 'Election ID', type: 'text', short: true },
   { key: 'firstName', label: 'First Name', type: 'text', required: true, uppercase: true },
@@ -72,8 +76,6 @@ export default function UploadPreview({ kind, data, onCancel, onCommit, headerEx
     if (isVoter) return [];
     const m = [
       { kind: 'serial', label: 'PS #', short: true },
-      { kind: 'boothName', label: 'Booth Name' },
-      { kind: 'name', label: 'Polling Station' },
     ];
     candidates.forEach((c) => m.push({ kind: 'cand', candidate: c, label: c, short: true }));
     m.push({ kind: 'valid', label: 'Valid', short: true, readonly: true });
@@ -317,6 +319,14 @@ export default function UploadPreview({ kind, data, onCancel, onCommit, headerEx
       <Card.Body>
         {headerExtras}
 
+        {rows.length > RENDER_CAP && (
+          <div className="mb-3 rounded-sm border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-800">
+            Large file — showing the first <strong>{RENDER_CAP.toLocaleString()}</strong> of{' '}
+            <strong>{rows.length.toLocaleString()}</strong> rows. All rows are validated and imported;
+            fix any data issues in your spreadsheet and re-upload. The import runs in batches with a progress bar.
+          </div>
+        )}
+
         {/* Error summary banner */}
         {errorRowCount > 0 && (
           <div className="errors-banner">
@@ -384,7 +394,7 @@ export default function UploadPreview({ kind, data, onCancel, onCommit, headerEx
               </tr>
             </thead>
             <tbody>
-              {rows.map((row, ri) => {
+              {rows.slice(0, RENDER_CAP).map((row, ri) => {
                 const hasErr = Object.keys(row.__errors || {}).length > 0;
                 return (
                   <tr key={row.__id} className={hasErr ? 'row-has-error' : ''}>
