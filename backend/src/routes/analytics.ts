@@ -12,12 +12,14 @@ import { aggregate, attachElectionFields } from '../services/segmentation.js';
 import { computeBoothTargets, computeTurnoutGap, computeSwing } from '../services/boothAnalytics.js';
 import { assembleStrategyBrief } from '../services/strategy.js';
 import { geocodeElectionBooths } from '../services/geocode.js';
-import { computeBoothRecommendations } from '../services/boothRecommendations.js';
 import {
   computePartyAnalytics,
   computeAssemblyTimeline,
   computeElectionsHierarchy,
+  computeConstituencyRollups,
+  computeConstituencyBooths,
 } from '../services/electionInsights.js';
+import { buildBoothDetail, buildStationHistory } from '../services/stationHistory.js';
 
 const router = Router();
 
@@ -117,122 +119,53 @@ router.post(
 router.get(
   '/booth/:boothId',
   asyncHandler(async (req, res) => {
-    const boothId = Number(req.params.boothId);
-    const booth = await prisma.booth.findUnique({
-      where: { id: boothId },
-      include: {
-        election: true,
-        pollingStation: true,
-        voteResults: { include: { candidate: true } },
-      },
-    });
-    if (!booth) {
+    const detail = await buildBoothDetail(Number(req.params.boothId));
+    if (!detail) {
       res.status(404).json({ error: 'NotFound' });
       return;
     }
-    const ps = booth.pollingStation;
+    res.json(detail);
+  }),
+);
 
-    let totalValid = 0;
-    for (const vr of booth.voteResults) totalValid += vr.votes;
-    const candidates = booth.voteResults
-      .map((vr) => ({
-        id: vr.candidateId,
-        name: vr.candidate.name,
-        party: vr.candidate.party,
-        alliance: vr.candidate.alliance,
-        votes: vr.votes,
-        share: totalValid > 0 ? vr.votes / totalValid : 0,
-      }))
-      .sort((a, b) => b.votes - a.votes);
+// GET /api/analytics/constituencies
+// One row per constituency (assemblyNo::assemblyName), merged across every
+// election type — powers the deduped "Booth wise election" landing.
+router.get(
+  '/constituencies',
+  asyncHandler(async (_req, res) => {
+    res.json(await computeConstituencyRollups());
+  }),
+);
 
-    // Roll for this booth (per-election), with the linked voter.
-    const roll = await prisma.boothVoter.findMany({
-      where: { boothId },
-      orderBy: [{ houseNumber: 'asc' }],
-      include: { voter: true },
-    });
-    const voters = attachElectionFields(
-      roll.map((bv) => ({ ...bv.voter, boothVoters: [{ ...bv, booth }] })),
-      booth.electionId,
-    );
-    const registered = roll.length;
-    const voted = roll.reduce((n, bv) => n + (bv.voted ? 1 : 0), 0);
+// GET /api/analytics/constituency-booths?assemblyNo=&assemblyName=
+// Distinct physical polling stations across all of a constituency's elections,
+// each with its latest-election headline result + all-elections average turnout.
+router.get(
+  '/constituency-booths',
+  asyncHandler(async (req, res) => {
+    const assemblyNo = (req.query.assemblyNo as string) || undefined;
+    const assemblyName = (req.query.assemblyName as string) || undefined;
+    if (!assemblyNo && !assemblyName) {
+      res.status(400).json({ error: 'assemblyNo or assemblyName required' });
+      return;
+    }
+    res.json(await computeConstituencyBooths({ assemblyNo, assemblyName }));
+  }),
+);
 
-    const totalPolled = totalValid + booth.rejectedVotes + booth.notaVotes;
-    const leader = candidates[0] ?? null;
-    const runnerUp = candidates[1] ?? null;
-    const demographics = aggregate(voters);
-
-    // Booth classification + concrete campaign recommendations.
-    const reco = await computeBoothRecommendations(booth.electionId, booth.id, {
-      leader: leader ? { name: leader.name, share: leader.share } : null,
-      runnerUp: runnerUp ? { name: runnerUp.name, share: runnerUp.share } : null,
-      totalValid,
-      notaShare: totalPolled > 0 ? booth.notaVotes / totalPolled : 0,
-      demographics,
-      registered,
-    });
-
-    res.json({
-      election: {
-        id: booth.election.id,
-        assemblyNo: booth.election.assemblyNo,
-        assemblyName: booth.election.assemblyName,
-        assemblySeatType: booth.election.assemblySeatType,
-        parlNo: booth.election.parlNo,
-        parlName: booth.election.parlName,
-        parlSeatType: booth.election.parlSeatType,
-        state: booth.election.state,
-        electionType: booth.election.electionType,
-        electionYear: booth.election.electionYear,
-      },
-      ps: {
-        id: booth.id,
-        serial: booth.serial,
-        name: booth.name ?? ps?.name ?? null,
-        address: ps?.address ?? null,
-        cityVillage: ps?.cityVillage ?? null,
-        ward: ps?.ward ?? null,
-        tolaMohalla: ps?.tolaMohalla ?? null,
-        postOffice: ps?.postOffice ?? null,
-        policeStation: ps?.policeStation ?? null,
-        latitude: ps?.latitude ?? null,
-        longitude: ps?.longitude ?? null,
-        rejectedVotes: booth.rejectedVotes,
-        notaVotes: booth.notaVotes,
-        tenderedVotes: booth.tenderedVotes,
-      },
-      candidates,
-      leader,
-      runnerUp,
-      totalValid,
-      totalPolled,
-      turnout: {
-        registered,
-        voted,
-        pct: registered > 0 ? voted / registered : 0,
-      },
-      classification: reco.classification,
-      priority: reco.priority,
-      recommendations: reco.recommendations,
-      demographics,
-      voters: roll.slice(0, 500).map((bv) => ({
-        id: bv.voter.id,
-        fullName: bv.voter.fullName,
-        firstName: bv.voter.firstName,
-        lastName: bv.voter.lastName,
-        age: bv.voter.age,
-        gender: bv.voter.gender,
-        religion: bv.voter.religion,
-        caste: bv.voter.caste,
-        community: bv.voter.community,
-        category: bv.voter.category,
-        houseNumber: bv.houseNumber,
-        epic: bv.voter.epic,
-        relationType: bv.voter.relationType,
-        relativeName: bv.voter.relativeName,
-      })),
-    });
+// GET /api/analytics/polling-station/:psId
+// A single physical booth across every election it took part in: per-election
+// detail + blended timeline + all-years rollup + latest-roll demographics.
+router.get(
+  '/polling-station/:psId',
+  asyncHandler(async (req, res) => {
+    const bundle = await buildStationHistory(Number(req.params.psId));
+    if (!bundle) {
+      res.status(404).json({ error: 'NotFound' });
+      return;
+    }
+    res.json(bundle);
   }),
 );
 

@@ -153,6 +153,16 @@ export const api = {
         return request(`/api/analytics/assembly-timeline?${p.toString()}`);
     },
     electionsHierarchy: () => request('/api/analytics/hierarchy'),
+    // Booth-wise election: constituencies (deduped across types), a
+    // constituency's physical booths, and one booth across every election.
+    constituencies: () => request('/api/analytics/constituencies'),
+    constituencyBooths: ({ assemblyNo, assemblyName } = {}) => {
+        const p = new URLSearchParams();
+        if (assemblyNo) p.set('assemblyNo', assemblyNo);
+        if (assemblyName) p.set('assemblyName', assemblyName);
+        return request(`/api/analytics/constituency-booths?${p.toString()}`);
+    },
+    pollingStation: (psId) => request(`/api/analytics/polling-station/${psId}`),
 
     // ─── Targeting + correlation ───────────────────────────────
     boothTargets: (electionId, ourCandidate) => {
@@ -217,6 +227,16 @@ export const api = {
     masterUpdateOption: (id, data) => request(`/api/master/options/${id}`, { method: 'PUT', body: data }),
     masterDeleteOption: (id) => request(`/api/master/options/${id}`, { method: 'DELETE' }),
     masterSync: () => request('/api/master/sync', { method: 'POST' }),
+    // Booth (physical polling-station) registry — per constituency.
+    masterBooths: ({ assemblyNo, assemblyName } = {}) => {
+        const p = new URLSearchParams();
+        if (assemblyNo) p.set('assemblyNo', assemblyNo);
+        if (assemblyName) p.set('assemblyName', assemblyName);
+        return request(`/api/master/polling-stations?${p.toString()}`);
+    },
+    masterBoothCreate: (data) => request('/api/master/polling-stations', { method: 'POST', body: data }),
+    masterBoothUpdate: (id, data) => request(`/api/master/polling-stations/${id}`, { method: 'PUT', body: data }),
+    masterBoothDelete: (id) => request(`/api/master/polling-stations/${id}`, { method: 'DELETE' }),
 };
 
 // Direct download URLs (use as href / window.open) — only for PUBLIC endpoints

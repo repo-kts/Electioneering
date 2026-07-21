@@ -18,18 +18,32 @@ import { geoRollupStory, seatsByParty } from '../components/analytics/narrative.
  *   boothMode = jump the constituency straight into its booth grid (?booths=1)
  */
 export default function GeographyExplorer({ title, subtitle, matchType = null, boothMode = false }) {
-  const q = useQuery({ queryKey: ['elections', 'hierarchy'], queryFn: () => api.electionsHierarchy() });
+  // Booth mode dedups constituencies across election types (one Mandrem, not
+  // one-per-type), so it reads the merged `constituencies` rollup instead of
+  // the type→year hierarchy that the Assembly / Lok Sabha modes use.
+  const q = useQuery({
+    queryKey: boothMode ? ['constituencies'] : ['elections', 'hierarchy'],
+    queryFn: () => (boothMode ? api.constituencies() : api.electionsHierarchy()),
+  });
   const [params, setParams] = useSearchParams();
 
-  // Flatten the type→constituency tree to the constituencies we care about.
+  // Normalize to a flat list of constituency tiles the drill can group by state/parl.
   const all = useMemo(() => {
+    if (boothMode) {
+      return (q.data?.constituencies ?? []).map((c) => ({
+        ...c,
+        yearCount: c.years?.length ?? c.electionCount ?? 0,
+        pollingStations: c.distinctBooths ?? 0,
+        electionType: c.types?.length > 1 ? `${c.electionCount} elections` : c.types?.[0] ?? '',
+      }));
+    }
     const out = [];
     for (const t of q.data?.types ?? []) {
       if (matchType && t.electionType !== matchType) continue;
       for (const c of t.constituencies ?? []) out.push({ ...c, electionType: t.electionType });
     }
     return out;
-  }, [q.data, matchType]);
+  }, [q.data, matchType, boothMode]);
 
   const byState = useMemo(() => groupBy(all, (c) => c.state || 'Unknown state'), [all]);
   const stateNames = useMemo(() => [...byState.keys()].sort(), [byState]);
@@ -211,7 +225,9 @@ function RollupTile({ name, eyebrow, rows = [], onClick }) {
 
 /** A constituency tile — shows latest winner and competitiveness; links in. */
 function ConstituencyTile({ c, boothMode }) {
-  const to = boothMode ? `/elections/${c.latestElectionId}?booths=1` : `/elections/${c.latestElectionId}`;
+  const to = boothMode
+    ? `/elections/booths/${encodeURIComponent(c.assemblyNo)}/${encodeURIComponent(c.assemblyName)}`
+    : `/elections/${c.latestElectionId}`;
   const w = c.winner;
   const bm = benchmarkFor(w?.share);
   return (

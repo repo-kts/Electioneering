@@ -14,7 +14,10 @@ function FitBounds({ points }) {
   return null;
 }
 
-export default function BoothMap({ items = [], electionId }) {
+export default function BoothMap({ items = [], electionId, linkFor }) {
+  // Where a booth's popup link points. Defaults to the per-election booth page;
+  // the booth-wise flow passes its own (the cross-election station history).
+  const hrefFor = linkFor ?? ((b) => `/elections/${electionId}/booth/${b.id}`);
   const placed = useMemo(
     () => items.filter((b) => b.latitude != null && b.longitude != null),
     [items],
@@ -66,7 +69,7 @@ export default function BoothMap({ items = [], electionId }) {
                   ) : (
                     <div className="mt-1 text-xs text-slate-400">No Form 20 data</div>
                   )}
-                  <Link to={`/elections/${electionId}/booth/${b.id}`} className="mt-1.5 inline-block text-xs font-medium text-accent-600">
+                  <Link to={hrefFor(b)} className="mt-1.5 inline-block text-xs font-medium text-accent-600">
                     Open booth →
                   </Link>
                 </div>

@@ -8,6 +8,7 @@ import { prisma } from '../lib/prisma.js';
 import { asyncHandler } from '../lib/asyncHandler.js';
 import { requireAdmin } from '../middleware/auth.js';
 import { syncMasterFromData, seedMasterDefaults } from '../services/master.js';
+import { pollingStationCode } from '../lib/pollingStationCode.js';
 
 const router = Router();
 
@@ -158,6 +159,122 @@ router.delete('/assembly/:id', requireAdmin, asyncHandler(async (req, res) => {
   await prisma.assemblyConstituency.delete({ where: { id: Number(req.params.id) } });
   res.status(204).end();
 }));
+
+// ─── Booths (physical polling stations, per constituency) ──────────────
+// The stable, election-independent booth registry. A Booth (Form 20 row) and
+// BoothVoter (roll entry) reference these; edits here (name/address/coords)
+// propagate to every election that uses the station. `code` is the dedup key
+// (assemblyNo + name) and is immutable once created.
+const stationSchema = z.object({
+  assemblyNo: z.string().trim().optional().nullable(),
+  assemblyName: z.string().trim().optional().nullable(),
+  name: z.string().trim().min(1),
+  address: z.string().trim().optional().nullable(),
+  cityVillage: z.string().trim().optional().nullable(),
+  ward: z.string().trim().optional().nullable(),
+  tolaMohalla: z.string().trim().optional().nullable(),
+  postOffice: z.string().trim().optional().nullable(),
+  policeStation: z.string().trim().optional().nullable(),
+  latitude: z.coerce.number().optional().nullable(),
+  longitude: z.coerce.number().optional().nullable(),
+});
+
+router.get(
+  '/polling-stations',
+  asyncHandler(async (req, res) => {
+    const assemblyNo = (req.query.assemblyNo as string) || undefined;
+    const assemblyName = (req.query.assemblyName as string) || undefined;
+    const where: { assemblyNo?: string; assemblyName?: string } = {};
+    if (assemblyNo) where.assemblyNo = assemblyNo;
+    if (assemblyName) where.assemblyName = assemblyName;
+    const rows = await prisma.pollingStation.findMany({
+      where,
+      orderBy: [{ name: 'asc' }],
+      include: { _count: { select: { booths: true } } },
+    });
+    const items = rows.map((p) => {
+      const { _count, ...rest } = p;
+      return { ...rest, electionsCount: _count.booths };
+    });
+    res.json({ items });
+  }),
+);
+
+router.post(
+  '/polling-stations',
+  requireAdmin,
+  asyncHandler(async (req, res) => {
+    const data = stationSchema.parse(req.body);
+    const code = pollingStationCode(data.assemblyNo, data.name);
+    const existing = await prisma.pollingStation.findUnique({ where: { code } });
+    if (existing) {
+      res.status(409).json({ error: 'Conflict', message: 'A booth with this name already exists in this constituency.' });
+      return;
+    }
+    const created = await prisma.pollingStation.create({
+      data: {
+        code,
+        name: data.name,
+        assemblyNo: data.assemblyNo ?? undefined,
+        assemblyName: data.assemblyName ?? undefined,
+        address: data.address ?? undefined,
+        cityVillage: data.cityVillage ?? undefined,
+        ward: data.ward ?? undefined,
+        tolaMohalla: data.tolaMohalla ?? undefined,
+        postOffice: data.postOffice ?? undefined,
+        policeStation: data.policeStation ?? undefined,
+        latitude: data.latitude ?? undefined,
+        longitude: data.longitude ?? undefined,
+      },
+    });
+    res.status(201).json(created);
+  }),
+);
+
+router.put(
+  '/polling-stations/:id',
+  requireAdmin,
+  asyncHandler(async (req, res) => {
+    // Editable attributes only — `code` is never regenerated so the station's
+    // dedup identity (and its links to existing booths) stays stable.
+    const data = stationSchema.partial().parse(req.body);
+    const updated = await prisma.pollingStation.update({
+      where: { id: Number(req.params.id) },
+      data: {
+        name: data.name ?? undefined,
+        assemblyNo: data.assemblyNo ?? undefined,
+        assemblyName: data.assemblyName ?? undefined,
+        address: data.address ?? undefined,
+        cityVillage: data.cityVillage ?? undefined,
+        ward: data.ward ?? undefined,
+        tolaMohalla: data.tolaMohalla ?? undefined,
+        postOffice: data.postOffice ?? undefined,
+        policeStation: data.policeStation ?? undefined,
+        latitude: data.latitude ?? undefined,
+        longitude: data.longitude ?? undefined,
+      },
+    });
+    res.json(updated);
+  }),
+);
+
+router.delete(
+  '/polling-stations/:id',
+  requireAdmin,
+  asyncHandler(async (req, res) => {
+    const id = Number(req.params.id);
+    const inUse = await prisma.booth.count({ where: { pollingStationId: id } });
+    if (inUse > 0) {
+      res.status(409).json({
+        error: 'Conflict',
+        message: `This booth is used in ${inUse} election${inUse === 1 ? '' : 's'} — remove it from those Form 20 results first.`,
+      });
+      return;
+    }
+    await prisma.pollingStation.delete({ where: { id } });
+    res.status(204).end();
+  }),
+);
 
 // ─── Lookup lists: read ───────────────────────────────────────────────
 router.get(

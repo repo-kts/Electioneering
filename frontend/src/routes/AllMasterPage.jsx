@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, downloadUrls } from '../lib/api.js';
 import { useToast } from '../context/ToastContext.jsx';
@@ -679,6 +680,228 @@ function CandidatesTab() {
   );
 }
 
+// ─── Booths (physical polling-station registry, per constituency) ───────────
+
+// Editable attributes of a physical booth. `name` drives the dedup `code`, so
+// it's shown but renaming is display-only (code stays fixed once created).
+const BOOTH_FIELDS = [
+  { k: 'name', ph: 'Booth / polling-station name', req: true, wide: true },
+  { k: 'ward', ph: 'Ward no.' },
+  { k: 'cityVillage', ph: 'City / Village' },
+  { k: 'tolaMohalla', ph: 'Tola / Mohalla' },
+  { k: 'postOffice', ph: 'Post office' },
+  { k: 'policeStation', ph: 'Police station' },
+  { k: 'address', ph: 'Address', wide: true },
+  { k: 'latitude', ph: 'Latitude', num: true },
+  { k: 'longitude', ph: 'Longitude', num: true },
+];
+
+function BoothForm({ assemblyNo, assemblyName, initial, onDone }) {
+  const { show } = useToast();
+  const qc = useQueryClient();
+  const editing = !!initial;
+  const [form, setForm] = useState(() => {
+    const f = {};
+    for (const fld of BOOTH_FIELDS) f[fld.k] = initial?.[fld.k] ?? '';
+    return f;
+  });
+
+  const mut = useMutation({
+    mutationFn: () => {
+      const payload = { assemblyNo, assemblyName };
+      for (const fld of BOOTH_FIELDS) {
+        const v = String(form[fld.k] ?? '').trim();
+        if (fld.num) payload[fld.k] = v === '' ? undefined : Number(v);
+        else payload[fld.k] = v === '' ? undefined : v;
+      }
+      return editing ? api.masterBoothUpdate(initial.id, payload) : api.masterBoothCreate(payload);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['master-booths', assemblyNo, assemblyName] });
+      show(editing ? 'Booth updated' : 'Booth added', 'success');
+      onDone();
+    },
+    onError: (e) => show(e.message, 'error'),
+  });
+
+  function submit(e) {
+    e.preventDefault();
+    if (!String(form.name).trim()) return show('Booth name is required', 'error');
+    mut.mutate();
+  }
+
+  return (
+    <form onSubmit={submit} className="border border-slate-300 bg-slate-50 p-3">
+      <div className="mb-2 text-sm font-semibold text-slate-900">{editing ? `Edit booth` : 'New booth'}</div>
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+        {BOOTH_FIELDS.map((fld) => (
+          <input
+            key={fld.k}
+            className={`${input} ${fld.wide ? 'col-span-2' : ''}`}
+            placeholder={fld.ph + (fld.req ? ' *' : '')}
+            type={fld.num ? 'number' : 'text'}
+            step={fld.num ? 'any' : undefined}
+            value={form[fld.k]}
+            onChange={(e) => setForm((s) => ({ ...s, [fld.k]: e.target.value }))}
+          />
+        ))}
+      </div>
+      <div className="mt-2 flex gap-1.5">
+        <button type="submit" className={btnPrimary} disabled={mut.isPending}>{editing ? 'Save' : 'Add booth'}</button>
+        <button type="button" className={btnGhost} onClick={onDone}>Cancel</button>
+      </div>
+    </form>
+  );
+}
+
+function BoothRow({ station, assemblyNo, assemblyName }) {
+  const { show } = useToast();
+  const qc = useQueryClient();
+  const [editing, setEditing] = useState(false);
+  const inUse = (station.electionsCount ?? 0) > 0;
+  const hasCoords = station.latitude != null && station.longitude != null;
+
+  const del = useMutation({
+    mutationFn: () => api.masterBoothDelete(station.id),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['master-booths', assemblyNo, assemblyName] }); show('Booth deleted', 'success'); },
+    onError: (e) => show(e.message, 'error'),
+  });
+
+  if (editing) {
+    return (
+      <tr className="border-t border-slate-100 bg-slate-50">
+        <td className="px-3 py-2" colSpan={6}>
+          <BoothForm assemblyNo={assemblyNo} assemblyName={assemblyName} initial={station} onDone={() => setEditing(false)} />
+        </td>
+      </tr>
+    );
+  }
+
+  const location = [station.ward && `Ward ${station.ward}`, station.cityVillage, station.tolaMohalla]
+    .filter(Boolean).join(' · ') || '—';
+
+  return (
+    <tr className="border-t border-slate-100">
+      <td className="px-3 py-2">
+        <div className="font-medium text-slate-800">{station.name ?? '—'}</div>
+        <div className="font-mono text-[11px] text-slate-400">{station.code}</div>
+      </td>
+      <td className="px-3 py-2 text-slate-600">{location}</td>
+      <td className="px-3 py-2 text-center">
+        {hasCoords
+          ? <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium text-emerald-700">Geo</span>
+          : <span className="text-slate-300">—</span>}
+      </td>
+      <td className="px-3 py-2 text-center">
+        {inUse
+          ? <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">{station.electionsCount}</span>
+          : <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700" title="Not used by any Form 20 yet">orphan</span>}
+      </td>
+      <td className="px-3 py-2">
+        <div className="flex items-center justify-end gap-1">
+          {inUse && (
+            <Link to={`/elections/booths/station/${station.id}`} className={`${btnGhost} px-2 py-1`} title="Open booth analytics">View</Link>
+          )}
+          <IconBtn title="Edit booth" onClick={() => setEditing(true)}><PencilIcon /></IconBtn>
+          <IconBtn
+            title={inUse ? 'In use — cannot delete' : 'Delete booth'}
+            danger
+            onClick={() => {
+              if (inUse) { show(`This booth is used in ${station.electionsCount} election${station.electionsCount === 1 ? '' : 's'} — remove it from Form 20 first.`, 'error'); return; }
+              if (confirm(`Delete booth "${station.name}"? This is an unused physical station.`)) del.mutate();
+            }}
+          >
+            <TrashIcon />
+          </IconBtn>
+        </div>
+      </td>
+    </tr>
+  );
+}
+
+function BoothsTab() {
+  // Cascading geography to pick the constituency (same source as the Elections tab).
+  const statesQ = useQuery({ queryKey: ['master-geo', 'states', 'root'], queryFn: () => api.masterGeoList('states') });
+  const [stateId, setStateId] = useState('');
+  const parlQ = useQuery({ queryKey: ['master-geo', 'parliamentary', stateId], queryFn: () => api.masterGeoList('parliamentary', { stateId }), enabled: !!stateId });
+  const [parlId, setParlId] = useState('');
+  const asmQ = useQuery({ queryKey: ['master-geo', 'assembly', parlId], queryFn: () => api.masterGeoList('assembly', { parlId }), enabled: !!parlId });
+  const [asmId, setAsmId] = useState('');
+  const [adding, setAdding] = useState(false);
+
+  const asm = (asmQ.data?.items ?? []).find((a) => String(a.id) === String(asmId));
+  const assemblyNo = asm ? String(asm.number) : undefined;
+  const assemblyName = asm ? asm.name : undefined;
+
+  const boothsQ = useQuery({
+    queryKey: ['master-booths', assemblyNo, assemblyName],
+    queryFn: () => api.masterBooths({ assemblyNo, assemblyName }),
+    enabled: !!assemblyNo && !!assemblyName,
+  });
+  const booths = boothsQ.data?.items ?? [];
+  const orphans = booths.filter((b) => (b.electionsCount ?? 0) === 0).length;
+
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-slate-500">
+        The physical booth (polling-station) registry for a constituency — shared across every election held there. Editing a booth's name/address/coordinates updates it everywhere. Booths used in a Form 20 are protected; unused (orphan) booths can be deleted.
+      </p>
+
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+        <select className={input} value={stateId} onChange={(e) => { setStateId(e.target.value); setParlId(''); setAsmId(''); }}>
+          <option value="">State…</option>
+          {(statesQ.data?.items ?? []).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+        </select>
+        <select className={input} value={parlId} disabled={!stateId} onChange={(e) => { setParlId(e.target.value); setAsmId(''); }}>
+          <option value="">Parliamentary…</option>
+          {(parlQ.data?.items ?? []).map((p) => <option key={p.id} value={p.id}>{p.number} — {p.name}</option>)}
+        </select>
+        <select className={input} value={asmId} disabled={!parlId} onChange={(e) => setAsmId(e.target.value)}>
+          <option value="">Constituency…</option>
+          {(asmQ.data?.items ?? []).map((a) => <option key={a.id} value={a.id}>{a.number} — {a.name}</option>)}
+        </select>
+      </div>
+
+      {!asm && <div className="border border-dashed border-slate-300 bg-white p-8 text-center text-sm text-slate-400">Pick a constituency to manage its booths.</div>}
+
+      {asm && (
+        <>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="text-sm text-slate-600">
+              <strong className="text-slate-900">{booths.length}</strong> booths in {assemblyNo}-{assemblyName}
+              {orphans > 0 && <span className="ml-2 text-amber-700">· {orphans} orphan{orphans === 1 ? '' : 's'}</span>}
+            </div>
+            {!adding && <button className={btnPrimary} onClick={() => setAdding(true)}>+ Add booth</button>}
+          </div>
+
+          {adding && <BoothForm assemblyNo={assemblyNo} assemblyName={assemblyName} onDone={() => setAdding(false)} />}
+
+          <div className="overflow-x-auto rounded-sm border border-slate-300 bg-white">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50 text-left text-[11px] uppercase tracking-wide text-slate-500">
+                <tr>
+                  <th className="px-3 py-2">Booth</th>
+                  <th className="px-3 py-2">Location</th>
+                  <th className="px-3 py-2 text-center">Coords</th>
+                  <th className="px-3 py-2 text-center">Elections</th>
+                  <th className="px-3 py-2" />
+                </tr>
+              </thead>
+              <tbody>
+                {boothsQ.isLoading && <tr><td colSpan={5} className="px-3 py-6 text-center text-slate-400">Loading…</td></tr>}
+                {!boothsQ.isLoading && booths.map((b) => (
+                  <BoothRow key={b.id} station={b} assemblyNo={assemblyNo} assemblyName={assemblyName} />
+                ))}
+                {!boothsQ.isLoading && booths.length === 0 && <tr><td colSpan={5} className="px-3 py-6 text-center text-slate-400">No booths yet — add one, or upload this constituency's Form 20.</td></tr>}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 // ─── Page shell ─────────────────────────────────────────────────────────────
 
 export default function AllMasterPage() {
@@ -709,7 +932,7 @@ export default function AllMasterPage() {
       </div>
 
       <div className="mb-4 flex gap-1 border-b border-slate-300">
-        {[['geography', 'Geography'], ['elections', 'Elections'], ['candidates', 'Candidates'], ['lists', 'Lookup Lists']].map(([id, lbl]) => (
+        {[['geography', 'Geography'], ['elections', 'Elections'], ['booths', 'Booths'], ['candidates', 'Candidates'], ['lists', 'Lookup Lists']].map(([id, lbl]) => (
           <button
             key={id}
             type="button"
@@ -723,6 +946,7 @@ export default function AllMasterPage() {
 
       {tab === 'geography' && <GeographyTab />}
       {tab === 'elections' && <ElectionsTab />}
+      {tab === 'booths' && <BoothsTab />}
       {tab === 'candidates' && <CandidatesTab />}
       {tab === 'lists' && <ListsTab />}
     </div>

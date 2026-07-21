@@ -281,6 +281,208 @@ export interface ElectionsHierarchyResult {
   }>;
 }
 
+// ─── 4. Constituency rollups (one row per assembly, merged across types) ────
+// Powers the "Booth wise election" landing: unlike the hierarchy (which splits
+// by electionType), this collapses every election of an assembly into a single
+// constituency entry keyed on assemblyNo::assemblyName.
+export interface ConstituencyRollup {
+  key: string;
+  state: string;
+  parlNo: string;
+  parlName: string;
+  assemblyNo: string;
+  assemblyName: string;
+  electionCount: number;
+  years: number[]; // distinct, newest first
+  types: string[]; // distinct election types present
+  distinctBooths: number; // distinct physical polling stations across all its elections
+  totalElectors: number | null; // latest election
+  latestElectionId: number;
+  winner: { name: string; party: string | null; share: number } | null; // latest election
+}
+
+export async function computeConstituencyRollups(): Promise<{ constituencies: ConstituencyRollup[] }> {
+  const elections = await prisma.election.findMany({
+    orderBy: [{ assemblyName: 'asc' }, { electionYear: 'desc' }],
+  });
+
+  const byKey = new Map<string, typeof elections>();
+  for (const e of elections) {
+    const key = `${e.assemblyNo}::${e.assemblyName}`;
+    const arr = byKey.get(key) ?? [];
+    arr.push(e);
+    byKey.set(key, arr);
+  }
+
+  const constituencies = await Promise.all(
+    Array.from(byKey.entries()).map(async ([key, rows]) => {
+      // Latest by electionYear (nulls last).
+      const latest = [...rows].sort(
+        (a, b) => (b.electionYear ?? -Infinity) - (a.electionYear ?? -Infinity),
+      )[0];
+      const ids = rows.map((r) => r.id);
+      const distinctPs = await prisma.booth.findMany({
+        where: { electionId: { in: ids } },
+        select: { pollingStationId: true },
+        distinct: ['pollingStationId'],
+      });
+      const { candidates } = await loadCandidateTotals(latest.id);
+      const w = candidates[0] ?? null;
+      const years = Array.from(
+        new Set(rows.map((r) => r.electionYear).filter((y): y is number => y != null)),
+      ).sort((a, b) => b - a);
+      const types = Array.from(new Set(rows.map((r) => r.electionType)));
+      return {
+        key,
+        state: latest.state,
+        parlNo: latest.parlNo,
+        parlName: latest.parlName,
+        assemblyNo: latest.assemblyNo,
+        assemblyName: latest.assemblyName,
+        electionCount: rows.length,
+        years,
+        types,
+        distinctBooths: distinctPs.length,
+        totalElectors: latest.totalElectors,
+        latestElectionId: latest.id,
+        winner: w ? { name: w.name, party: w.party, share: w.share } : null,
+      };
+    }),
+  );
+
+  constituencies.sort((a, b) => a.assemblyName.localeCompare(b.assemblyName));
+  return { constituencies };
+}
+
+// ─── 5. Constituency booths (distinct polling stations across all elections) ─
+// One row per physical PollingStation used anywhere in the constituency, with
+// its latest-election headline result + turnout and an all-elections average.
+export interface ConstituencyBooth {
+  id: number; // pollingStationId (the stable "booth" identity across years)
+  name: string | null;
+  serial: number; // latest election's serial
+  latitude: number | null;
+  longitude: number | null;
+  electionsCount: number;
+  registeredVoters: number; // latest election
+  totalValid: number; // latest election
+  leader: string | null;
+  leaderShare: number;
+  runnerUp: string | null;
+  runnerUpShare: number;
+  margin: number; // leaderShare - runnerUpShare
+  turnoutPct: number; // latest election
+  avgTurnout: number; // mean across the PS's elections
+}
+
+function topTwo(byCandidate: Record<string, number>): {
+  leader: string | null;
+  leaderShare: number;
+  runnerUp: string | null;
+  runnerUpShare: number;
+} {
+  const sorted = Object.entries(byCandidate).sort((a, b) => b[1] - a[1]);
+  return {
+    leader: sorted[0]?.[0] ?? null,
+    leaderShare: sorted[0]?.[1] ?? 0,
+    runnerUp: sorted[1]?.[0] ?? null,
+    runnerUpShare: sorted[1]?.[1] ?? 0,
+  };
+}
+
+export async function computeConstituencyBooths(opts: {
+  assemblyNo?: string;
+  assemblyName?: string;
+}): Promise<{
+  constituency: { assemblyNo: string | null; assemblyName: string | null; state: string | null; parlName: string | null };
+  items: ConstituencyBooth[];
+}> {
+  const where: { assemblyNo?: string; assemblyName?: string } = {};
+  if (opts.assemblyNo) where.assemblyNo = opts.assemblyNo;
+  if (opts.assemblyName) where.assemblyName = opts.assemblyName;
+
+  const elections = await prisma.election.findMany({
+    where,
+    orderBy: { electionYear: 'desc' },
+  });
+  const first = elections[0] ?? null;
+  const yearById = new Map(elections.map((e) => [e.id, e.electionYear ?? -Infinity]));
+
+  // Per-election booth leanings (leader/shares), cached by electionId.
+  const leaningByElection = new Map<number, Awaited<ReturnType<typeof computeBoothLeanings>>>();
+  await Promise.all(
+    elections.map(async (e) => {
+      leaningByElection.set(e.id, await computeBoothLeanings(e.id));
+    }),
+  );
+
+  const booths = await prisma.booth.findMany({
+    where: { electionId: { in: elections.map((e) => e.id) } },
+    include: { pollingStation: true, _count: { select: { boothVoters: true } } },
+  });
+
+  // Group by physical polling station.
+  const byPs = new Map<number, typeof booths>();
+  for (const b of booths) {
+    const arr = byPs.get(b.pollingStationId) ?? [];
+    arr.push(b);
+    byPs.set(b.pollingStationId, arr);
+  }
+
+  const items: ConstituencyBooth[] = Array.from(byPs.entries()).map(([psId, group]) => {
+    // Headline = the group's most recent election.
+    const sorted = [...group].sort(
+      (a, b) => (yearById.get(b.electionId) ?? -Infinity) - (yearById.get(a.electionId) ?? -Infinity),
+    );
+    const head = sorted[0];
+    const lean = leaningByElection.get(head.electionId)?.get(head.id);
+    const tops = topTwo(lean?.byCandidate ?? {});
+    const totalValid = lean?.totalValid ?? 0;
+    const registered = head._count.boothVoters;
+    const totalPolled = totalValid + head.rejectedVotes + head.notaVotes;
+
+    const turnouts = group
+      .map((b) => {
+        const l = leaningByElection.get(b.electionId)?.get(b.id);
+        const tv = l?.totalValid ?? 0;
+        const polled = tv + b.rejectedVotes + b.notaVotes;
+        return b._count.boothVoters > 0 ? polled / b._count.boothVoters : 0;
+      })
+      .filter((t) => t > 0);
+    const avgTurnout = turnouts.length ? turnouts.reduce((s, t) => s + t, 0) / turnouts.length : 0;
+
+    return {
+      id: psId,
+      name: head.name ?? head.pollingStation?.name ?? null,
+      serial: head.serial,
+      latitude: head.pollingStation?.latitude ?? null,
+      longitude: head.pollingStation?.longitude ?? null,
+      electionsCount: group.length,
+      registeredVoters: registered,
+      totalValid,
+      leader: tops.leader,
+      leaderShare: tops.leaderShare,
+      runnerUp: tops.runnerUp,
+      runnerUpShare: tops.runnerUpShare,
+      margin: tops.leaderShare - tops.runnerUpShare,
+      turnoutPct: registered > 0 ? totalPolled / registered : 0,
+      avgTurnout,
+    };
+  });
+
+  items.sort((a, b) => a.serial - b.serial);
+
+  return {
+    constituency: {
+      assemblyNo: first?.assemblyNo ?? opts.assemblyNo ?? null,
+      assemblyName: first?.assemblyName ?? opts.assemblyName ?? null,
+      state: first?.state ?? null,
+      parlName: first?.parlName ?? null,
+    },
+    items,
+  };
+}
+
 export async function computeElectionsHierarchy(): Promise<ElectionsHierarchyResult> {
   const elections = await prisma.election.findMany({
     orderBy: [{ electionType: 'asc' }, { assemblyName: 'asc' }, { electionYear: 'desc' }],
