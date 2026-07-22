@@ -23,10 +23,10 @@ export const DEFAULT_CATEGORIES: Array<{
   { key: 'party', label: 'Political Party', options: ['BJP', 'INC', 'AAP', 'IND', 'BSP', 'SP', 'RJD', 'JDU', 'TMC', 'NCP', 'SHS', 'CPI', 'CPM'] },
   { key: 'alliance', label: 'Alliance', options: ['NDA', 'INDIA', 'Others', 'Independent'] },
   { key: 'community', label: 'Community (Reservation Class)', options: ['Gen', 'OBC', 'SC', 'ST'] },
-  { key: 'religion', label: 'Religion', options: ['Hindu', 'Muslim', 'Christian', 'Sikh', 'Buddhist', 'Jain', 'Other'] },
+  { key: 'religion', label: 'Religion', options: ['Hindu', 'Muslim', 'Christian', 'Sikh', 'Buddhist', 'Jain', 'Zoroastrian (Parsi)', 'Judaism', "Bahá'í", 'Sarnaism (Tribal)', 'Other', 'Not Stated'] },
   { key: 'language', label: 'Language', options: ['Hindi', 'English', 'Bhojpuri', 'Magahi', 'Urdu', 'Marathi', 'Konkani', 'Gujarati', 'Bengali', 'Tamil', 'Telugu'] },
   { key: 'occupation', label: 'Occupation', options: ['Farmer', 'Shopkeeper', 'Teacher', 'Daily Wage', 'Student', 'Government Employee', 'Business', 'Homemaker', 'Driver', 'Unemployed'] },
-  { key: 'category', label: 'Category', options: ['General', 'Backward', 'Minority', 'Reserved'] },
+  { key: 'category', label: 'Category', options: ['General', 'OBC', 'SC', 'ST', 'EWS'] },
   { key: 'gender', label: 'Gender', options: ['Male', 'Female', 'Other'] },
   { key: 'caste', label: 'Caste', options: [] },
 ];
