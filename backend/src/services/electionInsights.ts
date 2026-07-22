@@ -354,11 +354,13 @@ export async function computeConstituencyRollups(): Promise<{ constituencies: Co
   return { constituencies };
 }
 
-// ─── 5. Constituency booths (distinct polling stations across all elections) ─
-// One row per physical PollingStation used anywhere in the constituency, with
-// its latest-election headline result + turnout and an all-elections average.
+// ─── 5. Constituency booths (distinct physical booths across all elections) ──
+// One row per physical booth (building + wing) used anywhere in the constituency,
+// with its latest-election headline result + turnout and an all-elections average.
+// A booth's identity is its serial-stripped name, so two booths sharing a
+// building stay separate and the same booth stays one across renumbered years.
 export interface ConstituencyBooth {
-  id: number; // pollingStationId (the stable "booth" identity across years)
+  id: number; // pollingStationId (the stable per-booth identity across years)
   name: string | null;
   serial: number; // latest election's serial
   latitude: number | null;
@@ -367,12 +369,15 @@ export interface ConstituencyBooth {
   registeredVoters: number; // latest election
   totalValid: number; // latest election
   leader: string | null;
+  leaderParty: string | null; // leading candidate's party (latest election)
   leaderShare: number;
   runnerUp: string | null;
+  runnerUpParty: string | null; // runner-up candidate's party (latest election)
   runnerUpShare: number;
   margin: number; // leaderShare - runnerUpShare
   turnoutPct: number; // latest election
   avgTurnout: number; // mean across the PS's elections
+  byParty: Record<string, number>; // party → vote share (0..1), latest election
 }
 
 function topTwo(byCandidate: Record<string, number>): {
@@ -421,6 +426,15 @@ export async function computeConstituencyBooths(opts: {
     include: { pollingStation: true, _count: { select: { boothVoters: true } } },
   });
 
+  // Candidate name → party, keyed per election (leanings are keyed by name only).
+  const candidates = await prisma.candidate.findMany({
+    where: { electionId: { in: elections.map((e) => e.id) } },
+    select: { electionId: true, name: true, party: true },
+  });
+  const nameToParty = new Map(candidates.map((c) => [`${c.electionId}::${c.name}`, c.party]));
+  const partyOf = (electionId: number, name: string | null) =>
+    name ? nameToParty.get(`${electionId}::${name}`) ?? null : null;
+
   // Group by physical polling station.
   const byPs = new Map<number, typeof booths>();
   for (const b of booths) {
@@ -438,6 +452,13 @@ export async function computeConstituencyBooths(opts: {
     const lean = leaningByElection.get(head.electionId)?.get(head.id);
     const tops = topTwo(lean?.byCandidate ?? {});
     const totalValid = lean?.totalValid ?? 0;
+
+    // Roll the headline election's per-candidate shares up to per-party shares.
+    const byParty: Record<string, number> = {};
+    for (const [cand, share] of Object.entries(lean?.byCandidate ?? {})) {
+      const party = partyOf(head.electionId, cand) ?? cand;
+      byParty[party] = (byParty[party] ?? 0) + share;
+    }
     const registered = head._count.boothVoters;
     const totalPolled = totalValid + head.rejectedVotes + head.notaVotes;
 
@@ -453,7 +474,9 @@ export async function computeConstituencyBooths(opts: {
 
     return {
       id: psId,
-      name: head.name ?? head.pollingStation?.name ?? null,
+      // Prefer the station's serial-stripped name ("… (East Wing)") over the
+      // booth's raw "2 - … (East Wing)"; the serial shows separately as PS-<n>.
+      name: head.pollingStation?.name ?? head.name ?? null,
       serial: head.serial,
       latitude: head.pollingStation?.latitude ?? null,
       longitude: head.pollingStation?.longitude ?? null,
@@ -461,12 +484,15 @@ export async function computeConstituencyBooths(opts: {
       registeredVoters: registered,
       totalValid,
       leader: tops.leader,
+      leaderParty: partyOf(head.electionId, tops.leader),
       leaderShare: tops.leaderShare,
       runnerUp: tops.runnerUp,
+      runnerUpParty: partyOf(head.electionId, tops.runnerUp),
       runnerUpShare: tops.runnerUpShare,
       margin: tops.leaderShare - tops.runnerUpShare,
       turnoutPct: registered > 0 ? totalPolled / registered : 0,
       avgTurnout,
+      byParty,
     };
   });
 

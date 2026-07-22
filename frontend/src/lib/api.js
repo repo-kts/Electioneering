@@ -227,9 +227,11 @@ export const api = {
     masterUpdateOption: (id, data) => request(`/api/master/options/${id}`, { method: 'PUT', body: data }),
     masterDeleteOption: (id) => request(`/api/master/options/${id}`, { method: 'DELETE' }),
     masterSync: () => request('/api/master/sync', { method: 'POST' }),
-    // Booth (physical polling-station) registry — per constituency.
-    masterBooths: ({ assemblyNo, assemblyName } = {}) => {
+    // Master booth registry — keyed by UNIQUE_CODE, filtered by PC/AC.
+    masterBooths: ({ parlId, asmId, assemblyNo, assemblyName } = {}) => {
         const p = new URLSearchParams();
+        if (parlId) p.set('parlId', parlId);
+        if (asmId) p.set('asmId', asmId);
         if (assemblyNo) p.set('assemblyNo', assemblyNo);
         if (assemblyName) p.set('assemblyName', assemblyName);
         return request(`/api/master/polling-stations?${p.toString()}`);
@@ -237,6 +239,19 @@ export const api = {
     masterBoothCreate: (data) => request('/api/master/polling-stations', { method: 'POST', body: data }),
     masterBoothUpdate: (id, data) => request(`/api/master/polling-stations/${id}`, { method: 'PUT', body: data }),
     masterBoothDelete: (id) => request(`/api/master/polling-stations/${id}`, { method: 'DELETE' }),
+    // Bulk booth creation (two-phase, Excel).
+    masterBoothsPreview: (file) => {
+        const fd = new FormData();
+        fd.append('file', file);
+        return request('/api/master/booths/preview', { method: 'POST', body: fd });
+    },
+    masterBoothsCommit: (payload) => request('/api/master/booths/commit', { method: 'POST', body: payload }),
+    // Surname → caste/category/religion rules (seed blank voter cells at import).
+    masterSurnameRules: () => request('/api/master/surname-rules'),
+    masterSurnameRuleCreate: (data) => request('/api/master/surname-rules', { method: 'POST', body: data }),
+    masterSurnameRuleUpdate: (id, data) => request(`/api/master/surname-rules/${id}`, { method: 'PUT', body: data }),
+    masterSurnameRuleDelete: (id) => request(`/api/master/surname-rules/${id}`, { method: 'DELETE' }),
+    masterSurnameRulesBulk: (rules) => request('/api/master/surname-rules/bulk', { method: 'POST', body: { rules } }),
 };
 
 // Direct download URLs (use as href / window.open) — only for PUBLIC endpoints
@@ -257,6 +272,18 @@ export const downloadUrls = {
         if (electionId != null) p.set('electionId', String(electionId));
         const qs = p.toString();
         return `${BASE}/api/templates/form20${qs ? '?' + qs : ''}`;
+    },
+    // Booth-creation sheet, seeded with the chosen PC/AC (id + names).
+    boothTemplate: ({ sample = false, format = '', pcId, acId, pcName, acName } = {}) => {
+        const p = new URLSearchParams();
+        if (format) p.set('format', format);
+        if (sample) p.set('sample', '1');
+        if (pcId != null) p.set('pcId', String(pcId));
+        if (acId != null) p.set('acId', String(acId));
+        if (pcName) p.set('pcName', pcName);
+        if (acName) p.set('acName', acName);
+        const qs = p.toString();
+        return `${BASE}/api/templates/booths${qs ? '?' + qs : ''}`;
     },
 };
 

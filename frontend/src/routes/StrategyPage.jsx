@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import Breadcrumbs from '../components/ui/Breadcrumbs.jsx';
 import { PageHeader, Surface, StatCard, Loading, ErrorBox } from '../components/ui/kit.jsx';
 import ActionPlan from '../components/analytics/ActionPlan.jsx';
+import { boothName, boothTag } from '../components/elections/helpers.js';
 import { api } from '../lib/api.js';
 
 const num = (n) => Math.round(n ?? 0).toLocaleString();
@@ -147,8 +148,8 @@ export function StrategyContent({ electionId, initialCandidate = '' }) {
                       return (
                         <label key={b.id} className={`flex cursor-pointer items-center gap-3 rounded-lg border px-3 py-2 text-sm transition ${on ? 'border-accent-300 bg-accent-50' : 'border-slate-200 hover:bg-slate-50'}`}>
                           <input type="checkbox" checked={on} onChange={() => toggleFlip(b.id)} />
-                          <span className="font-semibold text-slate-700">PS-{b.serial}</span>
-                          <span className="flex-1 truncate text-slate-500">{b.name ?? '—'}</span>
+                          <span className="min-w-0 flex-1 truncate font-semibold text-slate-700" title={boothName(b)}>{boothName(b)}</span>
+                          {boothTag(b) && <span className="shrink-0 text-xs tabular-nums text-slate-400">{boothTag(b)}</span>}
                           <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">{b.classification}</span>
                           <span className="w-20 text-right text-xs tabular-nums text-slate-500">+{num(need)} votes</span>
                         </label>

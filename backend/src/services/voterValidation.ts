@@ -42,6 +42,7 @@ export interface VoterClean {
   parlName: string;
   assemblyNo: string;
   assemblyName: string;
+  uniqueCode: string; // master-booth UNIQUE_CODE — resolves the booth at import
   pollingStationName: string;
   pollingStationAddress: string | null;
   boothName: string | null;
@@ -81,7 +82,14 @@ export interface VoterValidation {
   value: VoterClean | null;
 }
 
-export function validateVoter(raw: Record<string, unknown>): VoterValidation {
+// `classify` (default true) runs the name-based caste/religion inference for
+// blank cells. The bulk voter import passes `classify: false` so caste/category/
+// religion are seeded ONLY from admin surname rules (see services/surnameRules.ts)
+// and left blank when no rule matches.
+export function validateVoter(
+  raw: Record<string, unknown>,
+  opts: { classify?: boolean } = {},
+): VoterValidation {
   const errors: Record<string, string> = {};
   const s = (k: string) => String(raw[k] ?? '').trim();
   const sUp = (k: string) => s(k).toUpperCase();
@@ -140,6 +148,10 @@ export function validateVoter(raw: Record<string, unknown>): VoterValidation {
   const parlName = s('parlName');
   const assemblyNo = s('assemblyNo');
   const assemblyName = s('assemblyName');
+  // Master-booth link — REQUIRED. The roll is now imported booth-wise; each row
+  // names its booth by UNIQUE_CODE and the importer resolves (never creates) it.
+  const uniqueCode = s('uniqueCode');
+  if (!uniqueCode) errors.uniqueCode = 'UNIQUE_CODE required';
   const pollingStationName = s('pollingStationName');
   const pollingStationAddress = s('pollingStationAddress') || null;
   const boothName = s('boothName') || null;
@@ -183,8 +195,9 @@ export function validateVoter(raw: Record<string, unknown>): VoterValidation {
     communitySource = 'manual';
     communityConfidence = 1;
   }
-  // Fill caste + religion from the name when either is missing.
-  if (!caste || !religion) {
+  // Fill caste + religion from the name when either is missing — unless the
+  // caller opted out (bulk import seeds these from admin surname rules instead).
+  if (opts.classify !== false && (!caste || !religion)) {
     const c = classifyName(firstName, lastName);
     if (!religion) religion = c.religion;
     if (!caste) {
@@ -221,6 +234,7 @@ export function validateVoter(raw: Record<string, unknown>): VoterValidation {
           parlName,
           assemblyNo,
           assemblyName,
+          uniqueCode,
           pollingStationName,
           pollingStationAddress,
           boothName,

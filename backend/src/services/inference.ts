@@ -148,35 +148,3 @@ export async function computeCommunityLeaning(
   groups.sort((a, b) => b.voters - a.voters);
   return { electionId, dimension, groups };
 }
-
-/**
- * Fallback linker: re-point any BoothVoter rows in this election whose booth
- * has no Form 20 results onto the booth that matches by `partSerial`/name.
- *
- * The primary roll↔booth join is structural (roll Part Number == Booth serial,
- * done at voter-upload time). This exists only to reconcile rows uploaded
- * before their Form 20 booth existed; it matches BoothVoter.partNumber to the
- * booth serial within the election.
- */
-export async function linkRollToBooths(electionId: number): Promise<number> {
-  const booths = await prisma.booth.findMany({
-    where: { electionId },
-    select: { id: true, serial: true },
-  });
-  const bySerial = new Map<string, number>();
-  for (const b of booths) bySerial.set(String(b.serial), b.id);
-
-  const orphans = await prisma.boothVoter.findMany({
-    where: { electionId },
-    select: { id: true, boothId: true, partNumber: true },
-  });
-  let linked = 0;
-  for (const bv of orphans) {
-    const want = bySerial.get(String(bv.partNumber ?? '').trim());
-    if (want != null && want !== bv.boothId) {
-      await prisma.boothVoter.update({ where: { id: bv.id }, data: { boothId: want } });
-      linked++;
-    }
-  }
-  return linked;
-}

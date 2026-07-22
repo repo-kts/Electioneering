@@ -7,8 +7,14 @@ const router = Router();
 // / assembly / year / type) is NOT here — it is chosen in the upload screen and
 // applied to the whole file. Headers use operator-friendly labels that the
 // importer recognizes (see services/parseUpload.ts VOTER_HEADER_MAP).
+// Per-voter columns only. Everything booth/area-level (part number, booth &
+// polling-station name, main town, ward, post office, police station, panchayat,
+// block, tehsil, mandal, revenue division, subdivision, district, pin code) is
+// NOT here — it lives on the master booth and is inherited via UNIQUE_CODE at
+// import. Only House Number + Section (a voter's position INSIDE the booth) stay.
 const VOTER_HEADERS = [
   'Election ID',
+  'UNIQUE_CODE',
   'Name',
   'Relation',
   'Father Name',
@@ -19,21 +25,6 @@ const VOTER_HEADERS = [
   'House Number',
   'Section No',
   'Section Name',
-  'Part Number',
-  'Booth Name',
-  'Polling Station Name',
-  'Main Town',
-  'Ward',
-  'Post Office',
-  'Police Station',
-  'Panchayat',
-  'Block',
-  'Tehsil',
-  'Mandal',
-  'Revenue Division',
-  'Subdivision',
-  'District',
-  'Pin Code',
   'Caste',
   'Community',
   'Category',
@@ -44,6 +35,7 @@ const VOTER_HEADERS = [
 
 const VOTER_SAMPLE: Record<string, string | number> = {
   'Election ID': 1,
+  UNIQUE_CODE: 'GOA-PERNEM-001',
   Name: 'Sebastiao Xavier Fernandes',
   Relation: 'Father',
   'Father Name': 'Xavier Fernandes',
@@ -54,21 +46,6 @@ const VOTER_SAMPLE: Record<string, string | number> = {
   'House Number': '3',
   'Section No': '1',
   'Section Name': 'Near Church, Tiracol',
-  'Part Number': '1',
-  'Booth Name': 'Booth 1 — Room A',
-  'Polling Station Name': 'Government Primary School, Tiracol',
-  'Main Town': 'TIRACOL',
-  Ward: '',
-  'Post Office': 'ARAMBOL',
-  'Police Station': 'MANDREM',
-  Panchayat: '',
-  Block: 'PERNEM',
-  Tehsil: '',
-  Mandal: '',
-  'Revenue Division': '',
-  Subdivision: 'PERNEM',
-  District: 'NORTH GOA',
-  'Pin Code': '403524',
   Caste: '',
   Community: 'Gen',
   Category: '',
@@ -152,6 +129,7 @@ router.get('/form20', (req, res) => {
   const electionId = hasElectionId ? electionIdParam : 1;
   const headers = [
     'electionId',
+    'UNIQUE_CODE',
     'serial',
     ...candidates,
     'rejected',
@@ -164,6 +142,7 @@ router.get('/form20', (req, res) => {
     const validSum = 100 * candidates.length;
     rows.push({
       electionId,
+      UNIQUE_CODE: 'GOA-PERNEM-001',
       serial: 1,
       ...Object.fromEntries(candidates.map((c) => [c, 100])),
       rejected: 0,
@@ -176,6 +155,58 @@ router.get('/form20', (req, res) => {
     rows.push({ electionId });
   }
   sendSheet(res, headers, rows, sample ? 'form20_sample' : 'form20_template', format, 'Form20');
+});
+
+// GET /api/templates/booths[?pcId=&acId=&pcName=&acName=][&sample=1][&format=csv]
+// Booth-creation sheet, optionally seeded with the chosen PC/AC (id + names) so
+// the operator knows which constituency the booths will be created under. The
+// commit still uses the PC/AC picked in the UI — these columns are informational.
+const BOOTH_HEADERS = [
+  'pcId',
+  'acId',
+  'PC',
+  'AC',
+  'part_number',
+  'Booth_Name',
+  'Polling_Station_Name',
+  'Main_Town',
+  'Post_Office',
+  'Police_Station',
+  'Block',
+  'Subdivision',
+  'District',
+  'Pin_Code',
+  'UNIQUE_CODE',
+];
+router.get('/booths', (req, res) => {
+  const format = String(req.query.format ?? '').toLowerCase();
+  const sample = req.query.sample === '1';
+  const pcId = String(req.query.pcId ?? '').trim();
+  const acId = String(req.query.acId ?? '').trim();
+  const pcName = String(req.query.pcName ?? '').trim();
+  const acName = String(req.query.acName ?? '').trim();
+  const seed: Record<string, string | number> = { pcId, acId, PC: pcName, AC: acName };
+  const rows: Record<string, string | number>[] = [];
+  if (sample) {
+    rows.push({
+      ...seed,
+      part_number: '1',
+      Booth_Name: 'Government Primary School, Tiracol — Room A',
+      Polling_Station_Name: 'Government Primary School, Tiracol',
+      Main_Town: 'TIRACOL',
+      Post_Office: 'ARAMBOL',
+      Police_Station: 'MANDREM',
+      Block: 'PERNEM',
+      Subdivision: 'PERNEM',
+      District: 'NORTH GOA',
+      Pin_Code: '403524',
+      UNIQUE_CODE: 'GOA-PERNEM-001',
+    });
+  } else if (pcId || acId) {
+    // Blank template with the chosen PC/AC pre-filled in row 2 for reference.
+    rows.push(seed);
+  }
+  sendSheet(res, BOOTH_HEADERS, rows, sample ? 'booths_sample' : 'booths_template', format, 'Booths');
 });
 
 export default router;

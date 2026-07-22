@@ -133,6 +133,13 @@ const VOTER_HEADER_MAP: Record<string, string> = {
   'booth name': 'boothName',
   boothname: 'boothName',
   booth_name: 'boothName',
+  // Master-booth link — the operator-assigned UNIQUE_CODE. Every roll row must
+  // carry it; the importer resolves the master booth by this code.
+  unique_code: 'uniqueCode',
+  'unique code': 'uniqueCode',
+  uniquecode: 'uniqueCode',
+  'booth code': 'uniqueCode',
+  booth_code: 'uniqueCode',
   partnumber: 'partNumber',
   'part number': 'partNumber',
   'part no': 'partNumber',
@@ -234,6 +241,55 @@ export function normalizeVoterRows(rows: ParsedRow[]): ParsedRow[] {
   });
 }
 
+// ─── Master-booth (creation sheet) normalizer ────────────────────────
+const BOOTH_HEADER_MAP: Record<string, string> = {
+  part_number: 'partNumber', 'part number': 'partNumber', partnumber: 'partNumber', 'part no': 'partNumber',
+  booth_name: 'boothName', 'booth name': 'boothName', boothname: 'boothName',
+  polling_station_name: 'pollingStationName', 'polling station name': 'pollingStationName', pollingstationname: 'pollingStationName',
+  main_town: 'mainTown', 'main town': 'mainTown',
+  post_office: 'postOffice', 'post office': 'postOffice',
+  police_station: 'policeStation', 'police station': 'policeStation',
+  block: 'block',
+  subdivision: 'subdivision', 'sub division': 'subdivision', 'sub-division': 'subdivision',
+  district: 'district',
+  pin_code: 'pinCode', 'pin code': 'pinCode', pincode: 'pinCode', pin: 'pinCode',
+  unique_code: 'code', 'unique code': 'code', uniquecode: 'code', code: 'code', 'booth code': 'code',
+};
+
+export interface BoothSheetRow {
+  partNumber: string;
+  boothName: string;
+  pollingStationName: string;
+  mainTown: string;
+  postOffice: string;
+  policeStation: string;
+  block: string;
+  subdivision: string;
+  district: string;
+  pinCode: string;
+  code: string;
+}
+
+/** Map a raw booth-creation sheet into canonical rows (all string fields, trimmed). */
+export function normalizeBoothRows(rows: ParsedRow[]): BoothSheetRow[] {
+  const keys: (keyof BoothSheetRow)[] = [
+    'partNumber', 'boothName', 'pollingStationName', 'mainTown', 'postOffice',
+    'policeStation', 'block', 'subdivision', 'district', 'pinCode', 'code',
+  ];
+  return rows.map((raw) => {
+    const mapped: Record<string, string> = {};
+    for (const [k, v] of Object.entries(raw)) {
+      const key = BOOTH_HEADER_MAP[k.toLowerCase().trim()];
+      if (!key) continue;
+      const val = typeof v === 'string' ? v.trim() : v == null ? '' : String(v).trim();
+      if (!mapped[key]) mapped[key] = val;
+    }
+    const out = {} as BoothSheetRow;
+    for (const k of keys) out[k] = mapped[k] ?? '';
+    return out;
+  });
+}
+
 // ─── Form 20 normalizer ──────────────────────────────────────────────
 // Expected columns: serial / PS#, then candidate-name columns, then
 // rejected, nota, total, tendered. Candidate names are dynamic.
@@ -241,6 +297,11 @@ const FORM20_RESERVED = new Set([
   'election id',
   'electionid',
   'election_id',
+  'unique_code',
+  'unique code',
+  'uniquecode',
+  'booth code',
+  'booth_code',
   'serial',
   'serial no',
   'serial no.',
@@ -278,6 +339,7 @@ export interface Form20Preview {
   electionId: number | null; // read from the sheet's Election ID column
   rows: Array<{
     serial: number;
+    code: string;       // master-booth UNIQUE_CODE (resolves the booth at commit)
     name?: string;      // polling station (building) name
     boothName?: string; // booth's own name (within the building)
     votes: Record<string, number>;
@@ -316,6 +378,7 @@ export function normalizeForm20(parsed: ParseResult): Form20Preview {
     return undefined;
   };
   const serialKey = findHeader('serial', 'serial no', 'sl', 'sl no', 'ps', 'ps#', 'ps no');
+  const codeKey = findHeader('unique_code', 'unique code', 'uniquecode', 'booth code', 'booth_code');
   const boothNameKey = findHeader('booth name', 'boothname', 'booth_name');
   const psNameKey = findHeader('polling station', 'pollingstation', 'polling_station', 'polling station name', 'polling_station_name');
   const rejectedKey = findHeader('rejected', 'rejected votes', 'no of rejected votes');
@@ -324,7 +387,7 @@ export function normalizeForm20(parsed: ParseResult): Form20Preview {
   const tenderedKey = findHeader('tendered', 'tendered votes', 'no of tendered votes');
   const electionIdKey = findHeader('election id', 'electionid', 'election_id');
   // Remove reserved keys from candidate cols
-  const reserved = new Set([serialKey, boothNameKey, psNameKey, rejectedKey, notaKey, totalKey, tenderedKey, electionIdKey].filter(Boolean) as string[]);
+  const reserved = new Set([serialKey, codeKey, boothNameKey, psNameKey, rejectedKey, notaKey, totalKey, tenderedKey, electionIdKey].filter(Boolean) as string[]);
   // Also remove "valid votes" if present
   const validKey = findHeader('valid votes', 'total valid', 'no of valid votes');
   if (validKey) reserved.add(validKey);
@@ -350,6 +413,9 @@ export function normalizeForm20(parsed: ParseResult): Form20Preview {
     const serialErr = checkPos(serialRaw);
     if (serialErr) errs.serial = serialErr;
     const serial = num(serialRaw) || i + 1;
+
+    const code = codeKey ? String(r[codeKey] ?? '').trim() : '';
+    if (!code) errs.code = 'UNIQUE_CODE required';
 
     const votes: Record<string, number> = {};
     for (const c of cleanedCandidates) {
@@ -380,6 +446,7 @@ export function normalizeForm20(parsed: ParseResult): Form20Preview {
 
     return {
       serial,
+      code,
       name: psNameKey ? String(r[psNameKey] ?? '').trim() || undefined : undefined,
       boothName: boothNameKey ? String(r[boothNameKey] ?? '').trim() || undefined : undefined,
       votes,

@@ -1,12 +1,12 @@
 // Compact "all years" analytics embedded in the constituency overview.
 // Shows every recorded election year for this constituency at a glance:
-// year chips (switch year), a turnout + winning-share trend, and a winner
-// timeline. Full detail lives on the Yearly-trends page.
+// year chips (switch year), a per-year turnout + winning-share comparison, and
+// a winner timeline. Full detail lives on the Yearly-trends page.
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
-  LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer, Legend,
+  BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer, Legend, LabelList,
 } from 'recharts';
 import { Surface, Loading, ErrorBox } from '../ui/kit.jsx';
 import { api } from '../../lib/api.js';
@@ -84,21 +84,25 @@ export default function AllYearsAnalytics({ assemblyNo, assemblyName, currentEle
             })}
           </div>
 
-          {chartData.length <= 1 ? (
+          {chartData.length === 0 ? (
             <p className="border border-dashed border-slate-200 bg-white py-6 text-center text-sm text-slate-500">
-              Only one election on record — add more years to plot a trend.
+              No election results recorded yet.
             </p>
           ) : (
             <ResponsiveContainer width="100%" height={260}>
-              <LineChart data={chartData} margin={{ left: 8, right: 16, top: 8, bottom: 8 }}>
+              <BarChart data={chartData} margin={{ left: 8, right: 16, top: 20, bottom: 8 }} barGap={2} barCategoryGap="28%">
                 <CartesianGrid stroke="#e7e5de" vertical={false} />
                 <XAxis dataKey="year" tick={{ fontSize: 11 }} />
                 <YAxis tick={{ fontSize: 11 }} domain={[0, 100]} unit="%" width={44} />
-                <Tooltip formatter={(v, n) => [v == null ? '—' : `${v}%`, n === 'turnout' ? 'Turnout' : 'Winning share']} />
+                <Tooltip formatter={(v, n) => [v == null ? '—' : `${v}%`, n === 'turnout' ? 'Turnout' : 'Winning share']} cursor={{ fill: '#f7f5f0' }} />
                 <Legend formatter={(v) => (v === 'turnout' ? 'Turnout' : 'Winning share')} />
-                <Line type="monotone" dataKey="turnout" stroke={colorFor('Turnout series')} strokeWidth={2} dot={{ r: 4 }} connectNulls />
-                <Line type="monotone" dataKey="winShare" stroke={colorFor('Winning share series')} strokeWidth={2} dot={{ r: 4 }} connectNulls />
-              </LineChart>
+                <Bar dataKey="turnout" fill={colorFor('Turnout series')} radius={[4, 4, 0, 0]}>
+                  <LabelList dataKey="turnout" position="top" fontSize={10} fill="#64748b" formatter={(v) => (v == null ? '' : `${v}%`)} />
+                </Bar>
+                <Bar dataKey="winShare" fill={colorFor('Winning share series')} radius={[4, 4, 0, 0]}>
+                  <LabelList dataKey="winShare" position="top" fontSize={10} fill="#64748b" formatter={(v) => (v == null ? '' : `${v}%`)} />
+                </Bar>
+              </BarChart>
             </ResponsiveContainer>
           )}
         </div>

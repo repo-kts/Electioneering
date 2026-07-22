@@ -85,19 +85,45 @@ model Candidate {
   @@index([electionId])
 }
 
-// ─── Polling Station (physical building / location, election-independent) ─
+// ─── Polling Station = MASTER BOOTH (one stable row per physical booth) ───
+// The single source of truth for a physical booth. Created up front from the
+// all-master Booth creator; `code` is the operator-assigned, immutable,
+// GLOBALLY-UNIQUE UNIQUE_CODE that maps this booth across every election even
+// as its serial/part number changes year to year. Importers (voter roll,
+// Form 20) only ever LOOK booths up by `code` — they never create them.
 model PollingStation {
   id            Int      @id @default(autoincrement())
-  code          String   @unique // in-house generated, deterministic — dedups buildings across elections
-  name          String?
+  code          String   @unique // operator-assigned UNIQUE_CODE — immutable, globally unique
+
+  // Geography — real FKs into the master hierarchy. AC is nullable (UTs with no
+  // assembly hang directly under the PC). Denormalized strings are kept for
+  // display + import constituency-matching against the Election's string fields.
+  parliamentaryConstituencyId Int
+  parliamentaryConstituency   ParliamentaryConstituency @relation(fields: [parliamentaryConstituencyId], references: [id], onDelete: Cascade)
+  assemblyConstituencyId      Int?
+  assemblyConstituency        AssemblyConstituency? @relation(fields: [assemblyConstituencyId], references: [id], onDelete: SetNull)
+  state         String?
+  parlNo        String?
+  parlName      String?
+  assemblyNo    String?
+  assemblyName  String?
+
+  // Master booth attributes (from the creation sheet)
+  partNumber        String?  // current/default part number (per-election serial lives on Booth)
+  boothName         String?
+  pollingStationName String?
+  name          String?  // display name (mirrors boothName; kept for analytics reads)
+  mainTown      String?
   address       String?
   cityVillage   String?  // city / village
   ward          String?  // ward no.
   tolaMohalla   String?  // tola / mohalla
   postOffice    String?
   policeStation String?
-  assemblyNo    String?  // scope anchor for the code
-  assemblyName  String?
+  block         String?
+  subdivision   String?
+  district      String?
+  pinCode       String?
   latitude      Float?   // geocoded from name/address
   longitude     Float?
   geocodedAt    DateTime?
@@ -107,17 +133,22 @@ model PollingStation {
   booths        Booth[]
 
   @@index([assemblyNo])
+  @@index([parliamentaryConstituencyId])
+  @@index([assemblyConstituencyId])
 }
 
-// ─── Booth (per-election polling booth; the Form 20 result row) ──────────
+// ─── Booth (per-election join: master booth × election; the Form 20 row) ──
+// One row per (election, master booth). Identity is [electionId, pollingStationId]
+// — resolved from UNIQUE_CODE at import time — NOT the serial (which is renumbered
+// year to year and is recorded here as per-election metadata only).
 model Booth {
   id               Int      @id @default(autoincrement())
   electionId       Int
   election         Election @relation(fields: [electionId], references: [id], onDelete: Cascade)
   pollingStationId Int
   pollingStation   PollingStation @relation(fields: [pollingStationId], references: [id])
-  serial           Int      // PS # in Form 20 (1..N) == roll Part Number
-  name             String?  // booth / PS name as printed
+  serial           Int      @default(0) // per-election PS # in Form 20 / roll Part Number
+  name             String?  // booth / PS name as printed for this election
   rejectedVotes    Int      @default(0)
   notaVotes        Int      @default(0)
   tenderedVotes    Int      @default(0)
@@ -128,9 +159,10 @@ model Booth {
   boothVoters      BoothVoter[]
   households       Household[]
 
-  @@unique([electionId, serial])
+  @@unique([electionId, pollingStationId])
   @@index([electionId])
   @@index([pollingStationId])
+  @@index([electionId, serial])
 }
 
 // ─── Vote results (cells in Form 20 grid) ───────────────────────────────
@@ -357,6 +389,7 @@ model ParliamentaryConstituency {
   updatedAt DateTime @updatedAt
 
   assemblies AssemblyConstituency[]
+  pollingStations PollingStation[]
 
   @@unique([stateId, number])
   @@index([stateId])
@@ -373,6 +406,8 @@ model AssemblyConstituency {
   active    Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  pollingStations PollingStation[]
 
   @@unique([parlId, number])
   @@index([parlId])
@@ -406,4 +441,22 @@ model MasterOption {
 
   @@unique([categoryId, label])
   @@index([categoryId])
+}
+
+// ─── Surname → caste/category/religion rules ────────────────────────────
+// Admin-managed lookup that maps a voter's surname (last name) to a caste,
+// category and/or religion. On voter import, BLANK caste/category/religion
+// cells are seeded from the matching rule (case-insensitive on `surname`);
+// filled cells are kept and surnames with no rule are left blank.
+model SurnameRule {
+  id        Int      @id @default(autoincrement())
+  surname   String   @unique // stored UPPERCASE for case-insensitive matching
+  caste     String?
+  category  String?
+  religion  String?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([active])
 }

@@ -20,6 +20,10 @@ export function validateVoterRow(row) {
     if (!s(k)) errors[k] = 'required';
   }
 
+  // Booth link — the roll is imported booth-wise by UNIQUE_CODE. (Existence /
+  // constituency checks happen server-side; here we just require it non-blank.)
+  if (!s('uniqueCode')) errors.uniqueCode = 'UNIQUE_CODE required';
+
   const ageRaw = s('age');
   if (!ageRaw) {
     errors.age = 'required';
@@ -69,6 +73,7 @@ export function form20CellError(field, raw) {
 
 export function validateForm20Row(row, candidates) {
   const errs = {};
+  if (!String(row.code ?? '').trim()) errs.code = 'UNIQUE_CODE required';
   const sErr = form20CellError('serial', row.serial);
   if (sErr) errs.serial = sErr;
   for (const c of candidates) {

@@ -8,8 +8,8 @@ import { useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
-  LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid,
-  ResponsiveContainer, Legend, Cell,
+  BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid,
+  ResponsiveContainer, Legend, Cell, LabelList,
 } from 'recharts';
 import { api } from '../lib/api.js';
 import Breadcrumbs from '../components/ui/Breadcrumbs.jsx';
@@ -17,7 +17,7 @@ import { PageHeader, Surface, StatCard, Loading, ErrorBox } from '../components/
 import BoothElectionDetail from '../components/analytics/BoothElectionDetail.jsx';
 import { DemographicCard } from '../components/analytics/BoothDemographics.jsx';
 import InsightsSection from '../components/analytics/InsightsSection.jsx';
-import { partyColor, colorFor, colorForCandidate, num, pct } from '../components/elections/helpers.js';
+import { partyColor, colorFor, colorForCandidate, num, pct, boothName, boothTag } from '../components/elections/helpers.js';
 
 const GRID = '#e7e5de';
 
@@ -109,7 +109,7 @@ export default function BoothHistoryPage() {
           d?.constituency
             ? { label: d.constituency.assemblyName ?? 'Constituency', to: `/elections/booths/${encodeURIComponent(d.constituency.assemblyNo ?? '')}/${encodeURIComponent(d.constituency.assemblyName ?? '')}` }
             : { label: 'Constituency' },
-          { label: d ? `PS-${elections[0]?.ps?.serial ?? ''}` : 'Booth' },
+          { label: d ? boothName(elections[0]?.ps) : 'Booth' },
         ]}
       />
 
@@ -124,8 +124,8 @@ export default function BoothHistoryPage() {
       {d && elections.length > 0 && (
         <>
           <PageHeader
-            eyebrow={`${d.constituency?.assemblyName ?? ''}${d.constituency?.state ? ' · ' + d.constituency.state : ''}`}
-            title={d.ps?.name ? `PS-${elections[0].ps.serial} · ${d.ps.name}` : `Booth PS-${elections[0].ps.serial}`}
+            eyebrow={[d.constituency?.assemblyName, d.constituency?.state, boothTag(elections[0]?.ps)].filter(Boolean).join(' · ')}
+            title={boothName(elections[0]?.ps)}
             subtitle="This booth's full history across every election. Default view blends all election types over time — narrow by type or year below."
             actions={
               <div className="flex flex-wrap items-center gap-2">
@@ -185,39 +185,43 @@ export default function BoothHistoryPage() {
                 <StatCard label="Registered (latest)" value={num(agg?.registeredVoters)} />
               </div>
 
-              {/* Result & turnout trends */}
-              <Surface title="Turnout & winning share over time" subtitle="Every election at this booth, blended chronologically. Each point is labelled with its year and type (AE = Assembly, LS = Lok Sabha).">
-                {trendData.length <= 1 ? (
-                  <p className="border border-dashed border-slate-200 bg-white py-6 text-center text-sm text-slate-500">Only one election in this filter — widen it to plot a trend.</p>
+              {/* Result & turnout, per election */}
+              <Surface title="Turnout & winning share by election" subtitle="Every election at this booth, compared side by side. Each bar group is labelled with its year and type (AE = Assembly, LS = Lok Sabha).">
+                {trendData.length === 0 ? (
+                  <p className="border border-dashed border-slate-200 bg-white py-6 text-center text-sm text-slate-500">No election results in this filter.</p>
                 ) : (
                   <ResponsiveContainer width="100%" height={280}>
-                    <LineChart data={trendData} margin={{ left: 8, right: 16, top: 8, bottom: 8 }}>
+                    <BarChart data={trendData} margin={{ left: 8, right: 16, top: 20, bottom: 8 }} barGap={2} barCategoryGap="28%">
                       <CartesianGrid stroke={GRID} vertical={false} />
                       <XAxis dataKey="label" tick={{ fontSize: 11 }} />
                       <YAxis tick={{ fontSize: 11 }} domain={[0, 100]} unit="%" width={44} />
-                      <Tooltip formatter={(v, n) => [v == null ? '—' : `${v}%`, n]} />
+                      <Tooltip formatter={(v, n) => [v == null ? '—' : `${v}%`, n]} cursor={{ fill: '#f7f5f0' }} />
                       <Legend />
-                      <Line name="Turnout" type="monotone" dataKey="turnout" stroke={colorFor('Turnout series')} strokeWidth={2} dot={{ r: 4 }} connectNulls />
-                      <Line name="Winning share" type="monotone" dataKey="winShare" stroke={colorFor('Winning share series')} strokeWidth={2} dot={{ r: 4 }} connectNulls />
-                    </LineChart>
+                      <Bar name="Turnout" dataKey="turnout" fill={colorFor('Turnout series')} radius={[4, 4, 0, 0]}>
+                        <LabelList dataKey="turnout" position="top" fontSize={10} fill="#64748b" formatter={(v) => (v == null ? '' : `${v}%`)} />
+                      </Bar>
+                      <Bar name="Winning share" dataKey="winShare" fill={colorFor('Winning share series')} radius={[4, 4, 0, 0]}>
+                        <LabelList dataKey="winShare" position="top" fontSize={10} fill="#64748b" formatter={(v) => (v == null ? '' : `${v}%`)} />
+                      </Bar>
+                    </BarChart>
                   </ResponsiveContainer>
                 )}
               </Surface>
 
-              {/* Vote share by candidate over time */}
-              {candShareData.length > 1 && candNames.length > 0 && (
-                <Surface className="mt-4" title="Vote share by candidate" subtitle="How each candidate's booth vote-share moved election to election.">
+              {/* Vote share by candidate, per election */}
+              {candShareData.length > 0 && candNames.length > 0 && (
+                <Surface className="mt-4" title="Vote share by candidate" subtitle="Each candidate's booth vote-share, compared election to election.">
                   <ResponsiveContainer width="100%" height={280}>
-                    <LineChart data={candShareData} margin={{ left: 8, right: 16, top: 8, bottom: 8 }}>
+                    <BarChart data={candShareData} margin={{ left: 8, right: 16, top: 8, bottom: 8 }} barGap={2} barCategoryGap="24%">
                       <CartesianGrid stroke={GRID} vertical={false} />
                       <XAxis dataKey="label" tick={{ fontSize: 11 }} />
                       <YAxis tick={{ fontSize: 11 }} unit="%" width={44} />
-                      <Tooltip formatter={(v, n) => [v == null ? '—' : `${v}%`, n]} />
+                      <Tooltip formatter={(v, n) => [v == null ? '—' : `${v}%`, n]} cursor={{ fill: '#f7f5f0' }} />
                       <Legend />
                       {candNames.map((nm) => (
-                        <Line key={nm} name={nm} type="monotone" dataKey={nm} stroke={colorForName(nm)} strokeWidth={2} dot={{ r: 3 }} connectNulls />
+                        <Bar key={nm} name={nm} dataKey={nm} fill={colorForName(nm)} radius={[4, 4, 0, 0]} />
                       ))}
-                    </LineChart>
+                    </BarChart>
                   </ResponsiveContainer>
                 </Surface>
               )}

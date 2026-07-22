@@ -26,6 +26,7 @@ const RENDER_CAP = 500;
 
 const VOTER_COLUMNS = [
   { key: 'electionId', label: 'Election ID', type: 'text', short: true },
+  { key: 'uniqueCode', label: 'UNIQUE_CODE', type: 'text', required: true, short: true },
   { key: 'firstName', label: 'First Name', type: 'text', required: true, uppercase: true },
   { key: 'lastName', label: 'Last Name', type: 'text', required: true, uppercase: true },
   { key: 'relativeName', label: 'Father/Husband', type: 'text', long: true },
@@ -34,11 +35,9 @@ const VOTER_COLUMNS = [
   { key: 'gender', label: 'Gender', type: 'select', options: GENDERS, required: true, short: true },
   { key: 'epic', label: 'EPIC', type: 'text', required: true, uppercase: true, maxLength: 10 },
   { key: 'mobile', label: 'Mobile', type: 'tel', maxLength: 10, short: true },
-  { key: 'partNumber', label: 'Part No', type: 'text', short: true },
-  { key: 'boothName', label: 'Booth Name', type: 'text', long: true },
-  { key: 'pollingStationName', label: 'Polling Station', type: 'text', long: true },
   { key: 'houseNumber', label: 'House', type: 'text', short: true },
-  { key: 'district', label: 'District', type: 'text' },
+  { key: 'sectionNo', label: 'Section No', type: 'text', short: true },
+  { key: 'sectionName', label: 'Section Name', type: 'text', long: true },
   { key: 'caste', label: 'Caste', type: 'text' },
   { key: 'community', label: 'Community', type: 'text', short: true },
   { key: 'category', label: 'Category', type: 'text', short: true },
@@ -76,6 +75,7 @@ export default function UploadPreview({ kind, data, onCancel, onCommit, headerEx
     if (isVoter) return [];
     const m = [
       { kind: 'serial', label: 'PS #', short: true },
+      { kind: 'code', label: 'UNIQUE_CODE', short: true },
     ];
     candidates.forEach((c) => m.push({ kind: 'cand', candidate: c, label: c, short: true }));
     m.push({ kind: 'valid', label: 'Valid', short: true, readonly: true });
@@ -113,6 +113,7 @@ export default function UploadPreview({ kind, data, onCancel, onCommit, headerEx
         if (r.__id !== rid) return r;
         const next = { ...r, votes: { ...(r.votes || {}) } };
         if (def.kind === 'serial') next.serial = Number(raw) || 0;
+        else if (def.kind === 'code') next.code = String(raw);
         else if (def.kind === 'name') next.name = String(raw);
         else if (def.kind === 'boothName') next.boothName = String(raw);
         else if (def.kind === 'cand') next.votes[def.candidate] = Number(raw) || 0;
@@ -133,7 +134,7 @@ export default function UploadPreview({ kind, data, onCancel, onCommit, headerEx
         const blankVoter = () =>
           Object.fromEntries(voterCols.map((c) => [c.key, ''])); // empty row
         const blankForm20 = () => ({
-          serial: 1, name: '', boothName: '', votes: {},
+          serial: 1, code: '', name: '', boothName: '', votes: {},
           rejectedVotes: 0, notaVotes: 0, tenderedVotes: 0, total: 0,
         });
 
@@ -162,6 +163,7 @@ export default function UploadPreview({ kind, data, onCancel, onCommit, headerEx
               const def = form20Cols[c];
               if (!def || def.readonly) return;
               if (def.kind === 'serial') row.serial = Number(rawVal) || row.serial;
+              else if (def.kind === 'code') row.code = String(rawVal ?? '').trim();
               else if (def.kind === 'name') row.name = String(rawVal ?? '').trim();
               else if (def.kind === 'boothName') row.boothName = String(rawVal ?? '').trim();
               else if (def.kind === 'cand') row.votes[def.candidate] = Number(rawVal) || 0;
@@ -265,6 +267,7 @@ export default function UploadPreview({ kind, data, onCancel, onCommit, headerEx
   function renderForm20Cell(row, def, ri, ci) {
     const errKey =
       def.kind === 'serial' ? 'serial' :
+      def.kind === 'code' ? 'code' :
       def.kind === 'cand' ? def.candidate :
       def.kind === 'rejectedVotes' ? 'rejectedVotes' :
       def.kind === 'notaVotes' ? 'notaVotes' :
@@ -275,6 +278,7 @@ export default function UploadPreview({ kind, data, onCancel, onCommit, headerEx
     }`;
     const value =
       def.kind === 'serial' ? row.serial :
+      def.kind === 'code' ? (row.code ?? '') :
       def.kind === 'name' ? (row.name ?? '') :
       def.kind === 'boothName' ? (row.boothName ?? '') :
       def.kind === 'cand' ? (row.votes?.[def.candidate] ?? '') :
@@ -284,7 +288,7 @@ export default function UploadPreview({ kind, data, onCancel, onCommit, headerEx
     return (
       <td key={def.label + ci} className={cls} data-error={err || undefined}>
         <input
-          type={def.kind === 'name' || def.kind === 'boothName' ? 'text' : 'number'}
+          type={def.kind === 'name' || def.kind === 'boothName' || def.kind === 'code' ? 'text' : 'number'}
           min={def.kind === 'serial' ? 1 : 0}
           className={`cell-input ${def.short ? 'short' : ''}`}
           value={value ?? ''}

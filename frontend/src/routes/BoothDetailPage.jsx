@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import Breadcrumbs from '../components/ui/Breadcrumbs.jsx';
 import BoothElectionDetail from '../components/analytics/BoothElectionDetail.jsx';
 import { api } from '../lib/api.js';
+import { boothName } from '../components/elections/helpers.js';
 
 export default function BoothDetailPage() {
   const { id, psId } = useParams();
@@ -21,7 +22,7 @@ export default function BoothDetailPage() {
             to: d?.election?.electionType === 'Lok Sabha Election' ? '/elections/lok-sabha' : '/elections/assembly',
           },
           { label: electionName, to: `/elections/${electionId}` },
-          { label: d ? `PS-${d.ps.serial}` : 'Booth' },
+          { label: d ? boothName(d.ps) : 'Booth' },
         ]}
       />
 

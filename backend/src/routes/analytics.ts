@@ -6,7 +6,6 @@ import {
   computeBoothLeanings,
   computeCommunityLeaning,
   recomputePredictedLeaning,
-  linkRollToBooths,
 } from '../services/inference.js';
 import { aggregate, attachElectionFields } from '../services/segmentation.js';
 import { computeBoothTargets, computeTurnoutGap, computeSwing } from '../services/boothAnalytics.js';
@@ -94,21 +93,18 @@ router.get(
   }),
 );
 
-// POST /api/analytics/recompute?electionId=X[&link=1]
-// Recomputes predictedLeaning for every voter linked to a PS in the election.
-// link=1 also relinks voters to PS by name match before computing.
+// POST /api/analytics/recompute?electionId=X
+// Recomputes predictedLeaning for every voter linked to a booth in the election.
+// (Roll↔booth links are resolved by UNIQUE_CODE at import time, so there is no
+// separate relink step any more.)
 router.post(
   '/recompute',
   asyncHandler(async (req, res) => {
     const { electionId } = z.object({ electionId: z.coerce.number().int() }).parse({
       electionId: req.query.electionId,
     });
-    let linked = 0;
-    if (req.query.link === '1') {
-      linked = await linkRollToBooths(electionId);
-    }
     const r = await recomputePredictedLeaning(electionId);
-    res.json({ electionId, linked, ...r });
+    res.json({ electionId, linked: 0, ...r });
   }),
 );
 

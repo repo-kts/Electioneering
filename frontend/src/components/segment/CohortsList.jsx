@@ -4,9 +4,11 @@ import Button from '../ui/Button.jsx';
 import { CloseIcon } from '../ui/Icon.jsx';
 import { ErrorState, SkeletonRows, Spinner } from '../ui/Loader.jsx';
 import { api, downloadBlob } from '../../lib/api.js';
+import { useConfirm } from '../../context/ConfirmContext.jsx';
 
 export default function CohortsList({ onLoad, onError }) {
   const qc = useQueryClient();
+  const confirm = useConfirm();
   const list = useQuery({
     queryKey: ['cohorts'],
     queryFn: () => api.listCohorts(),
@@ -21,8 +23,8 @@ export default function CohortsList({ onLoad, onError }) {
     onError: (e) => onError?.(e.message || 'Export failed'),
   });
 
-  function handleDelete(id) {
-    if (!window.confirm('Delete this cohort?')) return;
+  async function handleDelete(id) {
+    if (!(await confirm({ title: 'Delete cohort?', message: 'This saved filter will be permanently removed.', confirmText: 'Delete' }))) return;
     del.mutate(id);
   }
 

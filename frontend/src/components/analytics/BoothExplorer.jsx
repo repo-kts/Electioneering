@@ -4,27 +4,11 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../lib/api.js';
 import { useToast } from '../../context/ToastContext.jsx';
 import { Surface, Loading, ErrorBox } from '../ui/kit.jsx';
-import { partyColor, colorFor, num, pct } from '../elections/helpers.js';
+import { partyColor, colorFor, num, pct, boothName, boothTag } from '../elections/helpers.js';
 import BoothMap from './BoothMap.jsx';
 import FilterableTable from './FilterableTable.jsx';
+import BoothFilterBar, { applyBoothFilters, emptyBoothFilters } from './BoothFilterBar.jsx';
 
-// Competitiveness chip styles — one shared vocabulary across the app.
-const CLASS_STYLE = {
-  'Safe-win': 'border-emerald-200 bg-emerald-50 text-emerald-800',
-  'Marginal-win': 'border-lime-200 bg-lime-50 text-lime-800',
-  Swing: 'border-amber-200 bg-amber-50 text-amber-800',
-  'Marginal-loss': 'border-orange-200 bg-orange-50 text-orange-800',
-  'Safe-loss': 'border-rose-200 bg-rose-50 text-rose-800',
-  'No-data': 'border-slate-200 bg-slate-50 text-slate-500',
-};
-const CLASS_LABEL = {
-  'Safe-win': 'Stronghold',
-  'Marginal-win': 'Narrow win',
-  Swing: 'Swing',
-  'Marginal-loss': 'Recoverable',
-  'Safe-loss': 'Opposition',
-  'No-data': 'No data',
-};
 // Higher = more worth acting on. Surfaces swing/recoverable booths first.
 const OPP_BASE = { Swing: 100, 'Marginal-loss': 90, 'Marginal-win': 60, 'Safe-loss': 40, 'Safe-win': 20, 'No-data': 0 };
 
@@ -38,6 +22,7 @@ const SORTS = {
 export default function BoothExplorer({ electionId }) {
   const [view, setView] = useState('grid'); // grid | table | map
   const [sortKey, setSortKey] = useState('opportunity');
+  const [filters, setFilters] = useState(emptyBoothFilters);
   const { show } = useToast();
   const qc = useQueryClient();
 
@@ -98,14 +83,16 @@ export default function BoothExplorer({ electionId }) {
     });
   }, [leaningItems, targetById]);
 
+  const filtered = useMemo(() => applyBoothFilters(booths, filters), [booths, filters]);
+
   const sorted = useMemo(() => {
-    const arr = [...booths];
+    const arr = [...filtered];
     if (sortKey === 'serial') arr.sort((a, b) => a.serial - b.serial);
     else if (sortKey === 'turnout') arr.sort((a, b) => a.turnoutPct - b.turnoutPct);
     else if (sortKey === 'valid') arr.sort((a, b) => (b.totalValid ?? 0) - (a.totalValid ?? 0));
     else arr.sort((a, b) => b.opportunity - a.opportunity || a.serial - b.serial);
     return arr;
-  }, [booths, sortKey]);
+  }, [filtered, sortKey]);
 
   const isPending = leaningQ.isPending || targetsQ.isPending;
 
@@ -157,25 +144,31 @@ export default function BoothExplorer({ electionId }) {
         <p className="py-8 text-center text-sm text-slate-400">No booths recorded for this election yet.</p>
       )}
 
-      {!isPending && booths.length > 0 && view === 'map' && (
+      {!isPending && booths.length > 0 && (
+        <BoothFilterBar items={booths} value={filters} onChange={setFilters} resultCount={filtered.length} />
+      )}
+
+      {!isPending && booths.length > 0 && sorted.length === 0 && (
+        <p className="py-8 text-center text-sm text-slate-400">
+          No booths match these filters.{' '}
+          <button onClick={() => setFilters(emptyBoothFilters())} className="font-medium text-accent-700 hover:underline">Clear filters</button>
+        </p>
+      )}
+
+      {!isPending && sorted.length > 0 && view === 'map' && (
         <BoothMap items={sorted} electionId={electionId} />
       )}
 
-      {!isPending && booths.length > 0 && view === 'table' && (
+      {!isPending && sorted.length > 0 && view === 'table' && (
         <FilterableTable
           rows={sorted}
           getRowKey={(b) => b.id}
           searchPlaceholder="Search booths by name…"
           columns={[
-            { key: 'serial', label: 'Booth', filterValue: (b) => b.serial, render: (b) => (
-              <Link to={`/elections/${electionId}/booth/${b.id}`} className="font-semibold text-slate-900 hover:text-accent-700">PS-{b.serial}</Link>
+            { key: 'name', label: 'Booth', filterValue: (b) => `${b.name ?? ''} PS-${b.serial}`, render: (b) => (
+              <Link to={`/elections/${electionId}/booth/${b.id}`} className="block truncate font-semibold text-slate-900 hover:text-accent-700" title={boothName(b)}>{boothName(b)}</Link>
             ) },
-            { key: 'name', label: 'Polling station', className: 'text-slate-600', render: (b) => <span className="truncate" title={b.name ?? ''}>{b.name ?? '—'}</span> },
-            { key: 'classification', label: 'Status', filterValue: (b) => CLASS_LABEL[b.classification] ?? b.classification, render: (b) => (
-              <span className={`inline-block border px-1.5 py-0.5 text-[11px] font-semibold ${CLASS_STYLE[b.classification] ?? CLASS_STYLE['No-data']}`}>
-                {CLASS_LABEL[b.classification] ?? b.classification}
-              </span>
-            ) },
+            { key: 'serial', label: 'PS no.', className: 'tabular-nums text-slate-400', filterValue: (b) => b.serial, render: (b) => `PS-${b.serial}` },
             { key: 'leader', label: 'Leader', render: (b) => b.leader ? (
               <span className="flex items-center gap-1.5">
                 <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: colorForName(b.leader) }} />
@@ -189,7 +182,7 @@ export default function BoothExplorer({ electionId }) {
         />
       )}
 
-      {!isPending && booths.length > 0 && view === 'grid' && (
+      {!isPending && sorted.length > 0 && view === 'grid' && (
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
           {sorted.map((b) => {
             const reported = (b.totalValid ?? 0) > 0;
@@ -200,21 +193,26 @@ export default function BoothExplorer({ electionId }) {
                 to={`/elections/${electionId}/booth/${b.id}`}
                 className="group flex flex-col gap-2 border border-slate-200 bg-white p-3 transition hover:border-accent-400 hover:bg-[#fbfaf7]"
               >
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-sm font-semibold text-slate-900">PS-{b.serial}</span>
-                  <span className={`border px-1.5 py-0.5 text-[10px] font-semibold ${CLASS_STYLE[b.classification] ?? CLASS_STYLE['No-data']}`}>
-                    {CLASS_LABEL[b.classification] ?? b.classification}
-                  </span>
+                <div className="flex items-start justify-between gap-2">
+                  <span className="min-w-0 truncate text-sm font-semibold text-slate-900" title={boothName(b)}>{boothName(b)}</span>
+                  {boothTag(b) && <span className="shrink-0 text-[11px] font-medium tabular-nums text-slate-400">{boothTag(b)}</span>}
                 </div>
-                <div className="truncate text-xs text-slate-500" title={b.name ?? ''}>{b.name ?? '—'}</div>
                 {reported ? (
-                  <div className="mt-auto flex items-center justify-between gap-2 border-t border-slate-100 pt-2 text-xs">
-                    <span className="flex min-w-0 items-center gap-1.5">
-                      <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: c }} />
-                      <span className="truncate font-medium" style={{ color: c }}>{b.leader}</span>
-                      <span className="text-slate-400">{pct(b.leaderShare)}</span>
-                    </span>
-                    <span className="shrink-0 tabular-nums text-slate-500">{b.turnoutPct ? pct(b.turnoutPct) : '—'}</span>
+                  <div className="mt-auto grid grid-cols-2 gap-3 border-t border-slate-100 pt-2">
+                    <div className="min-w-0">
+                      <div className="text-[10px] uppercase tracking-wide text-slate-400">Leading candidate</div>
+                      <div className="mt-0.5 flex items-center gap-1.5 text-xs">
+                        <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: c }} />
+                        <span className="truncate font-medium" style={{ color: c }} title={partyByName[b.leader] ? `${b.leader} (${partyByName[b.leader]})` : b.leader}>
+                          {b.leader}{partyByName[b.leader] ? <span className="text-slate-400"> · {partyByName[b.leader]}</span> : null}
+                        </span>
+                      </div>
+                      <div className="text-[11px] tabular-nums text-slate-500">{pct(b.leaderShare)} vote share</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-[10px] uppercase tracking-wide text-slate-400">Turnout</div>
+                      <div className="mt-0.5 text-sm font-semibold tabular-nums text-slate-700">{b.turnoutPct ? pct(b.turnoutPct) : '—'}</div>
+                    </div>
                   </div>
                 ) : (
                   <div className="mt-auto border-t border-slate-100 pt-2 text-xs text-slate-400">No Form 20 data</div>

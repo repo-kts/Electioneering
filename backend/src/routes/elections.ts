@@ -2,8 +2,8 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { asyncHandler } from '../lib/asyncHandler.js';
-import { recomputePredictedLeaning, linkRollToBooths } from '../services/inference.js';
-import { upsertPollingStation, upsertBooth } from '../services/booths.js';
+import { recomputePredictedLeaning } from '../services/inference.js';
+import { resolveBoothsByCode, upsertBooth } from '../services/booths.js';
 import { requireAdmin } from '../middleware/auth.js';
 
 const router = Router();
@@ -150,10 +150,10 @@ router.delete(
   }),
 );
 
-// ─── Form 20 bulk save (replace polling stations + results) ───────────
+// ─── Form 20 bulk save (replace results for booths named by UNIQUE_CODE) ──
 const form20RowSchema = z.object({
-  serial: z.coerce.number().int().min(1),
-  name: z.string().trim().optional(),
+  code: z.string().trim().min(1), // master-booth UNIQUE_CODE (resolves the booth)
+  serial: z.coerce.number().int().min(0).default(0),
   rejectedVotes: z.coerce.number().int().nonnegative().default(0),
   notaVotes: z.coerce.number().int().nonnegative().default(0),
   tenderedVotes: z.coerce.number().int().nonnegative().default(0),
@@ -165,7 +165,7 @@ const form20SaveSchema = z.object({
   rows: z.array(form20RowSchema),
 });
 
-// PUT /api/elections/:id/form20  → replace all polling-station rows
+// PUT /api/elections/:id/form20  → replace results for each named booth
 router.put(
   '/:id/form20',
   asyncHandler(async (req, res) => {
@@ -182,32 +182,41 @@ router.put(
     }
     const validCandIds = new Set(election.candidates.map((c) => c.id));
 
+    // Resolve booths by UNIQUE_CODE; reject the save if any code is unknown /
+    // from another constituency (booths are never created here).
+    const byCode = await resolveBoothsByCode(prisma, rows.map((r) => r.code));
+    const unknown = rows
+      .filter((r) => {
+        const b = byCode.get(r.code);
+        if (!b) return true;
+        const ba = (b.assemblyNo ?? '').trim();
+        const ea = (election.assemblyNo ?? '').trim();
+        return ba && ea ? ba !== ea : (b.parlNo ?? '').trim() !== (election.parlNo ?? '').trim();
+      })
+      .map((r) => r.code);
+    if (unknown.length) {
+      res.status(400).json({
+        error: 'BadRequest',
+        message: `${unknown.length} UNIQUE_CODE${unknown.length === 1 ? '' : 's'} not found in this constituency: ${[...new Set(unknown)].slice(0, 10).join(', ')}. Create the booth(s) in Master → Booths first.`,
+      });
+      return;
+    }
+
     await prisma.$transaction(async (tx) => {
-      // Clear only the vote results (not booths — deleting booths would cascade
-      // away the BoothVoter roll mappings). Booths are re-upserted below.
-      const existingBooths = await tx.booth.findMany({ where: { electionId }, select: { id: true } });
-      await tx.voteResult.deleteMany({ where: { boothId: { in: existingBooths.map((b) => b.id) } } });
       for (const row of rows) {
-        const pollingStationId = await upsertPollingStation(
-          tx,
-          { assemblyNo: election.assemblyNo, assemblyName: election.assemblyName, name: row.name },
-          row.serial,
-        );
+        const booth = byCode.get(row.code)!;
         const boothId = await upsertBooth(tx, {
           electionId,
-          pollingStationId,
+          pollingStationId: booth.id,
           serial: row.serial,
-          name: row.name,
           rejectedVotes: row.rejectedVotes,
           notaVotes: row.notaVotes,
           tenderedVotes: row.tenderedVotes,
         });
+        // Replace only this booth's results (leaves BoothVoter roll mappings intact).
+        await tx.voteResult.deleteMany({ where: { boothId } });
         const voteEntries = Object.entries(row.votes)
-          .map(([cid, v]) => ({
-            boothId,
-            candidateId: Number(cid),
-            votes: v,
-          }))
+          .map(([cid, v]) => ({ boothId, candidateId: Number(cid), votes: v }))
           .filter((e) => validCandIds.has(e.candidateId));
         if (voteEntries.length) {
           await tx.voteResult.createMany({ data: voteEntries });
@@ -215,9 +224,7 @@ router.put(
       }
     });
 
-    // Reconcile roll→booth links then recompute predicted leaning
     try {
-      await linkRollToBooths(electionId);
       await recomputePredictedLeaning(electionId);
     } catch (err) {
       console.error('[inference] recompute failed', err);

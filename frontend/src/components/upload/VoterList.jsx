@@ -6,6 +6,7 @@ import { CloseIcon } from '../ui/Icon.jsx';
 import { ErrorState, SkeletonRows, Spinner } from '../ui/Loader.jsx';
 import EditVoterForm from './EditVoterForm.jsx';
 import { api } from '../../lib/api.js';
+import { useConfirm } from '../../context/ConfirmContext.jsx';
 
 const PAGE_SIZE = 50;
 
@@ -37,6 +38,7 @@ export default function VoterList({ onError, canDelete = true }) {
   const [page, setPage] = useState(0); // 0-indexed
   const [editVoter, setEditVoter] = useState(null);
   const qc = useQueryClient();
+  const confirm = useConfirm();
 
   const list = useQuery({
     // Server-side pagination — one page at a time, never the whole table.
@@ -66,8 +68,8 @@ export default function VoterList({ onError, canDelete = true }) {
     setPage(0);
     setFilters({});
   }
-  function handleDelete(id) {
-    if (!window.confirm('Delete this voter?')) return;
+  async function handleDelete(id) {
+    if (!(await confirm({ title: 'Delete voter?', message: 'This voter record will be permanently removed.', confirmText: 'Delete' }))) return;
     del.mutate(id);
   }
 

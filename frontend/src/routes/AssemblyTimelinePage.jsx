@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
-  LineChart, Line, BarChart, Bar, Cell, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer, Legend,
+  BarChart, Bar, Cell, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer, Legend, LabelList,
 } from 'recharts';
 import Breadcrumbs from '../components/ui/Breadcrumbs.jsx';
 import { PageHeader, StatCard, Surface, Loading, ErrorBox } from '../components/ui/kit.jsx';
@@ -99,21 +99,25 @@ export function TimelineContent({ electionId }) {
             </div>
           )}
 
-          {/* Trend: turnout % & winning share % share one axis (both 0–100%). */}
-          <Surface title="Turnout & winning share over time" subtitle="Percent of registered voters who voted, and the winner's vote share, by year.">
-            {chartData.length <= 1 ? (
-              <p className="py-8 text-center text-sm text-slate-500">Need at least two elections to plot a trend.</p>
+          {/* Turnout % & winning share % per year — both 0–100%, so one shared axis. */}
+          <Surface title="Turnout & winning share by year" subtitle="Percent of registered voters who voted, and the winner's vote share, compared year by year.">
+            {chartData.length === 0 ? (
+              <p className="py-8 text-center text-sm text-slate-500">No election results to compare.</p>
             ) : (
               <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={chartData} margin={{ left: 8, right: 16, top: 8, bottom: 8 }}>
+                <BarChart data={chartData} margin={{ left: 8, right: 16, top: 20, bottom: 8 }} barGap={2} barCategoryGap="28%">
                   <CartesianGrid stroke="#e7e5de" vertical={false} />
                   <XAxis dataKey="year" tick={{ fontSize: 11 }} />
                   <YAxis tick={{ fontSize: 11 }} domain={[0, 100]} unit="%" width={44} />
-                  <Tooltip formatter={(v, n) => [v == null ? '—' : `${v}%`, n === 'turnout' ? 'Turnout' : 'Winning share']} />
+                  <Tooltip formatter={(v, n) => [v == null ? '—' : `${v}%`, n === 'turnout' ? 'Turnout' : 'Winning share']} cursor={{ fill: '#f7f5f0' }} />
                   <Legend formatter={(v) => (v === 'turnout' ? 'Turnout' : 'Winning share')} />
-                  <Line type="monotone" dataKey="turnout" stroke={colorFor('Turnout series')} strokeWidth={2} dot={{ r: 4 }} connectNulls label={{ position: 'top', fontSize: 10, fill: '#64748b', formatter: (v) => (v == null ? '' : `${v}%`) }} />
-                  <Line type="monotone" dataKey="winShare" stroke={colorFor('Winning share series')} strokeWidth={2} dot={{ r: 4 }} connectNulls />
-                </LineChart>
+                  <Bar dataKey="turnout" fill={colorFor('Turnout series')} radius={[4, 4, 0, 0]}>
+                    <LabelList dataKey="turnout" position="top" fontSize={10} fill="#64748b" formatter={(v) => (v == null ? '' : `${v}%`)} />
+                  </Bar>
+                  <Bar dataKey="winShare" fill={colorFor('Winning share series')} radius={[4, 4, 0, 0]}>
+                    <LabelList dataKey="winShare" position="top" fontSize={10} fill="#64748b" formatter={(v) => (v == null ? '' : `${v}%`)} />
+                  </Bar>
+                </BarChart>
               </ResponsiveContainer>
             )}
           </Surface>

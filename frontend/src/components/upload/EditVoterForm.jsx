@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../lib/api.js';
 import { useToast } from '../../context/ToastContext.jsx';
+import Modal from '../ui/Modal.jsx';
+import { Spinner } from '../ui/Loader.jsx';
 
 // Edit one voter's stable identity + address/geography + demographics, keyed by
 // the constant EPIC. Per-election booth/roll placement is not here — it belongs
@@ -69,16 +71,19 @@ export default function EditVoterForm({ voter, onClose }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/30 p-4">
-      <form onSubmit={submit} className="mt-8 w-full max-w-3xl rounded-sm border border-slate-300 bg-white shadow-xl">
-        <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
-          <div>
-            <div className="text-sm font-semibold text-slate-900">Edit voter</div>
-            <div className="text-[11px] text-slate-400">EPIC {voter.epic} · identity is fixed, details editable</div>
-          </div>
-          <button type="button" onClick={onClose} className="rounded-sm px-2 py-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700">✕</button>
-        </div>
-        <div className="grid max-h-[70vh] grid-cols-2 gap-3 overflow-y-auto p-4 sm:grid-cols-3">
+    <Modal
+      open
+      onClose={onClose}
+      size="xl"
+      title={(
+        <span className="flex flex-col">
+          <span className="text-sm font-semibold text-slate-800">Edit voter</span>
+          <span className="text-[11px] font-normal text-slate-400">EPIC {voter.epic} · identity is fixed, details editable</span>
+        </span>
+      )}
+    >
+      <form onSubmit={submit}>
+        <div className="grid max-h-[65vh] grid-cols-2 gap-3 overflow-y-auto sm:grid-cols-3">
           {FIELDS.map(([k, label, kind]) => (
             <label key={k} className="block">
               <span className={lbl}>{label}</span>
@@ -103,13 +108,14 @@ export default function EditVoterForm({ voter, onClose }) {
             </label>
           ))}
         </div>
-        <div className="flex justify-end gap-2 border-t border-slate-200 px-4 py-3">
+        <div className="mt-4 flex justify-end gap-2 border-t border-slate-200 pt-3">
           <button type="button" onClick={onClose} className="rounded-sm border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50">Cancel</button>
-          <button type="submit" disabled={save.isPending} className="rounded-sm bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50">
+          <button type="submit" disabled={save.isPending} className="inline-flex items-center gap-2 rounded-sm bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50">
+            {save.isPending && <Spinner size={14} />}
             {save.isPending ? 'Saving…' : 'Save changes'}
           </button>
         </div>
       </form>
-    </div>
+    </Modal>
   );
 }

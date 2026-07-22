@@ -23,6 +23,7 @@ function makeEmptyRow(serial) {
   return {
     id: nextLocalRowId--,
     serial,
+    code: '',
     name: '',
     votes: {},
     rejectedVotes: 0,
@@ -71,6 +72,7 @@ export default function Form20({ electionId, onSubmit, onChangeElection }) {
             return {
               id: ps.id,
               serial: ps.serial,
+              code: ps.pollingStation?.code || '',
               name: ps.name || ps.pollingStation?.name || '',
               votes,
               rejectedVotes: ps.rejectedVotes,
@@ -151,6 +153,7 @@ export default function Form20({ electionId, onSubmit, onChangeElection }) {
       prev.map((r) => {
         if (r.id !== rowId) return r;
         if (key === 'name') return { ...r, name: value };
+        if (key === 'code') return { ...r, code: value };
         if (key === 'serial') return { ...r, serial: Number(value) || 0 };
         if (typeof key === 'object' && key.candidateId != null) {
           return { ...r, votes: { ...r.votes, [key.candidateId]: Number(value) || 0 } };
@@ -196,10 +199,10 @@ export default function Form20({ electionId, onSubmit, onChangeElection }) {
   }
 
   // colMap drives Excel-like paste targeting. Layout matches the rendered
-  // table exactly: 0 serial, 1 ps name, 2..N candidates, then Valid (RO),
-  // Rejected, NOTA, Total (RO), Tendered.
+  // table exactly: 0 serial, 1 UNIQUE_CODE, 2 ps name, 3..N candidates, then
+  // Valid (RO), Rejected, NOTA, Total (RO), Tendered.
   const colMap = useMemo(() => {
-    const m = [{ kind: 'serial' }, { kind: 'name' }];
+    const m = [{ kind: 'serial' }, { kind: 'code' }, { kind: 'name' }];
     candidates.forEach((c) => m.push({ kind: 'cand', id: c.id }));
     m.push({ kind: 'valid', readonly: true });
     m.push({ kind: 'rejectedVotes' });
@@ -223,6 +226,7 @@ export default function Form20({ electionId, onSubmit, onChangeElection }) {
             next.push({
               id: -(Date.now() + Math.random()),
               serial: next.length + 1,
+              code: '',
               name: '',
               votes: {},
               rejectedVotes: 0,
@@ -237,6 +241,8 @@ export default function Form20({ electionId, onSubmit, onChangeElection }) {
             if (!def || def.readonly) return;
             if (def.kind === 'serial') {
               row.serial = num(rawVal) || row.serial;
+            } else if (def.kind === 'code') {
+              row.code = String(rawVal ?? '').trim();
             } else if (def.kind === 'name') {
               row.name = String(rawVal ?? '').trim();
             } else if (def.kind === 'cand') {
@@ -271,11 +277,16 @@ export default function Form20({ electionId, onSubmit, onChangeElection }) {
       onSubmit?.({ ok: false, message: 'Add at least one polling station' });
       return;
     }
+    const missingCode = rows.filter((r) => !String(r.code || '').trim()).length;
+    if (missingCode > 0) {
+      setError(`${missingCode} row${missingCode === 1 ? '' : 's'} missing a UNIQUE_CODE. Every polling station must name its master booth by code.`);
+      return;
+    }
     setSaving(true);
     try {
       const payload = rows.map((r) => ({
+        code: String(r.code).trim(),
         serial: Number(r.serial) || 0,
-        name: r.name || undefined,
         rejectedVotes: Number(r.rejectedVotes) || 0,
         notaVotes: Number(r.notaVotes) || 0,
         tenderedVotes: Number(r.tenderedVotes) || 0,
@@ -398,6 +409,7 @@ export default function Form20({ electionId, onSubmit, onChangeElection }) {
                 <thead>
                   <tr>
                     <th rowSpan="2" className="row-num">PS #</th>
+                    <th rowSpan="2">UNIQUE_CODE</th>
                     <th rowSpan="2">PS Name</th>
                     <th colSpan={candidates.length} className="group-head">
                       No. of Valid Votes Cast in favour of
@@ -441,7 +453,7 @@ export default function Form20({ electionId, onSubmit, onChangeElection }) {
                 </thead>
                 <tbody>
                   {rows.map((row, ri) => {
-                    const candStart = 2;
+                    const candStart = 3;
                     const validCol = candStart + candidates.length;
                     const rejectedCol = validCol + 1;
                     const notaCol = validCol + 2;
@@ -472,9 +484,21 @@ export default function Form20({ electionId, onSubmit, onChangeElection }) {
                         <input
                           type="text"
                           className="cell-input"
-                          value={row.name}
+                          value={row.code}
                           data-row={ri}
                           data-col={1}
+                          placeholder="UNIQUE_CODE"
+                          onFocus={onFocusSelect}
+                          onChange={(e) => updateCell(row.id, 'code', e.target.value)}
+                        />
+                      </td>
+                      <td className="value">
+                        <input
+                          type="text"
+                          className="cell-input"
+                          value={row.name}
+                          data-row={ri}
+                          data-col={2}
                           onFocus={onFocusSelect}
                           onChange={(e) => updateCell(row.id, 'name', e.target.value)}
                         />
@@ -566,6 +590,7 @@ export default function Form20({ electionId, onSubmit, onChangeElection }) {
                   {/* Totals row */}
                   <tr className="totals-row">
                     <td className="row-num">Σ</td>
+                    <td />
                     <td />
                     {candidates.map((c) => (
                       <td key={c.id} className="totals-cell">

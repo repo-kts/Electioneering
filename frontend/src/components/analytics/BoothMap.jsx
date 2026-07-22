@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { MapContainer, TileLayer, CircleMarker, Tooltip, Popup, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 // Share the app-wide palette/formatters so the map matches every other chart.
-import { colorFor, pct, num } from '../elections/helpers.js';
+import { colorFor, pct, num, boothName, boothTag } from '../elections/helpers.js';
 
 function FitBounds({ points }) {
   const map = useMap();
@@ -53,13 +53,13 @@ export default function BoothMap({ items = [], electionId, linkFor }) {
               pathOptions={{ color: '#fff', weight: 1.5, fillColor: reported ? c : '#cbd5e1', fillOpacity: 0.85 }}
             >
               <Tooltip direction="top" offset={[0, -4]}>
-                <span className="font-semibold">PS-{b.serial}</span>
+                <span className="font-semibold">{boothName(b)}</span>
                 {reported && <> · {b.leader} {pct(b.leaderShare)}</>}
               </Tooltip>
               <Popup>
                 <div className="min-w-[160px]">
-                  <div className="text-sm font-semibold text-slate-800">PS-{b.serial}</div>
-                  <div className="text-xs text-slate-500">{b.name ?? '—'}</div>
+                  <div className="text-sm font-semibold text-slate-800">{boothName(b)}</div>
+                  {boothTag(b) && <div className="text-xs text-slate-500">{boothTag(b)}</div>}
                   {reported ? (
                     <div className="mt-1 text-xs">
                       <span className="font-medium" style={{ color: c }}>{b.leader}</span> leading · {pct(b.leaderShare)}

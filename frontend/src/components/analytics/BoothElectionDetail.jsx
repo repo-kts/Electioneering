@@ -10,7 +10,7 @@ import BoothMap from './BoothMap.jsx';
 import { DemographicCard } from './BoothDemographics.jsx';
 import FilterableTable from './FilterableTable.jsx';
 import DraggablePanel from './DraggablePanel.jsx';
-import { partyColor, colorForParty, benchmarkFor } from '../elections/helpers.js';
+import { partyColor, colorForParty, benchmarkFor, boothName, boothTag } from '../elections/helpers.js';
 import { boothStory } from './narrative.js';
 
 function colorFor(s) {
@@ -193,7 +193,6 @@ export default function BoothElectionDetail({ d, electionId }) {
   return (
     <>
       <BoothBanner d={d} />
-      <Recommendations benchmark={benchmark} priority={d.priority} recommendations={d.recommendations} />
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(320px,0.85fr)]">
         <div className="flex flex-col border border-slate-300 bg-white">
@@ -201,8 +200,8 @@ export default function BoothElectionDetail({ d, electionId }) {
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">Polling station</div>
-                <h2 className="text-[26px] font-semibold leading-tight text-slate-950">PS-{d.ps.serial}</h2>
-                <p className="mt-0.5 text-sm text-slate-600">{d.ps.name ?? '—'}</p>
+                <h2 className="text-[26px] font-semibold leading-tight text-slate-950">{boothName(d.ps)}</h2>
+                {boothTag(d.ps) && <p className="mt-0.5 text-sm font-medium tabular-nums text-slate-500">{boothTag(d.ps)}</p>}
                 {d.ps.address && <p className="mt-0.5 text-xs text-slate-400">{d.ps.address}</p>}
               </div>
               <span className={`inline-flex items-center gap-1.5 border px-2.5 py-1 text-sm font-semibold ${benchmark.cls}`}>
@@ -366,6 +365,8 @@ export default function BoothElectionDetail({ d, electionId }) {
           ]}
         />
       </DraggablePanel>
+
+      <Recommendations benchmark={benchmark} priority={d.priority} recommendations={d.recommendations} />
     </>
   );
 }

@@ -48,6 +48,24 @@ export function colorForParty(party) {
 export const pct = (n) => `${((n ?? 0) * 100).toFixed(1)}%`;
 export const num = (n) => (n ?? 0).toLocaleString();
 
+/** Booth identity convention. The physical booth NAME (e.g. "Government Primary
+ *  School, Tiracol") is the stable identity — the same building shows up election
+ *  after election — so it's the PRIMARY label everywhere. The PS serial number
+ *  can be renumbered year to year, so it's demoted to a secondary tag.
+ *  `booth` is any object carrying `{ name, serial }` (a booth row, `d.ps`, …). */
+export function boothName(booth) {
+  const name = (booth?.name ?? '').trim();
+  if (name) return name;
+  return booth?.serial != null ? `PS-${booth.serial}` : 'Booth';
+}
+/** Secondary "PS-<serial>" tag, or null when there's no name to sit under (the
+ *  serial is then already the primary label, so showing it twice would be noise). */
+export function boothTag(booth) {
+  const name = (booth?.name ?? '').trim();
+  if (!name) return null;
+  return booth?.serial != null ? `PS-${booth.serial}` : null;
+}
+
 /** Single competitiveness benchmark used across the app, keyed off a 0..1 vote
  *  share: Safe 75+ / Favorable 50–75 / Battleground 30–50 / Difficult 0–30. */
 export function benchmarkFor(share) {

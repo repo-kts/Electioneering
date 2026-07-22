@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { api, downloadUrls } from '../lib/api.js';
+import { api, downloadUrls, downloadBlob } from '../lib/api.js';
+import Modal from '../components/ui/Modal.jsx';
 import { useToast } from '../context/ToastContext.jsx';
+import { useConfirm } from '../context/ConfirmContext.jsx';
 
 // ─────────────────────────────────────────────────────────────────────────
 // /all-master — single console to manage every piece of reference data:
@@ -31,6 +33,7 @@ function IconBtn({ title, onClick, children, danger }) {
 const PencilIcon = () => (<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>);
 const TrashIcon = () => (<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m2 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" /></svg>);
 const DownloadIcon = () => (<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><path d="M7 10l5 5 5-5" /><path d="M12 15V3" /></svg>);
+const UploadGlyph = () => (<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><path d="M17 8l-5-5-5 5" /><path d="M12 3v12" /></svg>);
 
 // ─── Geography ────────────────────────────────────────────────────────────
 
@@ -109,6 +112,7 @@ function InlineForm({ level, initial, parentField, parentId, onDone }) {
 function GeoColumn({ level, parentField, parentId, selectedId, onSelect }) {
   const spec = LEVELS[level];
   const { show } = useToast();
+  const confirm = useConfirm();
   const qc = useQueryClient();
   const [editId, setEditId] = useState(null);
   const [adding, setAdding] = useState(false);
@@ -154,7 +158,7 @@ function GeoColumn({ level, parentField, parentId, selectedId, onSelect }) {
               </button>
               <span className="opacity-0 group-hover:opacity-100">
                 <IconBtn title="Edit" onClick={() => setEditId(it.id)}><PencilIcon /></IconBtn>
-                <IconBtn title="Delete" danger onClick={() => { if (confirm(`Delete ${spec.render(it)}?`)) del.mutate(it.id); }}><TrashIcon /></IconBtn>
+                <IconBtn title="Delete" danger onClick={async () => { if (await confirm({ title: 'Delete entry?', message: `Delete ${spec.render(it)}?`, confirmText: 'Delete' })) del.mutate(it.id); }}><TrashIcon /></IconBtn>
               </span>
             </div>
           ),
@@ -202,6 +206,7 @@ function GeographyTab() {
 
 function OptionRow({ optionId, categoryKey, option }) {
   const { show } = useToast();
+  const confirm = useConfirm();
   const qc = useQueryClient();
   const [editing, setEditing] = useState(false);
   const [label, setLabel] = useState(option.label);
@@ -246,7 +251,7 @@ function OptionRow({ optionId, categoryKey, option }) {
       </button>
       <span className="opacity-0 group-hover:opacity-100">
         <IconBtn title="Edit" onClick={() => setEditing(true)}><PencilIcon /></IconBtn>
-        <IconBtn title="Delete" danger onClick={() => { if (confirm(`Delete "${option.label}"?`)) del.mutate(); }}><TrashIcon /></IconBtn>
+        <IconBtn title="Delete" danger onClick={async () => { if (await confirm({ title: 'Delete option?', message: `Delete "${option.label}"?`, confirmText: 'Delete' })) del.mutate(); }}><TrashIcon /></IconBtn>
       </span>
     </div>
   );
@@ -254,6 +259,7 @@ function OptionRow({ optionId, categoryKey, option }) {
 
 function ListsTab() {
   const { show } = useToast();
+  const confirm = useConfirm();
   const qc = useQueryClient();
   const [activeKey, setActiveKey] = useState(null);
   const [newOpt, setNewOpt] = useState('');
@@ -330,7 +336,7 @@ function ListsTab() {
                 <div className="text-[11px] text-slate-400">key: {key}{catQ.data?.system ? ' · system' : ''}</div>
               </div>
               {catQ.data && !catQ.data.system && (
-                <button className={`${btnGhost} text-rose-600`} onClick={() => { if (confirm(`Delete the "${catQ.data.label}" list and all its options?`)) delCat.mutate(catQ.data.id); }}>Delete list</button>
+                <button className={`${btnGhost} text-rose-600`} onClick={async () => { if (await confirm({ title: 'Delete list?', message: `Delete the "${catQ.data.label}" list and all its options?`, confirmText: 'Delete list' })) delCat.mutate(catQ.data.id); }}>Delete list</button>
               )}
             </div>
             <div className="max-h-[64vh] min-h-[420px] overflow-y-auto">
@@ -460,6 +466,7 @@ function ElectionEditForm({ election, onDone }) {
 
 function ElectionRow({ election, onDelete }) {
   const { show } = useToast();
+  const confirm = useConfirm();
   const [editing, setEditing] = useState(false);
   if (editing) return <ElectionEditForm election={election} onDone={() => setEditing(false)} />;
   return (
@@ -496,7 +503,7 @@ function ElectionRow({ election, onDelete }) {
             <DownloadIcon /> Form 20
           </a>
           <IconBtn title="Edit election" onClick={() => setEditing(true)}><PencilIcon /></IconBtn>
-          <IconBtn title="Delete election" danger onClick={() => { if (confirm(`Delete election #${election.id} (${election.assemblyName})? This removes its booths & results.`)) onDelete(election.id); }}><TrashIcon /></IconBtn>
+          <IconBtn title="Delete election" danger onClick={async () => { if (await confirm({ title: 'Delete election?', message: `Delete election #${election.id} (${election.assemblyName})? This removes its booths & results.`, confirmText: 'Delete' })) onDelete(election.id); }}><TrashIcon /></IconBtn>
         </div>
       </td>
     </tr>
@@ -680,26 +687,29 @@ function CandidatesTab() {
   );
 }
 
-// ─── Booths (physical polling-station registry, per constituency) ───────────
+// ─── Master booths (one stable row per physical booth, keyed by UNIQUE_CODE) ─
 
-// Editable attributes of a physical booth. `name` drives the dedup `code`, so
-// it's shown but renaming is display-only (code stays fixed once created).
+// Editable booth attributes (from the creation sheet). `code` (UNIQUE_CODE) is
+// handled separately — required on create, immutable afterwards.
 const BOOTH_FIELDS = [
-  { k: 'name', ph: 'Booth / polling-station name', req: true, wide: true },
-  { k: 'ward', ph: 'Ward no.' },
-  { k: 'cityVillage', ph: 'City / Village' },
-  { k: 'tolaMohalla', ph: 'Tola / Mohalla' },
+  { k: 'partNumber', ph: 'Part number' },
+  { k: 'boothName', ph: 'Booth name', wide: true },
+  { k: 'pollingStationName', ph: 'Polling station name', wide: true },
+  { k: 'mainTown', ph: 'Main town' },
   { k: 'postOffice', ph: 'Post office' },
   { k: 'policeStation', ph: 'Police station' },
-  { k: 'address', ph: 'Address', wide: true },
-  { k: 'latitude', ph: 'Latitude', num: true },
-  { k: 'longitude', ph: 'Longitude', num: true },
+  { k: 'block', ph: 'Block' },
+  { k: 'subdivision', ph: 'Subdivision' },
+  { k: 'district', ph: 'District' },
+  { k: 'pinCode', ph: 'Pin code' },
 ];
+const BOOTH_SHEET_COLS = BOOTH_FIELDS.map((f) => f.k);
 
-function BoothForm({ assemblyNo, assemblyName, initial, onDone }) {
+function BoothForm({ parlId, asmId, boothKey, initial, onDone }) {
   const { show } = useToast();
   const qc = useQueryClient();
   const editing = !!initial;
+  const [code, setCode] = useState(initial?.code ?? '');
   const [form, setForm] = useState(() => {
     const f = {};
     for (const fld of BOOTH_FIELDS) f[fld.k] = initial?.[fld.k] ?? '';
@@ -708,16 +718,21 @@ function BoothForm({ assemblyNo, assemblyName, initial, onDone }) {
 
   const mut = useMutation({
     mutationFn: () => {
-      const payload = { assemblyNo, assemblyName };
+      const payload = {};
       for (const fld of BOOTH_FIELDS) {
         const v = String(form[fld.k] ?? '').trim();
-        if (fld.num) payload[fld.k] = v === '' ? undefined : Number(v);
-        else payload[fld.k] = v === '' ? undefined : v;
+        payload[fld.k] = v === '' ? undefined : v;
       }
-      return editing ? api.masterBoothUpdate(initial.id, payload) : api.masterBoothCreate(payload);
+      if (editing) return api.masterBoothUpdate(initial.id, payload);
+      return api.masterBoothCreate({
+        ...payload,
+        code: code.trim(),
+        parliamentaryConstituencyId: Number(parlId),
+        assemblyConstituencyId: asmId ? Number(asmId) : undefined,
+      });
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['master-booths', assemblyNo, assemblyName] });
+      qc.invalidateQueries({ queryKey: ['master-booths', boothKey] });
       show(editing ? 'Booth updated' : 'Booth added', 'success');
       onDone();
     },
@@ -726,21 +741,30 @@ function BoothForm({ assemblyNo, assemblyName, initial, onDone }) {
 
   function submit(e) {
     e.preventDefault();
-    if (!String(form.name).trim()) return show('Booth name is required', 'error');
+    if (!editing && !code.trim()) return show('UNIQUE_CODE is required', 'error');
+    if (!String(form.boothName).trim() && !String(form.pollingStationName).trim()) {
+      return show('Give the booth a name', 'error');
+    }
     mut.mutate();
   }
 
   return (
     <form onSubmit={submit} className="border border-slate-300 bg-slate-50 p-3">
-      <div className="mb-2 text-sm font-semibold text-slate-900">{editing ? `Edit booth` : 'New booth'}</div>
+      <div className="mb-2 text-sm font-semibold text-slate-900">{editing ? 'Edit booth' : 'New booth'}</div>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+        <input
+          className={`${input} ${editing ? 'bg-slate-100 text-slate-500' : ''}`}
+          placeholder="UNIQUE_CODE *"
+          value={editing ? initial.code : code}
+          readOnly={editing}
+          title={editing ? 'UNIQUE_CODE is immutable' : undefined}
+          onChange={(e) => setCode(e.target.value)}
+        />
         {BOOTH_FIELDS.map((fld) => (
           <input
             key={fld.k}
             className={`${input} ${fld.wide ? 'col-span-2' : ''}`}
-            placeholder={fld.ph + (fld.req ? ' *' : '')}
-            type={fld.num ? 'number' : 'text'}
-            step={fld.num ? 'any' : undefined}
+            placeholder={fld.ph}
             value={form[fld.k]}
             onChange={(e) => setForm((s) => ({ ...s, [fld.k]: e.target.value }))}
           />
@@ -754,48 +778,45 @@ function BoothForm({ assemblyNo, assemblyName, initial, onDone }) {
   );
 }
 
-function BoothRow({ station, assemblyNo, assemblyName }) {
+function BoothRow({ station, parlId, asmId, boothKey }) {
   const { show } = useToast();
+  const confirm = useConfirm();
   const qc = useQueryClient();
   const [editing, setEditing] = useState(false);
   const inUse = (station.electionsCount ?? 0) > 0;
-  const hasCoords = station.latitude != null && station.longitude != null;
 
   const del = useMutation({
     mutationFn: () => api.masterBoothDelete(station.id),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['master-booths', assemblyNo, assemblyName] }); show('Booth deleted', 'success'); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['master-booths', boothKey] }); show('Booth deleted', 'success'); },
     onError: (e) => show(e.message, 'error'),
   });
 
   if (editing) {
     return (
       <tr className="border-t border-slate-100 bg-slate-50">
-        <td className="px-3 py-2" colSpan={6}>
-          <BoothForm assemblyNo={assemblyNo} assemblyName={assemblyName} initial={station} onDone={() => setEditing(false)} />
+        <td className="px-3 py-2" colSpan={5}>
+          <BoothForm parlId={parlId} asmId={asmId} boothKey={boothKey} initial={station} onDone={() => setEditing(false)} />
         </td>
       </tr>
     );
   }
 
-  const location = [station.ward && `Ward ${station.ward}`, station.cityVillage, station.tolaMohalla]
+  const displayName = station.boothName || station.name || station.pollingStationName || '—';
+  const location = [station.mainTown, station.block, station.district, station.pinCode]
     .filter(Boolean).join(' · ') || '—';
 
   return (
     <tr className="border-t border-slate-100">
       <td className="px-3 py-2">
-        <div className="font-medium text-slate-800">{station.name ?? '—'}</div>
+        <div className="font-medium text-slate-800">{displayName}</div>
         <div className="font-mono text-[11px] text-slate-400">{station.code}</div>
       </td>
+      <td className="px-3 py-2 text-center text-slate-600">{station.partNumber ?? '—'}</td>
       <td className="px-3 py-2 text-slate-600">{location}</td>
-      <td className="px-3 py-2 text-center">
-        {hasCoords
-          ? <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium text-emerald-700">Geo</span>
-          : <span className="text-slate-300">—</span>}
-      </td>
       <td className="px-3 py-2 text-center">
         {inUse
           ? <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">{station.electionsCount}</span>
-          : <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700" title="Not used by any Form 20 yet">orphan</span>}
+          : <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700" title="Not used by any election yet">unused</span>}
       </td>
       <td className="px-3 py-2">
         <div className="flex items-center justify-end gap-1">
@@ -806,9 +827,9 @@ function BoothRow({ station, assemblyNo, assemblyName }) {
           <IconBtn
             title={inUse ? 'In use — cannot delete' : 'Delete booth'}
             danger
-            onClick={() => {
-              if (inUse) { show(`This booth is used in ${station.electionsCount} election${station.electionsCount === 1 ? '' : 's'} — remove it from Form 20 first.`, 'error'); return; }
-              if (confirm(`Delete booth "${station.name}"? This is an unused physical station.`)) del.mutate();
+            onClick={async () => {
+              if (inUse) { show(`This booth is used in ${station.electionsCount} election${station.electionsCount === 1 ? '' : 's'} — remove it from those results first.`, 'error'); return; }
+              if (await confirm({ title: 'Delete booth?', message: `Delete booth "${displayName}" (${station.code})?`, confirmText: 'Delete' })) del.mutate();
             }}
           >
             <TrashIcon />
@@ -819,7 +840,91 @@ function BoothRow({ station, assemblyNo, assemblyName }) {
   );
 }
 
+// Two-phase bulk-upload preview shown in a modal: parsed rows + per-row flags.
+function BoothUploadModal({ preview, parlId, asmId, boothKey, onClose }) {
+  const { show } = useToast();
+  const qc = useQueryClient();
+  const rows = preview?.rows ?? [];
+  const validRows = rows.filter((r) => Object.keys(r.__errors ?? {}).length === 0);
+
+  const commit = useMutation({
+    mutationFn: () => api.masterBoothsCommit({
+      parlId: Number(parlId),
+      asmId: asmId ? Number(asmId) : undefined,
+      rows: validRows.map((r) => {
+        const out = { code: r.code };
+        for (const k of BOOTH_SHEET_COLS) if (r[k]) out[k] = r[k];
+        return out;
+      }),
+    }),
+    onSuccess: (res) => {
+      qc.invalidateQueries({ queryKey: ['master-booths', boothKey] });
+      show(`${res.created} created · ${res.updated} updated`, 'success');
+      onClose();
+    },
+    onError: (e) => show(e.message, 'error'),
+  });
+
+  return (
+    <Modal
+      open={!!preview}
+      onClose={onClose}
+      size="xl"
+      title={`Review booths — ${preview?.fileName ?? ''}`}
+      footer={(
+        <>
+          <button className={btnGhost} onClick={onClose}>Cancel</button>
+          <button className={btnPrimary} disabled={validRows.length === 0 || commit.isPending} onClick={() => commit.mutate()}>
+            {commit.isPending ? 'Saving…' : `Commit ${validRows.length} booth${validRows.length === 1 ? '' : 's'}`}
+          </button>
+        </>
+      )}
+    >
+      <div className="mb-3 flex flex-wrap gap-3 text-sm">
+        <span className="text-slate-600"><strong className="text-slate-900">{preview?.totalRows ?? 0}</strong> rows</span>
+        <span className="text-emerald-700">{preview?.createCount ?? 0} new</span>
+        <span className="text-sky-700">{preview?.updateCount ?? 0} update</span>
+        {preview?.errorCount > 0 && <span className="text-rose-700">{preview.errorCount} error{preview.errorCount === 1 ? '' : 's'} (skipped)</span>}
+      </div>
+      <div className="max-h-[55vh] overflow-auto rounded-sm border border-slate-200">
+        <table className="w-full text-sm">
+          <thead className="sticky top-0 bg-slate-50 text-left text-[11px] uppercase tracking-wide text-slate-500">
+            <tr>
+              <th className="px-2 py-1.5">#</th>
+              <th className="px-2 py-1.5">UNIQUE_CODE</th>
+              <th className="px-2 py-1.5">Booth name</th>
+              <th className="px-2 py-1.5">Part</th>
+              <th className="px-2 py-1.5">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r, i) => {
+              const err = Object.values(r.__errors ?? {})[0];
+              return (
+                <tr key={i} className={`border-t border-slate-100 ${err ? 'bg-rose-50' : ''}`}>
+                  <td className="px-2 py-1 text-slate-400">{i + 1}</td>
+                  <td className="px-2 py-1 font-mono text-[12px] text-slate-700">{r.code || '—'}</td>
+                  <td className="px-2 py-1 text-slate-700">{r.boothName || r.pollingStationName || '—'}</td>
+                  <td className="px-2 py-1 text-slate-500">{r.partNumber || '—'}</td>
+                  <td className="px-2 py-1">
+                    {err
+                      ? <span className="text-rose-700">{err}</span>
+                      : r.__exists
+                        ? <span className="text-sky-700">update</span>
+                        : <span className="text-emerald-700">new</span>}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </Modal>
+  );
+}
+
 function BoothsTab() {
+  const { show } = useToast();
   // Cascading geography to pick the constituency (same source as the Elections tab).
   const statesQ = useQuery({ queryKey: ['master-geo', 'states', 'root'], queryFn: () => api.masterGeoList('states') });
   const [stateId, setStateId] = useState('');
@@ -828,23 +933,44 @@ function BoothsTab() {
   const asmQ = useQuery({ queryKey: ['master-geo', 'assembly', parlId], queryFn: () => api.masterGeoList('assembly', { parlId }), enabled: !!parlId });
   const [asmId, setAsmId] = useState('');
   const [adding, setAdding] = useState(false);
+  const [preview, setPreview] = useState(null);
+  const fileRef = useRef(null);
 
+  const parl = (parlQ.data?.items ?? []).find((p) => String(p.id) === String(parlId));
   const asm = (asmQ.data?.items ?? []).find((a) => String(a.id) === String(asmId));
-  const assemblyNo = asm ? String(asm.number) : undefined;
-  const assemblyName = asm ? asm.name : undefined;
+  // Booths belong to a PC (AC optional — UTs with no assembly). The list/query
+  // key is scoped by both so switching constituency refetches cleanly.
+  const boothKey = `${parlId || ''}:${asmId || ''}`;
 
   const boothsQ = useQuery({
-    queryKey: ['master-booths', assemblyNo, assemblyName],
-    queryFn: () => api.masterBooths({ assemblyNo, assemblyName }),
-    enabled: !!assemblyNo && !!assemblyName,
+    queryKey: ['master-booths', boothKey],
+    queryFn: () => api.masterBooths({ parlId, asmId: asmId || undefined }),
+    enabled: !!parlId,
   });
   const booths = boothsQ.data?.items ?? [];
-  const orphans = booths.filter((b) => (b.electionsCount ?? 0) === 0).length;
+  const unused = booths.filter((b) => (b.electionsCount ?? 0) === 0).length;
+
+  const previewM = useMutation({
+    mutationFn: (file) => api.masterBoothsPreview(file),
+    onSuccess: (data) => setPreview(data),
+    onError: (e) => show(e.message, 'error'),
+  });
+
+  async function exportBooths() {
+    try {
+      const p = new URLSearchParams();
+      if (parlId) p.set('parlId', parlId);
+      if (asmId) p.set('asmId', asmId);
+      await downloadBlob(`/api/master/booths/export?${p.toString()}`, 'booths_export.xlsx');
+    } catch (e) {
+      show(e.message, 'error');
+    }
+  }
 
   return (
     <div className="space-y-4">
       <p className="text-sm text-slate-500">
-        The physical booth (polling-station) registry for a constituency — shared across every election held there. Editing a booth's name/address/coordinates updates it everywhere. Booths used in a Form 20 are protected; unused (orphan) booths can be deleted.
+        The master booth registry — one stable row per physical booth, keyed by your immutable <strong>UNIQUE_CODE</strong>. Create booths here (single-add or bulk Excel); Form 20 and voter imports only ever look them up by code. Pick a constituency (AC optional for UTs) to begin.
       </p>
 
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
@@ -857,32 +983,55 @@ function BoothsTab() {
           {(parlQ.data?.items ?? []).map((p) => <option key={p.id} value={p.id}>{p.number} — {p.name}</option>)}
         </select>
         <select className={input} value={asmId} disabled={!parlId} onChange={(e) => setAsmId(e.target.value)}>
-          <option value="">Constituency…</option>
+          <option value="">Assembly (optional)…</option>
           {(asmQ.data?.items ?? []).map((a) => <option key={a.id} value={a.id}>{a.number} — {a.name}</option>)}
         </select>
       </div>
 
-      {!asm && <div className="border border-dashed border-slate-300 bg-white p-8 text-center text-sm text-slate-400">Pick a constituency to manage its booths.</div>}
+      {!parl && <div className="border border-dashed border-slate-300 bg-white p-8 text-center text-sm text-slate-400">Pick a parliamentary constituency to manage its booths.</div>}
 
-      {asm && (
+      {parl && (
         <>
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="text-sm text-slate-600">
-              <strong className="text-slate-900">{booths.length}</strong> booths in {assemblyNo}-{assemblyName}
-              {orphans > 0 && <span className="ml-2 text-amber-700">· {orphans} orphan{orphans === 1 ? '' : 's'}</span>}
+              <strong className="text-slate-900">{booths.length}</strong> booths in {parl.number}-{parl.name}{asm ? ` · ${asm.number}-${asm.name}` : ''}
+              {unused > 0 && <span className="ml-2 text-amber-700">· {unused} unused</span>}
             </div>
-            {!adding && <button className={btnPrimary} onClick={() => setAdding(true)}>+ Add booth</button>}
+            <div className="flex flex-wrap items-center gap-1.5">
+              <a
+                href={downloadUrls.boothTemplate({ pcId: parlId, acId: asmId, pcName: parl ? `${parl.number} — ${parl.name}` : '', acName: asm ? `${asm.number} — ${asm.name}` : '' })}
+                className={`${btnGhost} px-2 py-1`}
+                title="Download a booth sheet seeded with this constituency"
+              >
+                <DownloadIcon /> Template
+              </a>
+              <button className={`${btnGhost} px-2 py-1`} onClick={() => fileRef.current?.click()} disabled={previewM.isPending}>
+                <UploadGlyph /> {previewM.isPending ? 'Parsing…' : 'Upload'}
+              </button>
+              <button className={`${btnGhost} px-2 py-1`} onClick={exportBooths}>
+                <DownloadIcon /> Export
+              </button>
+              {!adding && <button className={btnPrimary} onClick={() => setAdding(true)}>+ Add booth</button>}
+            </div>
           </div>
 
-          {adding && <BoothForm assemblyNo={assemblyNo} assemblyName={assemblyName} onDone={() => setAdding(false)} />}
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".xlsx,.xlsm,.xls,.csv,.tsv,.ods"
+            className="hidden"
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) previewM.mutate(f); e.target.value = ''; }}
+          />
+
+          {adding && <BoothForm parlId={parlId} asmId={asmId} boothKey={boothKey} onDone={() => setAdding(false)} />}
 
           <div className="overflow-x-auto rounded-sm border border-slate-300 bg-white">
             <table className="w-full text-sm">
               <thead className="bg-slate-50 text-left text-[11px] uppercase tracking-wide text-slate-500">
                 <tr>
                   <th className="px-3 py-2">Booth</th>
+                  <th className="px-3 py-2 text-center">Part</th>
                   <th className="px-3 py-2">Location</th>
-                  <th className="px-3 py-2 text-center">Coords</th>
                   <th className="px-3 py-2 text-center">Elections</th>
                   <th className="px-3 py-2" />
                 </tr>
@@ -890,14 +1039,202 @@ function BoothsTab() {
               <tbody>
                 {boothsQ.isLoading && <tr><td colSpan={5} className="px-3 py-6 text-center text-slate-400">Loading…</td></tr>}
                 {!boothsQ.isLoading && booths.map((b) => (
-                  <BoothRow key={b.id} station={b} assemblyNo={assemblyNo} assemblyName={assemblyName} />
+                  <BoothRow key={b.id} station={b} parlId={parlId} asmId={asmId} boothKey={boothKey} />
                 ))}
-                {!boothsQ.isLoading && booths.length === 0 && <tr><td colSpan={5} className="px-3 py-6 text-center text-slate-400">No booths yet — add one, or upload this constituency's Form 20.</td></tr>}
+                {!boothsQ.isLoading && booths.length === 0 && <tr><td colSpan={5} className="px-3 py-6 text-center text-slate-400">No booths yet — add one, or upload a booth sheet.</td></tr>}
               </tbody>
             </table>
           </div>
         </>
       )}
+
+      {preview && (
+        <BoothUploadModal
+          preview={preview}
+          parlId={parlId}
+          asmId={asmId}
+          boothKey={boothKey}
+          onClose={() => setPreview(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─── Surname rules (surname → caste / category / religion) ──────────────────
+
+// Parse a pasted table into rules. Accepts tab- or comma-separated rows, drops a
+// leading serial (S.No) column and a header row, maps: surname, caste, category,
+// religion (extra columns ignored). Handles the "S.No | Surname | Group" shape.
+function parseSurnameBulk(text) {
+  const out = [];
+  for (const raw of String(text ?? '').split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line) continue;
+    let cells = (line.includes('\t') ? line.split('\t') : line.split(',')).map((c) => c.trim());
+    if (cells.length > 2 && /^\d+$/.test(cells[0])) cells = cells.slice(1); // drop S.No
+    const [surname, caste, category, religion] = cells;
+    if (!surname) continue;
+    const low = surname.toLowerCase();
+    if (low === 'surname' || low === 's.no' || low === 'sno') continue; // header
+    out.push({ surname, caste: caste || undefined, category: category || undefined, religion: religion || undefined });
+  }
+  return out;
+}
+
+function SurnameRuleRow({ rule }) {
+  const { show } = useToast();
+  const confirm = useConfirm();
+  const qc = useQueryClient();
+  const [editing, setEditing] = useState(false);
+  const [form, setForm] = useState({ caste: rule.caste ?? '', category: rule.category ?? '', religion: rule.religion ?? '' });
+  const invalidate = () => qc.invalidateQueries({ queryKey: ['surname-rules'] });
+
+  const save = useMutation({
+    mutationFn: () => api.masterSurnameRuleUpdate(rule.id, {
+      caste: form.caste.trim() || null, category: form.category.trim() || null, religion: form.religion.trim() || null,
+    }),
+    onSuccess: () => { invalidate(); show('Rule updated', 'success'); setEditing(false); },
+    onError: (e) => show(e.message, 'error'),
+  });
+  const toggle = useMutation({
+    mutationFn: () => api.masterSurnameRuleUpdate(rule.id, { active: !rule.active }),
+    onSuccess: invalidate,
+    onError: (e) => show(e.message, 'error'),
+  });
+  const del = useMutation({
+    mutationFn: () => api.masterSurnameRuleDelete(rule.id),
+    onSuccess: () => { invalidate(); show('Rule deleted', 'success'); },
+    onError: (e) => show(e.message, 'error'),
+  });
+
+  if (editing) {
+    return (
+      <tr className="border-t border-slate-100 bg-slate-50">
+        <td className="px-3 py-2 font-mono text-xs text-slate-700">{rule.surname}</td>
+        <td className="px-2 py-2"><input className={input} value={form.caste} onChange={(e) => setForm((s) => ({ ...s, caste: e.target.value }))} placeholder="Caste" /></td>
+        <td className="px-2 py-2"><input className={input} value={form.category} onChange={(e) => setForm((s) => ({ ...s, category: e.target.value }))} placeholder="Category" /></td>
+        <td className="px-2 py-2"><input className={input} value={form.religion} onChange={(e) => setForm((s) => ({ ...s, religion: e.target.value }))} placeholder="Religion" /></td>
+        <td className="px-3 py-2 text-right">
+          <button className={btnPrimary} disabled={save.isPending} onClick={() => save.mutate()}>Save</button>
+          <button className={`${btnGhost} ml-1`} onClick={() => setEditing(false)}>Cancel</button>
+        </td>
+      </tr>
+    );
+  }
+  return (
+    <tr className={`group border-t border-slate-100 ${rule.active ? '' : 'opacity-50'}`}>
+      <td className="px-3 py-2 font-mono text-xs font-semibold text-slate-800">{rule.surname}</td>
+      <td className="px-3 py-2 text-slate-700">{rule.caste || <span className="text-slate-300">—</span>}</td>
+      <td className="px-3 py-2 text-slate-700">{rule.category || <span className="text-slate-300">—</span>}</td>
+      <td className="px-3 py-2 text-slate-700">{rule.religion || <span className="text-slate-300">—</span>}</td>
+      <td className="px-3 py-2">
+        <div className="flex items-center justify-end gap-1">
+          <button
+            type="button"
+            onClick={() => toggle.mutate()}
+            className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${rule.active ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}
+          >
+            {rule.active ? 'Active' : 'Off'}
+          </button>
+          <IconBtn title="Edit" onClick={() => setEditing(true)}><PencilIcon /></IconBtn>
+          <IconBtn title="Delete" danger onClick={async () => { if (await confirm({ title: 'Delete rule?', message: `Delete the rule for "${rule.surname}"?`, confirmText: 'Delete' })) del.mutate(); }}><TrashIcon /></IconBtn>
+        </div>
+      </td>
+    </tr>
+  );
+}
+
+function SurnamesTab() {
+  const { show } = useToast();
+  const qc = useQueryClient();
+  const [nf, setNf] = useState({ surname: '', caste: '', category: '', religion: '' });
+  const [bulk, setBulk] = useState('');
+  const [showBulk, setShowBulk] = useState(false);
+  const [q, setQ] = useState('');
+
+  const rulesQ = useQuery({ queryKey: ['surname-rules'], queryFn: () => api.masterSurnameRules() });
+  const rules = rulesQ.data?.items ?? [];
+  const filtered = q ? rules.filter((r) => r.surname.toLowerCase().includes(q.toLowerCase())) : rules;
+
+  const add = useMutation({
+    mutationFn: () => api.masterSurnameRuleCreate({
+      surname: nf.surname.trim(), caste: nf.caste.trim() || null, category: nf.category.trim() || null, religion: nf.religion.trim() || null,
+    }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['surname-rules'] }); setNf({ surname: '', caste: '', category: '', religion: '' }); show('Rule added', 'success'); },
+    onError: (e) => show(e.message, 'error'),
+  });
+  const bulkM = useMutation({
+    mutationFn: () => api.masterSurnameRulesBulk(parseSurnameBulk(bulk)),
+    onSuccess: (res) => { qc.invalidateQueries({ queryKey: ['surname-rules'] }); setBulk(''); setShowBulk(false); show(`${res.created} added · ${res.updated} updated`, 'success'); },
+    onError: (e) => show(e.message, 'error'),
+  });
+
+  const parsedCount = parseSurnameBulk(bulk).length;
+
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-slate-500">
+        Map a <strong>surname</strong> (voter's last name) to a caste, category and/or religion. On voter import, any <strong>blank</strong> caste/category/religion cell is seeded from the matching rule (case-insensitive); filled cells are kept, and surnames with no rule are left blank.
+      </p>
+
+      {/* Add single rule */}
+      <div className="rounded-sm border border-slate-300 bg-white p-3">
+        <div className="mb-2 text-sm font-semibold text-slate-900">New rule</div>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <input className={input} placeholder="Surname *" value={nf.surname} onChange={(e) => setNf((s) => ({ ...s, surname: e.target.value }))} />
+          <input className={input} placeholder="Caste" value={nf.caste} onChange={(e) => setNf((s) => ({ ...s, caste: e.target.value }))} />
+          <input className={input} placeholder="Category" value={nf.category} onChange={(e) => setNf((s) => ({ ...s, category: e.target.value }))} />
+          <input className={input} placeholder="Religion" value={nf.religion} onChange={(e) => setNf((s) => ({ ...s, religion: e.target.value }))} />
+        </div>
+        <div className="mt-2 flex items-center gap-2">
+          <button className={btnPrimary} disabled={!nf.surname.trim() || add.isPending} onClick={() => add.mutate()}>Add rule</button>
+          <button className={btnGhost} onClick={() => setShowBulk((v) => !v)}>{showBulk ? 'Hide bulk paste' : 'Bulk paste…'}</button>
+        </div>
+        {showBulk && (
+          <div className="mt-3 border-t border-slate-200 pt-3">
+            <div className="mb-1 text-xs text-slate-500">
+              Paste rows from Excel — columns: <code>Surname</code>, <code>Caste</code>, <code>Category</code>, <code>Religion</code> (a leading S.No column and a header row are ignored). Existing surnames are updated.
+            </div>
+            <textarea
+              className={`${input} h-36 font-mono text-xs`}
+              placeholder={'Barreto\tBamonn / Chardo\nCosta\tChardo\nMascarenhas\tBamonn'}
+              value={bulk}
+              onChange={(e) => setBulk(e.target.value)}
+            />
+            <div className="mt-2 flex items-center gap-2">
+              <button className={btnPrimary} disabled={parsedCount === 0 || bulkM.isPending} onClick={() => bulkM.mutate()}>
+                {bulkM.isPending ? 'Importing…' : `Import ${parsedCount} rule${parsedCount === 1 ? '' : 's'}`}
+              </button>
+              <button className={btnGhost} onClick={() => setBulk('')}>Clear</button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Rules table */}
+      <div className="flex items-center justify-between gap-2">
+        <div className="text-sm text-slate-600"><strong className="text-slate-900">{rules.length}</strong> rule{rules.length === 1 ? '' : 's'}</div>
+        <input className={`${input} max-w-xs`} placeholder="Search surname…" value={q} onChange={(e) => setQ(e.target.value)} />
+      </div>
+      <div className="overflow-x-auto rounded-sm border border-slate-300 bg-white">
+        <table className="w-full text-sm">
+          <thead className="bg-slate-50 text-left text-[11px] uppercase tracking-wide text-slate-500">
+            <tr>
+              <th className="px-3 py-2">Surname</th>
+              <th className="px-3 py-2">Caste</th>
+              <th className="px-3 py-2">Category</th>
+              <th className="px-3 py-2">Religion</th>
+              <th className="px-3 py-2" />
+            </tr>
+          </thead>
+          <tbody>
+            {rulesQ.isLoading && <tr><td colSpan={5} className="px-3 py-6 text-center text-slate-400">Loading…</td></tr>}
+            {!rulesQ.isLoading && filtered.map((r) => <SurnameRuleRow key={r.id} rule={r} />)}
+            {!rulesQ.isLoading && filtered.length === 0 && <tr><td colSpan={5} className="px-3 py-6 text-center text-slate-400">{q ? 'No matches.' : 'No rules yet — add one or bulk-paste your surname table.'}</td></tr>}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
@@ -932,7 +1269,7 @@ export default function AllMasterPage() {
       </div>
 
       <div className="mb-4 flex gap-1 border-b border-slate-300">
-        {[['geography', 'Geography'], ['elections', 'Elections'], ['booths', 'Booths'], ['candidates', 'Candidates'], ['lists', 'Lookup Lists']].map(([id, lbl]) => (
+        {[['geography', 'Geography'], ['elections', 'Elections'], ['booths', 'Booths'], ['candidates', 'Candidates'], ['surnames', 'Surname Rules'], ['lists', 'Lookup Lists']].map(([id, lbl]) => (
           <button
             key={id}
             type="button"
@@ -948,6 +1285,7 @@ export default function AllMasterPage() {
       {tab === 'elections' && <ElectionsTab />}
       {tab === 'booths' && <BoothsTab />}
       {tab === 'candidates' && <CandidatesTab />}
+      {tab === 'surnames' && <SurnamesTab />}
       {tab === 'lists' && <ListsTab />}
     </div>
   );
