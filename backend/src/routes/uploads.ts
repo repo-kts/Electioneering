@@ -10,7 +10,7 @@ import {
 } from '../services/parseUpload.js';
 import { validateVoter, type VoterClean } from '../services/voterValidation.js';
 import { recomputePredictedLeaning } from '../services/inference.js';
-import { resolveBoothsByCode, upsertBooth, type ResolvedBooth } from '../services/booths.js';
+import { resolveBoothsByCode, upsertBooth, replaceBoothGrid, type ResolvedBooth } from '../services/booths.js';
 import { loadSurnameRules, applySurnameRule } from '../services/surnameRules.js';
 
 const router = Router();
@@ -362,39 +362,36 @@ router.post(
       return;
     }
 
+    // Everything below is batched: a per-row loop costs three round trips per
+    // booth and blows the 5 s interactive-transaction timeout on a remote DB.
     await prisma.$transaction(async (tx) => {
-      // Wipe candidates (cascades to their VoteResults) and recreate them.
-      // Booths (the per-election join) are UPSERTED, never deleted — deleting
-      // them would cascade-remove the BoothVoter roll mappings.
+      // Wipe candidates (cascades to their VoteResults) and recreate them, then
+      // read the new ids back — the sheet keys its votes by candidate NAME.
       await tx.candidate.deleteMany({ where: { electionId: election.id } });
-
+      await tx.candidate.createMany({
+        data: body.candidates.map((name, i) => ({ electionId: election.id, name, position: i })),
+      });
+      const cands = await tx.candidate.findMany({
+        where: { electionId: election.id },
+        select: { id: true, name: true },
+      });
       const createdCands: Record<string, number> = {};
-      for (let i = 0; i < body.candidates.length; i++) {
-        const c = await tx.candidate.create({
-          data: { electionId: election.id, name: body.candidates[i], position: i },
-        });
-        createdCands[body.candidates[i]] = c.id;
-      }
+      for (const c of cands) createdCands[c.name] = c.id;
 
-      for (const row of body.rows) {
-        const booth = byCode.get(row.code)!;
-        const boothId = await upsertBooth(tx, {
-          electionId: election.id,
-          pollingStationId: booth.id,
+      await replaceBoothGrid(
+        tx,
+        election.id,
+        body.rows.map((row) => ({
+          pollingStationId: byCode.get(row.code)!.id,
           serial: row.serial,
           rejectedVotes: row.rejectedVotes,
           notaVotes: row.notaVotes,
           tenderedVotes: row.tenderedVotes,
-        });
-        // Replace this booth's vote results.
-        await tx.voteResult.deleteMany({ where: { boothId } });
-        const voteEntries = Object.entries(row.votes)
-          .map(([candName, v]) => ({ boothId, candidateId: createdCands[candName], votes: v }))
-          .filter((e) => e.candidateId);
-        if (voteEntries.length) {
-          await tx.voteResult.createMany({ data: voteEntries });
-        }
-      }
+          votes: Object.entries(row.votes)
+            .map(([candName, v]) => ({ candidateId: createdCands[candName], votes: v }))
+            .filter((e) => e.candidateId),
+        })),
+      );
     });
 
     const history = await prisma.uploadHistory.create({

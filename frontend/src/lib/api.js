@@ -99,6 +99,11 @@ export const api = {
     createElection: (data) => request('/api/elections', { method: 'POST', body: data }),
     updateElection: (id, data) => request(`/api/elections/${id}`, { method: 'PUT', body: data }),
     deleteElection: (id) => request(`/api/elections/${id}`, { method: 'DELETE' }),
+    copyVoters: (targetElectionId, fromElectionId) =>
+        request(`/api/elections/${targetElectionId}/copy-voters`, {
+            method: 'POST',
+            body: { fromElectionId },
+        }),
     addCandidate: (id, data) =>
         request(`/api/elections/${id}/candidates`, { method: 'POST', body: data }),
     updateCandidate: (id, cid, data) =>

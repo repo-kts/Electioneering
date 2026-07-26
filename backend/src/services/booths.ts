@@ -6,7 +6,8 @@
 // by `code` and reject unknown codes. A Booth is the per-election join (Election
 // × master booth); a BoothVoter is the per-election roll entry.
 
-import type { Prisma, PrismaClient } from '@prisma/client';
+import { Prisma } from '@prisma/client';
+import type { PrismaClient } from '@prisma/client';
 
 // Accepts either the base client or a transaction client.
 type Db = PrismaClient | Prisma.TransactionClient;
@@ -142,6 +143,76 @@ export async function upsertBooth(
     select: { id: true },
   });
   return booth.id;
+}
+
+// ─── Form 20 grid (batched) ────────────────────────────────────────────────
+export interface BoothGridRow {
+  pollingStationId: number;
+  serial?: number;
+  rejectedVotes?: number;
+  notaVotes?: number;
+  tenderedVotes?: number;
+  votes: Array<{ candidateId: number; votes: number }>;
+}
+
+/**
+ * Upsert a whole Form 20 grid — the per-election Booth rows plus their vote
+ * results — in a FIXED number of queries (3), not 3 per row.
+ *
+ * The obvious per-row loop (upsertBooth → deleteMany → createMany) costs three
+ * round trips per booth; against a remote Neon pooler that is ~115 round trips
+ * for a 46-booth sheet and blows Prisma's 5 s interactive-transaction timeout
+ * (P2028). The booth upsert has to be raw SQL because Prisma has no batched
+ * upsert — `updatedAt` is `@updatedAt` (NOT NULL, no DB default), so raw
+ * inserts must set it explicitly.
+ *
+ * Booths are UPSERTED, never deleted — deleting them would cascade-remove the
+ * BoothVoter roll mappings. Duplicate codes in one sheet are collapsed to the
+ * last occurrence (matching the old sequential-overwrite behaviour, and
+ * required because ON CONFLICT cannot touch the same row twice).
+ *
+ * Returns the number of booths written.
+ */
+export async function replaceBoothGrid(
+  db: Db,
+  electionId: number,
+  rows: BoothGridRow[],
+): Promise<number> {
+  const byPs = new Map<number, BoothGridRow>();
+  for (const r of rows) byPs.set(r.pollingStationId, r);
+  const deduped = [...byPs.values()];
+  if (deduped.length === 0) return 0;
+
+  const values = deduped.map(
+    (r) => Prisma.sql`(${electionId}, ${r.pollingStationId}, ${r.serial ?? 0}, ${
+      r.rejectedVotes ?? 0
+    }, ${r.notaVotes ?? 0}, ${r.tenderedVotes ?? 0}, NOW())`,
+  );
+  const booths = await db.$queryRaw<Array<{ id: number; pollingStationId: number }>>(Prisma.sql`
+    INSERT INTO "Booth" ("electionId","pollingStationId","serial","rejectedVotes","notaVotes","tenderedVotes","updatedAt")
+    VALUES ${Prisma.join(values)}
+    ON CONFLICT ("electionId","pollingStationId") DO UPDATE SET
+      "serial"        = EXCLUDED."serial",
+      "rejectedVotes" = EXCLUDED."rejectedVotes",
+      "notaVotes"     = EXCLUDED."notaVotes",
+      "tenderedVotes" = EXCLUDED."tenderedVotes",
+      "updatedAt"     = NOW()
+    RETURNING "id", "pollingStationId"
+  `);
+
+  const boothIdByPs = new Map(booths.map((b) => [b.pollingStationId, b.id]));
+
+  // Replace only these booths' results — one deleteMany for the whole grid.
+  await db.voteResult.deleteMany({ where: { boothId: { in: booths.map((b) => b.id) } } });
+
+  const data = deduped.flatMap((r) => {
+    const boothId = boothIdByPs.get(r.pollingStationId);
+    if (!boothId) return [];
+    return r.votes.map((v) => ({ boothId, candidateId: v.candidateId, votes: v.votes }));
+  });
+  if (data.length) await db.voteResult.createMany({ data, skipDuplicates: true });
+
+  return booths.length;
 }
 
 export interface RollPosition {

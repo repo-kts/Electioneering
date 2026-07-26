@@ -35,9 +35,34 @@ export default function VoterDetailPage() {
   const [historyQuery, setHistoryQuery] = useState('');
   const [preview, setPreview] = useState(null);
   const [uploadProgress, setUploadProgress] = useState(null); // { done, total } during a batched import
+  const [copyOpen, setCopyOpen] = useState(false);
+  const [copySource, setCopySource] = useState(''); // election id to copy FROM
+  const [copyTarget, setCopyTarget] = useState(''); // election id to copy INTO
   const { show } = useToast();
   const { hasRole } = useAuth();
   const qc = useQueryClient();
+
+  const electionsQ = useQuery({
+    queryKey: ['elections'],
+    queryFn: () => api.listElections(),
+  });
+  const elections = electionsQ.data?.items ?? [];
+  const elLabel = (e) =>
+    `${e.assemblyNo}-${e.assemblyName} (${e.state})${e.electionYear ? ` · ${e.electionYear}` : ''}`;
+
+  const copyM = useMutation({
+    mutationFn: () => api.copyVoters(Number(copyTarget), Number(copySource)),
+    onSuccess: (res) => {
+      const parts = [`${res.copied} voter${res.copied === 1 ? '' : 's'} copied`];
+      if (res.duplicates) parts.push(`${res.duplicates} already present`);
+      show(parts.join(' · '), res.duplicates ? 'warn' : 'success');
+      setCopyOpen(false);
+      setCopyTarget('');
+      qc.invalidateQueries({ queryKey: ['voters'] });
+      qc.invalidateQueries({ queryKey: ['uploads', 'history'] });
+    },
+    onError: (e) => show(e.message || 'Copy failed', 'error'),
+  });
 
   const historyQ = useQuery({
     queryKey: ['uploads', 'history'],
@@ -158,6 +183,84 @@ export default function VoterDetailPage() {
       <div className="mb-5">
         <StatGroup items={stats} />
       </div>
+
+      {/* Copy an existing election's roll into another election — no re-import. */}
+      {hasRole('admin') && elections.length >= 2 && (
+        <Card className="mb-5">
+          <Card.Body>
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="mr-auto">
+                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Copy voters</div>
+                <div className="text-sm text-slate-600">Replicate one election's voters into another — same people, no manual Excel import.</div>
+              </div>
+              <select
+                value={copySource}
+                onChange={(e) => setCopySource(e.target.value)}
+                className="w-auto"
+                title="Election to copy from"
+              >
+                <option value="">— Copy from… —</option>
+                {elections.map((e) => (
+                  <option key={e.id} value={e.id}>{elLabel(e)}</option>
+                ))}
+              </select>
+              <Button
+                variant="primary"
+                onClick={() => { setCopyTarget(''); setCopyOpen(true); }}
+                disabled={!copySource}
+              >
+                Copy voters to…
+              </Button>
+            </div>
+          </Card.Body>
+        </Card>
+      )}
+
+      {copyOpen && copySource && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          onClick={() => !copyM.isPending && setCopyOpen(false)}
+        >
+          <div className="w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+            <Card>
+              <Card.Head
+                title="Copy voters to another election"
+                subtitle="Replicates the selected election's voters into the target — same people (no duplicates), on the target's booths. Predicted leaning resets and recomputes from the target's own Form 20."
+              />
+              <Card.Body>
+                <div className="mb-3 text-sm text-slate-600">
+                  From: <b>{elLabel(elections.find((e) => String(e.id) === String(copySource)) ?? {})}</b>
+                </div>
+                <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Copy into
+                </label>
+                <select
+                  value={copyTarget}
+                  onChange={(e) => setCopyTarget(e.target.value)}
+                  className="mb-4 w-full"
+                >
+                  <option value="">— Select target election —</option>
+                  {elections
+                    .filter((e) => String(e.id) !== String(copySource))
+                    .map((e) => (
+                      <option key={e.id} value={e.id}>{elLabel(e)}</option>
+                    ))}
+                </select>
+                <div className="flex justify-end gap-2">
+                  <Button onClick={() => setCopyOpen(false)} disabled={copyM.isPending}>Cancel</Button>
+                  <Button
+                    variant="primary"
+                    onClick={() => copyM.mutate()}
+                    disabled={!copyTarget || copyM.isPending}
+                  >
+                    {copyM.isPending ? 'Copying…' : 'Copy voters'}
+                  </Button>
+                </div>
+              </Card.Body>
+            </Card>
+          </div>
+        </div>
+      )}
 
       <Tabs tabs={tabsWithCount} active={tab} onChange={setTab} />
 
