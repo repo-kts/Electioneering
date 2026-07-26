@@ -43,17 +43,17 @@ export default function Modal({
         role="dialog"
         aria-modal="true"
         aria-label={typeof title === 'string' ? title : undefined}
-        className={`modal-panel w-full ${width} border border-slate-300 bg-white shadow-pop`}
+        className={`modal-panel flex max-h-[calc(100vh-2rem)] w-full ${width} flex-col border border-slate-300 bg-white shadow-pop`}
       >
         {title != null && (
-          <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
+          <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
             <h2 className="text-sm font-semibold text-slate-800">{title}</h2>
             <button type="button" onClick={() => onClose?.()} className="text-lg leading-none text-slate-400 hover:text-slate-700" aria-label="Close">×</button>
           </div>
         )}
-        <div className="px-4 py-4">{children}</div>
+        <div className="flex-1 overflow-y-auto px-4 py-4">{children}</div>
         {footer != null && (
-          <div className="flex items-center justify-end gap-2 border-t border-slate-200 bg-slate-50 px-4 py-3">{footer}</div>
+          <div className="flex shrink-0 items-center justify-end gap-2 border-t border-slate-200 bg-slate-50 px-4 py-3">{footer}</div>
         )}
       </div>
     </div>,

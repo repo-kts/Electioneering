@@ -171,13 +171,14 @@ export default function BoothFilterBar({ items, value, onChange, resultCount }) 
     return { sizeMax, avgTurnout, sizeP67: p67 };
   }, [items]);
 
-  // Quick presets — each is a full filter state, so clicking toggles it on/off.
+  // Quick presets — the app's vote-share competitiveness bands (see benchmarkFor
+  // in helpers.js). Each sets the winner's-share range, so clicking toggles it.
   const presets = useMemo(() => [
-    { key: 'battlegrounds', label: '🎯 Battlegrounds', title: 'Margin under 10 points', state: { ...emptyBoothFilters(), margin: { min: 0, max: 10 } } },
-    { key: 'strongholds', label: '🏰 Strongholds', title: 'Winner took 60%+ of the vote', state: { ...emptyBoothFilters(), share: { min: 60, max: 100 } } },
-    { key: 'turnout', label: '📉 Turnout targets', title: `Turnout below the constituency average (${bounds.avgTurnout}%)`, state: { ...emptyBoothFilters(), turnout: { min: 0, max: bounds.avgTurnout } } },
-    { key: 'mustwin', label: '⚠️ Must-win', title: 'Tight race in a large booth — highest leverage', state: { ...emptyBoothFilters(), margin: { min: 0, max: 8 }, size: { min: bounds.sizeP67, max: bounds.sizeMax } } },
-  ], [bounds]);
+    { key: 'safe', label: 'Safe 75+', dot: '#16a34a', title: "Winner took 75%+ of the vote", state: { ...emptyBoothFilters(), share: { min: 75, max: 100 } } },
+    { key: 'favorable', label: 'Favorable 50–75', dot: '#65a30d', title: "Winner took 50–75% of the vote", state: { ...emptyBoothFilters(), share: { min: 50, max: 75 } } },
+    { key: 'battleground', label: 'Battleground 30–50', dot: '#d97706', title: "Winner took 30–50% of the vote", state: { ...emptyBoothFilters(), share: { min: 30, max: 50 } } },
+    { key: 'difficult', label: 'Difficult 0–30', dot: '#e11d48', title: "Winner took under 30% of the vote", state: { ...emptyBoothFilters(), share: { min: 0, max: 30 } } },
+  ], []);
 
   const sameFilters = (a, b) => JSON.stringify(a) === JSON.stringify(b);
   const activePreset = presets.find((p) => sameFilters(p.state, f))?.key;
@@ -197,10 +198,11 @@ export default function BoothFilterBar({ items, value, onChange, resultCount }) 
             type="button"
             title={p.title}
             onClick={() => onChange(activePreset === p.key ? emptyBoothFilters() : p.state)}
-            className={`border px-2.5 py-1 text-xs font-medium transition ${
+            className={`flex items-center gap-1.5 border px-2.5 py-1 text-xs font-medium transition ${
               activePreset === p.key ? 'border-accent-500 bg-accent-600 text-white' : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'
             }`}
           >
+            <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: p.dot, boxShadow: activePreset === p.key ? '0 0 0 1.5px rgba(255,255,255,.7)' : 'none' }} />
             {p.label}
           </button>
         ))}

@@ -87,6 +87,29 @@ src/
 
 ## Current Status
 
+### Booth-wise analytics — `new-dev` (2026-07-25)
+
+**Completed (this branch):**
+
+- **Booth-wise election drill-down** — `ConstituencyBoothsPage` with four views: Grid, Table, Graph, and a new **Treemap**.
+- **Treemap (single election)** — tiles sized by *registered voters / vote share / win margin* ("Size by"), coloured by *win margin / turnout / winning party* ("Colour by"), flat and sorted largest→smallest, click-through to the booth.
+- **Treemap (all years, prototype)** — grouped by **election year** (each year a cluster, every booth a tile inside), coloured by margin/turnout/party. Data is **simulated** for now (amber banner) — see backend TODO below.
+- **"How to read the treemap"** in-app guide behind an "i" button, plus a shareable artifact version.
+- **Quick Views renamed** to the app's vote-share benchmark bands: *Safe 75+ / Favorable 50–75 / Battleground 30–50 / Difficult 0–30*, each with a matching colour dot.
+- **Booth station-history page** reworked — full-width stat-tile strip, shared `StationOverview` (station card + map) across single-/all-years views, per-election **stacked vote-results chart** with a Top N / Custom / All series filter, and a **Geocode booths** button (uses the existing `/api/analytics/geocode`).
+- **Shared `Modal` fix** — caps height and scrolls the body so the close (×) button stays visible at any zoom.
+
+**Pending:**
+
+| Area | Task |
+| ---- | ---- |
+| Backend (needed) | Expose per-booth × per-election records for a constituency so the all-years treemap uses real data (replace the frontend `synthYears()` simulation in `BoothTreemapNested.jsx`). |
+| Data | Load additional election years (2019 / 2022 / Lok Sabha) so the all-years views are meaningful. |
+| Data | Populate booth address / ward / village so geocoding lands on real buildings. |
+| Future | Booth-polygon choropleth map (needs section-level geocoding + AC boundary polygons). |
+
+---
+
 ### What's working
 
 - **Home page** with tiles for Voter Detail and Form 20 sections

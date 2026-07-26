@@ -9,6 +9,10 @@ import { api } from '../lib/api.js';
 import Breadcrumbs from '../components/ui/Breadcrumbs.jsx';
 import { PageHeader, Surface, Loading, ErrorBox, StatCard } from '../components/ui/kit.jsx';
 import BoothGraphs from '../components/analytics/BoothGraphs.jsx';
+import BoothTreemap from '../components/analytics/BoothTreemap.jsx';
+import BoothTreemapNested from '../components/analytics/BoothTreemapNested.jsx';
+import TreemapGuide from '../components/analytics/TreemapGuide.jsx';
+import Modal from '../components/ui/Modal.jsx';
 import FilterableTable from '../components/analytics/FilterableTable.jsx';
 import BoothFilterBar, { applyBoothFilters, emptyBoothFilters } from '../components/analytics/BoothFilterBar.jsx';
 import { partyColor, colorFor, colorForCandidate, num, pct, boothName, boothTag } from '../components/elections/helpers.js';
@@ -26,6 +30,10 @@ export default function ConstituencyBoothsPage() {
   const navigate = useNavigate();
   const [view, setView] = useState('grid');
   const [sortKey, setSortKey] = useState('serial');
+  const [treeMetric, setTreeMetric] = useState('margin'); // margin | turnout
+  const [treeSize, setTreeSize] = useState('voters'); // voters | share | margin
+  const [treeYears, setTreeYears] = useState('latest'); // latest | all
+  const [guideOpen, setGuideOpen] = useState(false);
   const [filters, setFilters] = useState(emptyBoothFilters);
 
   const q = useQuery({
@@ -87,7 +95,7 @@ export default function ConstituencyBoothsPage() {
             subtitle="Headline = each booth's most-recent election. Open a booth for turnout, results and demographics across every year."
             right={
               <div className="flex flex-wrap items-center gap-2">
-                {view !== 'graph' && (
+                {(view === 'grid' || view === 'table') && (
                   <label className="flex items-center gap-1.5 text-xs text-slate-500">
                     Sort
                     <select
@@ -99,8 +107,58 @@ export default function ConstituencyBoothsPage() {
                     </select>
                   </label>
                 )}
+                {view === 'treemap' && (
+                  <>
+                    <label className="flex items-center gap-1.5 text-xs text-slate-500">
+                      Years
+                      <select
+                        value={treeYears}
+                        onChange={(e) => setTreeYears(e.target.value)}
+                        className="border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-700"
+                      >
+                        <option value="latest">Latest election</option>
+                        <option value="all">All years (demo)</option>
+                      </select>
+                    </label>
+                    {treeYears === 'latest' && (
+                      <label className="flex items-center gap-1.5 text-xs text-slate-500">
+                        Size by
+                        <select
+                          value={treeSize}
+                          onChange={(e) => setTreeSize(e.target.value)}
+                          className="border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-700"
+                        >
+                          <option value="voters">Registered voters</option>
+                          <option value="share">Vote share</option>
+                          <option value="margin">Win margin</option>
+                        </select>
+                      </label>
+                    )}
+                    <label className="flex items-center gap-1.5 text-xs text-slate-500">
+                      Colour by
+                      <select
+                        value={treeMetric}
+                        onChange={(e) => setTreeMetric(e.target.value)}
+                        className="border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-700"
+                      >
+                        <option value="margin">Win margin</option>
+                        <option value="turnout">Turnout</option>
+                        <option value="party">Winning party</option>
+                      </select>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setGuideOpen(true)}
+                      title="How to read the treemap"
+                      aria-label="How to read the treemap"
+                      className="flex h-6 w-6 items-center justify-center rounded-full border border-slate-300 bg-white text-xs font-semibold italic text-slate-500 transition hover:border-accent-500 hover:text-accent-700"
+                    >
+                      i
+                    </button>
+                  </>
+                )}
                 <div className="inline-flex overflow-hidden rounded-md border border-slate-300">
-                  {['grid', 'table', 'graph'].map((v) => (
+                  {['grid', 'table', 'graph', 'treemap'].map((v) => (
                     <button
                       key={v}
                       onClick={() => setView(v)}
@@ -130,6 +188,14 @@ export default function ConstituencyBoothsPage() {
 
             {sorted.length > 0 && view === 'graph' && (
               <BoothGraphs items={sorted} onSelect={(id) => { if (id != null) navigate(stationLink({ id })); }} />
+            )}
+
+            {sorted.length > 0 && view === 'treemap' && treeYears === 'all' && (
+              <BoothTreemapNested items={sorted} metric={treeMetric} onSelect={(id) => { if (id != null) navigate(stationLink({ id })); }} />
+            )}
+
+            {sorted.length > 0 && view === 'treemap' && treeYears === 'latest' && (
+              <BoothTreemap items={sorted} metric={treeMetric} sizeMetric={treeSize} onSelect={(id) => { if (id != null) navigate(stationLink({ id })); }} />
             )}
 
             {sorted.length > 0 && view === 'table' && (
@@ -200,6 +266,10 @@ export default function ConstituencyBoothsPage() {
           </Surface>
         </>
       )}
+
+      <Modal open={guideOpen} onClose={() => setGuideOpen(false)} title="How to read the treemap" size="lg">
+        <TreemapGuide />
+      </Modal>
     </div>
   );
 }
