@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { asyncHandler } from '../lib/asyncHandler.js';
 import { recomputePredictedLeaning } from '../services/inference.js';
-import { resolveBoothsByCode, upsertBooth } from '../services/booths.js';
+import { resolveBoothsByCode, upsertBooth, replaceBoothGrid } from '../services/booths.js';
 import { requireAdmin } from '../middleware/auth.js';
 
 const router = Router();
@@ -85,6 +85,117 @@ router.delete(
     const id = Number(req.params.id);
     await prisma.election.delete({ where: { id } });
     res.status(204).end();
+  }),
+);
+
+// ─── Copy voters into another election ────────────────────────────────
+// Replicates a source election's roll into the target without a manual Excel
+// re-import. Voters are the stable EPIC-keyed masters — they are REUSED, not
+// duplicated. For each source BoothVoter we ensure a per-election Booth on the
+// same master PollingStation for the target, then create the target BoothVoter
+// (same voter, copied roll position). Predicted leaning is reset — it recomputes
+// from the target's own Form 20 once uploaded. Idempotent: re-copying skips
+// voters already placed in the target (unique electionId+voterId).
+const copyVotersSchema = z.object({
+  fromElectionId: z.coerce.number().int().positive(),
+});
+
+// POST /api/elections/:id/copy-voters  { fromElectionId }  (admin only)
+router.post(
+  '/:id/copy-voters',
+  requireAdmin,
+  asyncHandler(async (req, res) => {
+    const targetId = Number(req.params.id);
+    const { fromElectionId } = copyVotersSchema.parse(req.body);
+
+    if (fromElectionId === targetId) {
+      res.status(400).json({ error: 'BadRequest', message: 'Source and target elections must differ.' });
+      return;
+    }
+
+    const [target, source] = await Promise.all([
+      prisma.election.findUnique({ where: { id: targetId } }),
+      prisma.election.findUnique({ where: { id: fromElectionId } }),
+    ]);
+    if (!target || !source) {
+      res.status(404).json({ error: 'NotFound', message: 'Source or target election not found.' });
+      return;
+    }
+
+    // Source roll entries + the master polling station behind each booth.
+    const sourceBVs = await prisma.boothVoter.findMany({
+      where: { electionId: fromElectionId },
+      select: {
+        voterId: true,
+        partNumber: true,
+        partName: true,
+        partSerial: true,
+        houseNumber: true,
+        sectionNo: true,
+        sectionName: true,
+        booth: { select: { pollingStationId: true, serial: true, name: true } },
+      },
+    });
+    if (sourceBVs.length === 0) {
+      res.status(400).json({ error: 'BadRequest', message: 'Source election has no voters to copy.' });
+      return;
+    }
+
+    // Ensure a per-election Booth on the target for every referenced master PS.
+    const psMeta = new Map<number, { serial: number; name: string | null }>();
+    for (const bv of sourceBVs) {
+      const psId = bv.booth.pollingStationId;
+      if (!psMeta.has(psId)) psMeta.set(psId, { serial: bv.booth.serial, name: bv.booth.name });
+    }
+    const psToBooth = new Map<number, number>();
+    for (const [psId, meta] of psMeta) {
+      const boothId = await upsertBooth(prisma, {
+        electionId: targetId,
+        pollingStationId: psId,
+        serial: meta.serial,
+        name: meta.name,
+      });
+      psToBooth.set(psId, boothId);
+    }
+
+    // Create the target roll entries (same voters), leaning reset.
+    const bvData = sourceBVs.map((bv) => ({
+      electionId: targetId,
+      boothId: psToBooth.get(bv.booth.pollingStationId) as number,
+      voterId: bv.voterId,
+      partNumber: bv.partNumber,
+      partName: bv.partName,
+      partSerial: bv.partSerial,
+      houseNumber: bv.houseNumber,
+      sectionNo: bv.sectionNo,
+      sectionName: bv.sectionName,
+    }));
+    const result = await prisma.boothVoter.createMany({ data: bvData, skipDuplicates: true });
+
+    // If the target already has a Form 20, immediately populate leanings.
+    try {
+      await recomputePredictedLeaning(targetId);
+    } catch (err) {
+      console.error('[inference] recompute after copy failed', err);
+    }
+
+    await prisma.uploadHistory.create({
+      data: {
+        fileName: `Copy from ${source.assemblyNo}-${source.assemblyName}${source.electionYear ? ` (${source.electionYear})` : ''}`,
+        source: `Copied · ${source.assemblyName} → ${target.assemblyName}`,
+        kind: 'voter',
+        records: result.count,
+        constituency: `${target.assemblyNo}-${target.assemblyName}`,
+        status: 'validated',
+      },
+    });
+
+    res.status(201).json({
+      copied: result.count,
+      requested: sourceBVs.length,
+      duplicates: sourceBVs.length - result.count,
+      booths: psToBooth.size,
+    });
   }),
 );
 
@@ -202,26 +313,23 @@ router.put(
       return;
     }
 
+    // Batched — replaces only these booths' results, leaving BoothVoter roll
+    // mappings intact. A per-row loop here costs three round trips per booth.
     await prisma.$transaction(async (tx) => {
-      for (const row of rows) {
-        const booth = byCode.get(row.code)!;
-        const boothId = await upsertBooth(tx, {
-          electionId,
-          pollingStationId: booth.id,
+      await replaceBoothGrid(
+        tx,
+        electionId,
+        rows.map((row) => ({
+          pollingStationId: byCode.get(row.code)!.id,
           serial: row.serial,
           rejectedVotes: row.rejectedVotes,
           notaVotes: row.notaVotes,
           tenderedVotes: row.tenderedVotes,
-        });
-        // Replace only this booth's results (leaves BoothVoter roll mappings intact).
-        await tx.voteResult.deleteMany({ where: { boothId } });
-        const voteEntries = Object.entries(row.votes)
-          .map(([cid, v]) => ({ boothId, candidateId: Number(cid), votes: v }))
-          .filter((e) => validCandIds.has(e.candidateId));
-        if (voteEntries.length) {
-          await tx.voteResult.createMany({ data: voteEntries });
-        }
-      }
+          votes: Object.entries(row.votes)
+            .map(([cid, v]) => ({ candidateId: Number(cid), votes: v }))
+            .filter((e) => validCandIds.has(e.candidateId)),
+        })),
+      );
     });
 
     try {
