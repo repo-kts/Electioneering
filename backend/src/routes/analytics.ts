@@ -14,6 +14,7 @@ import { geocodeElectionBooths } from '../services/geocode.js';
 import {
   computePartyAnalytics,
   computeAssemblyTimeline,
+  computePartyShareTimeline,
   computeElectionsHierarchy,
   computeConstituencyRollups,
   computeConstituencyBooths,
@@ -423,6 +424,7 @@ router.get(
       .object({
         assemblyNo: z.string().optional(),
         assemblyName: z.string().optional(),
+        electionType: z.string().optional(),
         limit: z.coerce.number().int().min(1).optional(),
       })
       .refine((p) => p.assemblyNo || p.assemblyName, {
@@ -431,9 +433,36 @@ router.get(
       .parse({
         assemblyNo: req.query.assemblyNo,
         assemblyName: req.query.assemblyName,
+        electionType: req.query.electionType,
         limit: req.query.limit,
       });
     const result = await computeAssemblyTimeline(params);
+    res.json(result);
+  }),
+);
+
+// GET /api/analytics/party-timeline?assemblyNo=X&assemblyName=Y
+// Party vote-share over time for one assembly constituency: per-year per-party
+// vote totals plus the union of parties ranked by total votes. Feeds the
+// "Party vote-share over time" stacked chart.
+router.get(
+  '/party-timeline',
+  asyncHandler(async (req, res) => {
+    const params = z
+      .object({
+        assemblyNo: z.string().optional(),
+        assemblyName: z.string().optional(),
+        electionType: z.string().optional(),
+      })
+      .refine((p) => p.assemblyNo || p.assemblyName, {
+        message: 'assemblyNo or assemblyName is required',
+      })
+      .parse({
+        assemblyNo: req.query.assemblyNo,
+        assemblyName: req.query.assemblyName,
+        electionType: req.query.electionType,
+      });
+    const result = await computePartyShareTimeline(params);
     res.json(result);
   }),
 );

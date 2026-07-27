@@ -150,12 +150,20 @@ export const api = {
         return request(`/api/analytics/strategy?${p.toString()}`);
     },
     partyAnalytics: (electionId) => request(`/api/analytics/party?electionId=${electionId}`),
-    assemblyTimeline: ({ assemblyNo, assemblyName, limit } = {}) => {
+    assemblyTimeline: ({ assemblyNo, assemblyName, electionType, limit } = {}) => {
         const p = new URLSearchParams();
         if (assemblyNo) p.set('assemblyNo', assemblyNo);
         if (assemblyName) p.set('assemblyName', assemblyName);
+        if (electionType) p.set('electionType', electionType);
         if (limit) p.set('limit', String(limit));
         return request(`/api/analytics/assembly-timeline?${p.toString()}`);
+    },
+    partyTimeline: ({ assemblyNo, assemblyName, electionType } = {}) => {
+        const p = new URLSearchParams();
+        if (assemblyNo) p.set('assemblyNo', assemblyNo);
+        if (assemblyName) p.set('assemblyName', assemblyName);
+        if (electionType) p.set('electionType', electionType);
+        return request(`/api/analytics/party-timeline?${p.toString()}`);
     },
     electionsHierarchy: () => request('/api/analytics/hierarchy'),
     // Booth-wise election: constituencies (deduped across types), a

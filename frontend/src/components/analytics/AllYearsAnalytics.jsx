@@ -1,22 +1,22 @@
 // Compact "all years" analytics embedded in the constituency overview.
 // Shows every recorded election year for this constituency at a glance:
-// year chips (switch year), a per-year turnout + winning-share comparison, and
-// a winner timeline. Full detail lives on the Yearly-trends page.
+// year chips (switch year), separate turnout & winning-share trend charts
+// (each with a Bar/Line/Area view switcher), and vote results by election.
+// Full detail lives on the Yearly-trends page.
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer, Legend, LabelList,
-} from 'recharts';
 import { Surface, Loading, ErrorBox } from '../ui/kit.jsx';
+import TrendChart from './TrendChart.jsx';
+import PartyShareTimeline from './PartyShareTimeline.jsx';
 import { api } from '../../lib/api.js';
 import { colorFor, colorForCandidate } from '../elections/helpers.js';
 
-export default function AllYearsAnalytics({ assemblyNo, assemblyName, currentElectionId, electionId }) {
+export default function AllYearsAnalytics({ assemblyNo, assemblyName, currentElectionId, electionId, electionType }) {
   const q = useQuery({
     enabled: !!(assemblyNo || assemblyName),
-    queryKey: ['assemblyTimeline', assemblyNo, assemblyName],
-    queryFn: () => api.assemblyTimeline({ assemblyNo, assemblyName }),
+    queryKey: ['assemblyTimeline', assemblyNo, assemblyName, electionType],
+    queryFn: () => api.assemblyTimeline({ assemblyNo, assemblyName, electionType }),
   });
 
   const elections = q.data?.elections ?? []; // year DESC
@@ -33,26 +33,26 @@ export default function AllYearsAnalytics({ assemblyNo, assemblyName, currentEle
   );
 
   return (
-    <Surface
-      title="All-year analytics"
-      subtitle="Every election on record for this constituency — turnout, winning share, and who won each year."
-      right={
-        <Link
-          to={`/elections/${electionId}/timeline`}
-          className="text-xs font-medium text-accent-600 hover:text-accent-700"
-        >
-          Full yearly trends →
-        </Link>
-      }
-    >
-      {q.isPending && <Loading className="h-40" />}
-      {q.isError && <ErrorBox message={q.error.message} onRetry={() => q.refetch()} />}
-      {q.data && elections.length === 0 && (
-        <p className="py-8 text-center text-sm text-slate-500">No election history recorded yet.</p>
-      )}
-      {q.data && elections.length > 0 && (
-        <div className="space-y-5">
-          {/* Winner-by-year timeline as selectable chips */}
+    <div className="space-y-6">
+      <Surface
+        title="All-year analytics"
+        subtitle="Every election on record for this constituency — pick a year to open its full result."
+        right={
+          <Link
+            to={`/elections/${electionId}/timeline`}
+            className="text-xs font-medium text-accent-600 hover:text-accent-700"
+          >
+            Full yearly trends →
+          </Link>
+        }
+      >
+        {q.isPending && <Loading className="h-40" />}
+        {q.isError && <ErrorBox message={q.error.message} onRetry={() => q.refetch()} />}
+        {q.data && elections.length === 0 && (
+          <p className="py-8 text-center text-sm text-slate-500">No election history recorded yet.</p>
+        )}
+        {/* Winner-by-year timeline as selectable chips */}
+        {q.data && elections.length > 0 && (
           <div className="flex flex-wrap gap-2">
             {elections.map((e) => {
               const active = e.electionId === currentElectionId;
@@ -83,30 +83,42 @@ export default function AllYearsAnalytics({ assemblyNo, assemblyName, currentEle
               );
             })}
           </div>
+        )}
+      </Surface>
 
-          {chartData.length === 0 ? (
-            <p className="border border-dashed border-slate-200 bg-white py-6 text-center text-sm text-slate-500">
-              No election results recorded yet.
-            </p>
-          ) : (
-            <ResponsiveContainer width="100%" height={260}>
-              <BarChart data={chartData} margin={{ left: 8, right: 16, top: 20, bottom: 8 }} barGap={2} barCategoryGap="28%">
-                <CartesianGrid stroke="#e7e5de" vertical={false} />
-                <XAxis dataKey="year" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 11 }} domain={[0, 100]} unit="%" width={44} />
-                <Tooltip formatter={(v, n) => [v == null ? '—' : `${v}%`, n === 'turnout' ? 'Turnout' : 'Winning share']} cursor={{ fill: '#f7f5f0' }} />
-                <Legend formatter={(v) => (v === 'turnout' ? 'Turnout' : 'Winning share')} />
-                <Bar dataKey="turnout" fill={colorFor('Turnout series')} radius={[4, 4, 0, 0]}>
-                  <LabelList dataKey="turnout" position="top" fontSize={10} fill="#64748b" formatter={(v) => (v == null ? '' : `${v}%`)} />
-                </Bar>
-                <Bar dataKey="winShare" fill={colorFor('Winning share series')} radius={[4, 4, 0, 0]}>
-                  <LabelList dataKey="winShare" position="top" fontSize={10} fill="#64748b" formatter={(v) => (v == null ? '' : `${v}%`)} />
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          )}
-        </div>
+      {elections.length > 0 && (
+        <>
+          <TrendChart
+            title="Turnout by year"
+            subtitle="Percent of registered voters who voted, year by year."
+            data={chartData}
+            dataKey="turnout"
+            name="Turnout"
+            unit="%"
+            domain={[0, 100]}
+            color={colorFor('Turnout series')}
+          />
+          <TrendChart
+            title="Winning share by year"
+            subtitle="The winner's share of the valid vote, year by year."
+            data={chartData}
+            dataKey="winShare"
+            name="Winning share"
+            unit="%"
+            domain={[0, 100]}
+            color={colorFor('Winning share series')}
+          />
+        </>
       )}
-    </Surface>
+
+      {/* Vote results by year — mirrors the booth page's headline chart. */}
+      <PartyShareTimeline
+        assemblyNo={assemblyNo}
+        assemblyName={assemblyName}
+        electionType={electionType}
+        title="Vote results by election"
+        subtitle="Votes polled across every recorded election for this constituency. Use Top-N to focus and toggle votes vs share of the valid vote."
+      />
+    </div>
   );
 }

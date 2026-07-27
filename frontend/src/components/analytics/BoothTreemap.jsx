@@ -31,6 +31,7 @@ const bandFor = (bands, v) => bands.find((band) => band.test(v)) ?? bands[bands.
 // What tile area is proportional to. Fractions (share/margin) are floored so a
 // near-zero booth still shows a sliver rather than vanishing from the layout.
 const SIZE_METRICS = {
+  valid: { label: 'Valid votes', of: (b) => b.totalValid ?? 0 },
   voters: { label: 'Registered voters', of: (b) => b.registeredVoters ?? 0 },
   share: { label: 'Winner vote share', of: (b) => b.leaderShare ?? 0 },
   margin: { label: 'Win margin', of: (b) => b.margin ?? 0 },
