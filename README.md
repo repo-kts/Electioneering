@@ -87,6 +87,44 @@ src/
 
 ## Current Status
 
+### Booth-wise analytics, part 2 — `new-dev` (2026-07-27)
+
+**Completed (this batch):**
+
+- **Constituency + booth pages: election Type / Year filters** — pick an election type and year to scope the whole view. Year options depend on the selected type (Assembly years ≠ Lok Sabha years); changing type resets year. Backend `computeConstituencyBooths` now takes `electionYear`/`electionType`, returns the available options, and each booth carries its **full per-election history**.
+- **All-years treemap uses real data** — the nested treemap now groups by real election (year + type, e.g. `2022 AE` / `2019 LS`), replacing the earlier simulation. Driven by the header Year filter (All years → nested, a specific year → single-election). Colour by margin / turnout / **winning party**.
+- **Booth "at a glance" scorecard** — a summary + chronological winner timeline (candidate, party, competitiveness band, guarded turnout) atop the all-years booth view.
+- **Charts split by election type** — "Vote results by election", "Turnout by election", and "Winning share by election" render Assembly and Lok Sabha in separate panels instead of one mixed axis. Victory-margin and winning-share bars are coloured + labelled by winning party, with the candidate named on hover. Removed the redundant "Vote share by candidate" chart.
+- **Turnout guard** — implausible imported turnout (>100% or 0) shows as a gap/dash in the scorecard and turnout charts rather than a wrong bar.
+
+**Known data issues (not code):**
+
+- The copied 2019/2022 elections have **inconsistent turnout** (votes copied without a matching registered-voter roll → e.g. 364%). Real fix belongs in the "copy election" backend feature.
+- **Community** is 0% across all voters, and caste/category/religion are sparse — surname rules only apply at **import time** (no retroactive apply), and cover ~15 surnames. A "apply surname rules to existing voters" job is still needed.
+
+### Booth-wise analytics — `new-dev` (2026-07-25)
+
+**Completed (this branch):**
+
+- **Booth-wise election drill-down** — `ConstituencyBoothsPage` with four views: Grid, Table, Graph, and a new **Treemap**.
+- **Treemap (single election)** — tiles sized by *registered voters / vote share / win margin* ("Size by"), coloured by *win margin / turnout / winning party* ("Colour by"), flat and sorted largest→smallest, click-through to the booth.
+- **Treemap (all years, prototype)** — grouped by **election year** (each year a cluster, every booth a tile inside), coloured by margin/turnout/party. Data is **simulated** for now (amber banner) — see backend TODO below.
+- **"How to read the treemap"** in-app guide behind an "i" button, plus a shareable artifact version.
+- **Quick Views renamed** to the app's vote-share benchmark bands: *Safe 75+ / Favorable 50–75 / Battleground 30–50 / Difficult 0–30*, each with a matching colour dot.
+- **Booth station-history page** reworked — full-width stat-tile strip, shared `StationOverview` (station card + map) across single-/all-years views, per-election **stacked vote-results chart** with a Top N / Custom / All series filter, and a **Geocode booths** button (uses the existing `/api/analytics/geocode`).
+- **Shared `Modal` fix** — caps height and scrolls the body so the close (×) button stays visible at any zoom.
+
+**Pending:**
+
+| Area | Task |
+| ---- | ---- |
+| Backend (needed) | Expose per-booth × per-election records for a constituency so the all-years treemap uses real data (replace the frontend `synthYears()` simulation in `BoothTreemapNested.jsx`). |
+| Data | Load additional election years (2019 / 2022 / Lok Sabha) so the all-years views are meaningful. |
+| Data | Populate booth address / ward / village so geocoding lands on real buildings. |
+| Future | Booth-polygon choropleth map (needs section-level geocoding + AC boundary polygons). |
+
+---
+
 ### What's working
 
 - **Home page** with tiles for Voter Detail and Form 20 sections

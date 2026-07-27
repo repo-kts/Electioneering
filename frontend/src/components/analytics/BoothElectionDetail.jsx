@@ -3,9 +3,12 @@
 // demographic cards, and the voter list. Extracted from BoothDetailPage so the
 // booth-wise station-history page can reuse the exact same single-election view.
 import { useMemo, useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer, Cell,
 } from 'recharts';
+import { api } from '../../lib/api.js';
+import { useToast } from '../../context/ToastContext.jsx';
 import BoothMap from './BoothMap.jsx';
 import { DemographicCard } from './BoothDemographics.jsx';
 import FilterableTable from './FilterableTable.jsx';
@@ -102,7 +105,7 @@ function BoothBanner({ d }) {
   const s = boothStory(d);
   if (!s.headline) return null;
   return (
-    <div className="mb-4 border border-slate-200 border-l-4 border-l-accent-500 bg-[#fbfaf7] px-4 py-3">
+    <div className="mt-6 border border-slate-200 border-l-4 border-l-accent-500 bg-[#fbfaf7] px-4 py-3">
       <div className="text-sm font-semibold text-slate-900">{s.headline}</div>
       {s.detail && <div className="mt-0.5 text-sm text-slate-600">{s.detail}</div>}
     </div>
@@ -126,6 +129,118 @@ function VoteTooltip({ active, payload, subLabel }) {
  * GET /api/analytics/booth/:boothId (or one entry of a station history's
  * `elections[]`). `electionId` sets the booth map's default link context.
  */
+/**
+ * Booth identity: the station card (name, benchmark, detail list) beside the
+ * location map. Constant across elections, so the station-history page renders
+ * it above the all-years view too, not just inside a single-election read.
+ */
+export function StationOverview({ d, electionId }) {
+  const { show } = useToast();
+  const qc = useQueryClient();
+  const benchmark = benchmarkFor(d?.leader?.share);
+
+  // Geocoding runs for the whole election (one Nominatim lookup per polling
+  // station, rate-limited server-side), so a run here places every sibling
+  // booth too — not just this one.
+  const placed = d?.ps?.latitude != null && d?.ps?.longitude != null;
+  const geocode = useMutation({
+    mutationFn: () => api.geocodeBooths(electionId, placed),
+    onSuccess: (r) => {
+      show(`Geocoded ${r.geocoded} of ${r.total} booths`, r.failed ? 'warn' : 'success');
+      qc.invalidateQueries({ queryKey: ['pollingStation'] });
+      qc.invalidateQueries({ queryKey: ['constituencyBooths'] });
+      qc.invalidateQueries({ queryKey: ['analytics', 'boothLeaning', electionId] });
+    },
+    onError: (e) => show(e.message || 'Geocoding failed', 'error'),
+  });
+
+  const mapItems = d
+    ? [{
+        id: d.ps.id,
+        serial: d.ps.serial,
+        name: d.ps.name,
+        latitude: d.ps.latitude,
+        longitude: d.ps.longitude,
+        leader: d.leader?.name,
+        leaderShare: d.leader?.share,
+        totalValid: d.totalValid,
+        registeredVoters: d.turnout.registered,
+      }]
+    : [];
+
+  if (!d) return null;
+
+  return (
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(320px,0.85fr)]">
+      <div className="flex flex-col border border-slate-300 bg-white">
+        <div className="border-b border-slate-200 bg-[#fbfaf7] px-5 py-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">Polling station</div>
+              <h2 className="text-[26px] font-semibold leading-tight text-slate-950">{boothName(d.ps)}</h2>
+              {boothTag(d.ps) && <p className="mt-0.5 text-sm font-medium tabular-nums text-slate-500">{boothTag(d.ps)}</p>}
+              {d.ps.address && <p className="mt-0.5 text-xs text-slate-400">{d.ps.address}</p>}
+            </div>
+            <span className={`inline-flex items-center gap-1.5 border px-2.5 py-1 text-sm font-semibold ${benchmark.cls}`}>
+              <span className="h-2.5 w-2.5 rounded-full" style={{ background: benchmark.dot }} />
+              {benchmark.label} <span className="font-normal opacity-70">· {benchmark.range}</span>
+            </span>
+          </div>
+        </div>
+        <div className="px-5 py-4">
+          <div className="mb-3 text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-500">Booth details</div>
+          <dl className="grid grid-cols-1 gap-x-6 gap-y-0 sm:grid-cols-2">
+            {[
+              ['Name', d.ps.name],
+              ['Polling station number', d.ps.serial != null ? `PS-${d.ps.serial}` : null],
+              ['Address', d.ps.address],
+              ['City / Village', d.ps.cityVillage],
+              ['Ward No.', d.ps.ward],
+              ['Tola / Mohalla', d.ps.tolaMohalla],
+              ['Post Office', d.ps.postOffice],
+              ['Legislative Assembly Name', d.election.assemblyName],
+              ['Legislative Assembly Number', d.election.assemblyNo],
+              ['Legislative Assembly Seat Type', d.election.assemblySeatType],
+              ['Loksabha Name', d.election.parlName],
+              ['Loksabha Number', d.election.parlNo],
+              ['Loksabha Seat Type', d.election.parlSeatType],
+              ['Police Station', d.ps.policeStation],
+            ].map(([label, value]) => (
+              <div key={label} className="flex items-baseline justify-between gap-3 border-b border-slate-100 py-2 last:border-b-0">
+                <dt className="shrink-0 text-xs text-slate-500">{label}</dt>
+                <dd className="min-w-0 truncate text-right text-sm font-medium text-slate-800" title={value ?? ''}>{value ?? '—'}</dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+      </div>
+
+      <div className="border border-slate-300 bg-white">
+        <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 bg-[#fbfaf7] px-5 py-4">
+          <div>
+            <div className="text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-500">Location</div>
+            <h3 className="text-sm font-semibold text-slate-950">Booth on the map</h3>
+          </div>
+          {electionId && (
+            <button
+              type="button"
+              onClick={() => geocode.mutate()}
+              disabled={geocode.isPending}
+              title="Looks up coordinates for every polling station in this election via OpenStreetMap. Takes a minute or two."
+              className="rounded-md border border-slate-300 bg-white px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+            >
+              {geocode.isPending ? 'Geocoding…' : placed ? 'Re-geocode booths' : 'Geocode booths'}
+            </button>
+          )}
+        </div>
+        <div className="p-3">
+          <BoothMap items={mapItems} electionId={electionId} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function BoothElectionDetail({ d, electionId }) {
   const dem = d?.demographics;
   const benchmark = benchmarkFor(d?.leader?.share);
@@ -174,88 +289,19 @@ export default function BoothElectionDetail({ d, electionId }) {
   }, [d, candidateNames]);
   const matchedCount = (d?.voters ?? []).filter(isCandidateVoter).length;
 
-  const mapItems = d
-    ? [{
-        id: d.ps.id,
-        serial: d.ps.serial,
-        name: d.ps.name,
-        latitude: d.ps.latitude,
-        longitude: d.ps.longitude,
-        leader: d.leader?.name,
-        leaderShare: d.leader?.share,
-        totalValid: d.totalValid,
-        registeredVoters: d.turnout.registered,
-      }]
-    : [];
-
   if (!d) return null;
 
   return (
     <>
-      <BoothBanner d={d} />
+      <StationOverview d={d} electionId={electionId} />
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(320px,0.85fr)]">
-        <div className="flex flex-col border border-slate-300 bg-white">
-          <div className="border-b border-slate-200 bg-[#fbfaf7] px-5 py-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">Polling station</div>
-                <h2 className="text-[26px] font-semibold leading-tight text-slate-950">{boothName(d.ps)}</h2>
-                {boothTag(d.ps) && <p className="mt-0.5 text-sm font-medium tabular-nums text-slate-500">{boothTag(d.ps)}</p>}
-                {d.ps.address && <p className="mt-0.5 text-xs text-slate-400">{d.ps.address}</p>}
-              </div>
-              <span className={`inline-flex items-center gap-1.5 border px-2.5 py-1 text-sm font-semibold ${benchmark.cls}`}>
-                <span className="h-2.5 w-2.5 rounded-full" style={{ background: benchmark.dot }} />
-                {benchmark.label} <span className="font-normal opacity-70">· {benchmark.range}</span>
-              </span>
-            </div>
-          </div>
-          <div className="grid grid-cols-2 md:grid-cols-3">
-            <Kpi label="Total voters" value={num(d.turnout.registered)} />
-            <Kpi label="Voted" value={num(d.turnout.voted)} accent="#16a34a" sub={pct(Math.min(d.turnout.pct, 1)) + ' turnout'} />
-            <Kpi label="Valid votes" value={num(d.totalValid)} />
-            <Kpi label="NOTA" value={num(d.ps.notaVotes)} />
-            <Kpi label="Leader" value={d.leader?.name ?? '—'} accent={partyColor(d.leader?.party) ?? colorFor(d.leader?.name)} sub={d.leader ? pct(d.leader.share) : ''} />
-            <Kpi label="Runner-up" value={d.runnerUp?.name ?? '—'} sub={d.runnerUp ? pct(d.runnerUp.share) : ''} />
-          </div>
-
-          <div className="border-t border-slate-200 px-5 py-4">
-            <div className="mb-3 text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-500">Booth details</div>
-            <dl className="grid grid-cols-1 gap-x-6 gap-y-0 sm:grid-cols-2">
-              {[
-                ['Name', d.ps.name],
-                ['Polling station number', d.ps.serial != null ? `PS-${d.ps.serial}` : null],
-                ['Address', d.ps.address],
-                ['City / Village', d.ps.cityVillage],
-                ['Ward No.', d.ps.ward],
-                ['Tola / Mohalla', d.ps.tolaMohalla],
-                ['Post Office', d.ps.postOffice],
-                ['Legislative Assembly Name', d.election.assemblyName],
-                ['Legislative Assembly Number', d.election.assemblyNo],
-                ['Legislative Assembly Seat Type', d.election.assemblySeatType],
-                ['Loksabha Name', d.election.parlName],
-                ['Loksabha Number', d.election.parlNo],
-                ['Loksabha Seat Type', d.election.parlSeatType],
-                ['Police Station', d.ps.policeStation],
-              ].map(([label, value]) => (
-                <div key={label} className="flex items-baseline justify-between gap-3 border-b border-slate-100 py-2 last:border-b-0">
-                  <dt className="shrink-0 text-xs text-slate-500">{label}</dt>
-                  <dd className="min-w-0 truncate text-right text-sm font-medium text-slate-800" title={value ?? ''}>{value ?? '—'}</dd>
-                </div>
-              ))}
-            </dl>
-          </div>
-        </div>
-
-        <div className="border border-slate-300 bg-white">
-          <div className="border-b border-slate-200 bg-[#fbfaf7] px-5 py-4">
-            <div className="text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-500">Location</div>
-            <h3 className="text-sm font-semibold text-slate-950">Booth on the map</h3>
-          </div>
-          <div className="p-3">
-            <BoothMap items={mapItems} electionId={electionId} />
-          </div>
-        </div>
+      <div className="mt-4 grid grid-cols-2 border border-slate-300 bg-white sm:grid-cols-3 lg:grid-cols-6">
+        <Kpi label="Total voters" value={num(d.turnout.registered)} />
+        <Kpi label="Voted" value={num(d.turnout.voted)} accent="#16a34a" sub={pct(Math.min(d.turnout.pct, 1)) + ' turnout'} />
+        <Kpi label="Valid votes" value={num(d.totalValid)} />
+        <Kpi label="NOTA" value={num(d.ps.notaVotes)} />
+        <Kpi label="Leader" value={d.leader?.name ?? '—'} accent={partyColor(d.leader?.party) ?? colorFor(d.leader?.name)} sub={d.leader ? pct(d.leader.share) : ''} />
+        <Kpi label="Runner-up" value={d.runnerUp?.name ?? '—'} sub={d.runnerUp ? pct(d.runnerUp.share) : ''} />
       </div>
 
       <Panel
@@ -367,6 +413,8 @@ export default function BoothElectionDetail({ d, electionId }) {
       </DraggablePanel>
 
       <Recommendations benchmark={benchmark} priority={d.priority} recommendations={d.recommendations} />
+
+      <BoothBanner d={d} />
     </>
   );
 }

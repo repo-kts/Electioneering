@@ -378,6 +378,18 @@ export interface ConstituencyBooth {
   turnoutPct: number; // latest election
   avgTurnout: number; // mean across the PS's elections
   byParty: Record<string, number>; // party → vote share (0..1), latest election
+  // Full per-election history for this booth (all elections, newest first) —
+  // powers the all-years treemap. Independent of any year/type filter.
+  elections: {
+    year: number | null;
+    electionType: string;
+    votes: number;
+    leader: string | null;
+    leaderParty: string | null;
+    leaderShare: number;
+    margin: number;
+    turnoutPct: number;
+  }[];
 }
 
 function topTwo(byCandidate: Record<string, number>): {
@@ -398,37 +410,65 @@ function topTwo(byCandidate: Record<string, number>): {
 export async function computeConstituencyBooths(opts: {
   assemblyNo?: string;
   assemblyName?: string;
+  electionYear?: number;
+  electionType?: string;
 }): Promise<{
   constituency: { assemblyNo: string | null; assemblyName: string | null; state: string | null; parlName: string | null };
+  // Distinct year/type options across ALL of the constituency's elections, so the
+  // UI can offer filters even while `items` reflects only the selected election(s).
+  elections: { year: number | null; electionType: string }[];
   items: ConstituencyBooth[];
 }> {
   const where: { assemblyNo?: string; assemblyName?: string } = {};
   if (opts.assemblyNo) where.assemblyNo = opts.assemblyNo;
   if (opts.assemblyName) where.assemblyName = opts.assemblyName;
 
-  const elections = await prisma.election.findMany({
+  const allElections = await prisma.election.findMany({
     where,
     orderBy: { electionYear: 'desc' },
   });
-  const first = elections[0] ?? null;
-  const yearById = new Map(elections.map((e) => [e.id, e.electionYear ?? -Infinity]));
 
-  // Per-election booth leanings (leader/shares), cached by electionId.
+  // Filter options (unfiltered list) — newest first, deduped by type+year.
+  const optionSeen = new Set<string>();
+  const electionOptions: { year: number | null; electionType: string }[] = [];
+  for (const e of allElections) {
+    const key = `${e.electionType}::${e.electionYear ?? ''}`;
+    if (!optionSeen.has(key)) {
+      optionSeen.add(key);
+      electionOptions.push({ year: e.electionYear ?? null, electionType: e.electionType });
+    }
+  }
+
+  // Narrow to the selected year/type (if any) for the booth rollup below.
+  const elections = allElections.filter(
+    (e) =>
+      (opts.electionYear == null || e.electionYear === opts.electionYear) &&
+      (opts.electionType == null || e.electionType === opts.electionType),
+  );
+
+  const first = allElections[0] ?? null; // constituency metadata (filter-independent)
+  const yearById = new Map(allElections.map((e) => [e.id, e.electionYear ?? -Infinity]));
+  const electionById = new Map(allElections.map((e) => [e.id, e]));
+  // Elections that pass the year/type filter — used to pick each booth's headline.
+  const filteredIds = new Set(elections.map((e) => e.id));
+
+  // Booth leanings + booths + candidates cover ALL elections, so each booth's
+  // per-election history is complete regardless of the year/type filter.
   const leaningByElection = new Map<number, Awaited<ReturnType<typeof computeBoothLeanings>>>();
   await Promise.all(
-    elections.map(async (e) => {
+    allElections.map(async (e) => {
       leaningByElection.set(e.id, await computeBoothLeanings(e.id));
     }),
   );
 
   const booths = await prisma.booth.findMany({
-    where: { electionId: { in: elections.map((e) => e.id) } },
+    where: { electionId: { in: allElections.map((e) => e.id) } },
     include: { pollingStation: true, _count: { select: { boothVoters: true } } },
   });
 
   // Candidate name → party, keyed per election (leanings are keyed by name only).
   const candidates = await prisma.candidate.findMany({
-    where: { electionId: { in: elections.map((e) => e.id) } },
+    where: { electionId: { in: allElections.map((e) => e.id) } },
     select: { electionId: true, name: true, party: true },
   });
   const nameToParty = new Map(candidates.map((c) => [`${c.electionId}::${c.name}`, c.party]));
@@ -443,12 +483,40 @@ export async function computeConstituencyBooths(opts: {
     byPs.set(b.pollingStationId, arr);
   }
 
-  const items: ConstituencyBooth[] = Array.from(byPs.entries()).map(([psId, group]) => {
-    // Headline = the group's most recent election.
-    const sorted = [...group].sort(
-      (a, b) => (yearById.get(b.electionId) ?? -Infinity) - (yearById.get(a.electionId) ?? -Infinity),
-    );
+  // Per-booth per-election record (for the all-years views). Newest first.
+  const historyOf = (group: typeof booths) =>
+    [...group]
+      .sort((a, b) => (yearById.get(b.electionId) ?? -Infinity) - (yearById.get(a.electionId) ?? -Infinity))
+      .map((b) => {
+        const l = leaningByElection.get(b.electionId)?.get(b.id);
+        const t = topTwo(l?.byCandidate ?? {});
+        const votes = l?.totalValid ?? 0;
+        const polled = votes + b.rejectedVotes + b.notaVotes;
+        const reg = b._count.boothVoters;
+        const e = electionById.get(b.electionId);
+        return {
+          year: e?.electionYear ?? null,
+          electionType: e?.electionType ?? '',
+          votes,
+          leader: t.leader,
+          leaderParty: partyOf(b.electionId, t.leader),
+          leaderShare: t.leaderShare,
+          margin: t.leaderShare - t.runnerUpShare,
+          turnoutPct: reg > 0 ? polled / reg : 0,
+        };
+      });
+
+  const items: ConstituencyBooth[] = Array.from(byPs.entries())
+    .map(([psId, group]): ConstituencyBooth | null => {
+    // Headline = the group's most recent election that passes the filter. A PS
+    // with no booth in the filtered set didn't run then, so it's dropped.
+    const sorted = [...group]
+      .filter((b) => filteredIds.has(b.electionId))
+      .sort(
+        (a, b) => (yearById.get(b.electionId) ?? -Infinity) - (yearById.get(a.electionId) ?? -Infinity),
+      );
     const head = sorted[0];
+    if (!head) return null;
     const lean = leaningByElection.get(head.electionId)?.get(head.id);
     const tops = topTwo(lean?.byCandidate ?? {});
     const totalValid = lean?.totalValid ?? 0;
@@ -480,7 +548,8 @@ export async function computeConstituencyBooths(opts: {
       serial: head.serial,
       latitude: head.pollingStation?.latitude ?? null,
       longitude: head.pollingStation?.longitude ?? null,
-      electionsCount: group.length,
+      // Elections this booth ran in, within the current year/type filter.
+      electionsCount: sorted.length,
       registeredVoters: registered,
       totalValid,
       leader: tops.leader,
@@ -493,8 +562,10 @@ export async function computeConstituencyBooths(opts: {
       turnoutPct: registered > 0 ? totalPolled / registered : 0,
       avgTurnout,
       byParty,
+      elections: historyOf(group),
     };
-  });
+  })
+    .filter((it): it is ConstituencyBooth => it !== null);
 
   items.sort((a, b) => a.serial - b.serial);
 
@@ -505,6 +576,7 @@ export async function computeConstituencyBooths(opts: {
       state: first?.state ?? null,
       parlName: first?.parlName ?? null,
     },
+    elections: electionOptions,
     items,
   };
 }
