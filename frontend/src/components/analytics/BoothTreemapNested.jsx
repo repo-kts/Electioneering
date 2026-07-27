@@ -1,17 +1,19 @@
-// PROTOTYPE — nested "all years" treemap, grouped by ELECTION YEAR. Each year is
-// a big cluster (like a team/player group); inside it every booth is a small tile
-// sized by that year's votes and coloured by its win-margin (or turnout) band.
-// The year label sits on top of its mosaic.
+// Nested "all years" treemap, grouped by ELECTION (year + type). Each election is
+// a big cluster; inside it every booth is a small tile sized by that election's
+// votes and coloured by its win-margin / turnout band (or the winning party). The
+// election label sits on top of its mosaic.
 //
-// Per-year data is SIMULATED (the DB holds one election) so the nesting can be
-// seen. `synthYears` is deterministic per booth — swap it for real per-booth ×
-// per-election API data once multiple years are loaded.
+// Data is real — each booth's `elections[]` history comes from the constituency
+// endpoint (independent of the page's year/type filter).
 //
 // Rendered as hand-laid SVG (not Recharts) because a treemap library draws child
 // tiles over the parent, hiding group labels; here we paint tiles first, then the
-// year labels on top.
+// election labels on top.
 import { useMemo } from 'react';
 import { colorForCandidate, num, pct } from '../elections/helpers.js';
+
+// Short label for an election type, e.g. "Assembly Election" → "AE".
+const typeAbbr = (t) => (/lok\s*sabha/i.test(t) ? 'LS' : /assembly/i.test(t) ? 'AE' : (t || '').slice(0, 3).toUpperCase());
 
 const MARGIN_BANDS = [
   { key: 'Tight (<3%)', color: '#e11d48', test: (v) => v < 0.03 },
@@ -30,25 +32,6 @@ const COLOUR = {
   turnout: { label: 'Turnout', bands: TURNOUT_BANDS, of: (y) => y.turnoutPct },
 };
 const bandFor = (bands, v) => bands.find((b) => b.test(v)) ?? bands[bands.length - 1];
-
-const rnd = (seed) => { const x = Math.sin(seed) * 43758.5453; return x - Math.floor(x); };
-
-// Simulate K past elections for a booth from its real latest numbers.
-function synthYears(b, K = 4) {
-  const start = 2022;
-  const out = [];
-  for (let i = 0; i < K; i++) {
-    const r = (n) => rnd(b.id * 100 + i * 13 + n);
-    const turnoutPct = Math.min(0.98, Math.max(0.42, (b.turnoutPct ?? 0.7) * (0.85 + r(3) * 0.3)));
-    const votes = Math.max(60, Math.round((b.totalValid ?? 400) * (0.65 + r(1) * 0.7)));
-    const margin = Math.min(0.9, Math.max(0.004, (b.margin ?? 0.3) * (0.3 + r(2) * 1.6)));
-    const mainLeads = r(5) > 0.25;
-    const leader = (mainLeads ? b.leader : b.runnerUp) ?? b.leader ?? 'Winner';
-    const party = (mainLeads ? b.leaderParty : b.runnerUpParty) ?? null;
-    out.push({ year: start - i * 5, votes, margin, turnoutPct, leader, party, color: colorForCandidate(leader, party) });
-  }
-  return out;
-}
 
 // Binary (median-cut) treemap: always splits the longer side, giving squarish
 // tiles. Pushes {..item, x, y, w, h} into `out`. Items should be pre-sorted.
@@ -73,35 +56,49 @@ function layout(items, x, y, w, h, out) {
 
 const W = 1000, H = 600;
 
-export default function BoothTreemapNested({ items, metric = 'margin', onSelect }) {
+export default function BoothTreemapNested({ items, metric = 'margin', typeFilter = 'all', onSelect }) {
   const isParty = metric === 'party';
   const colour = COLOUR[metric] ?? COLOUR.margin;
   const fillOf = (t) => (isParty ? (t.color || '#94a3b8') : bandFor(colour.bands, colour.of(t)).color);
 
   const { yearCells, tiles } = useMemo(() => {
-    const reported = items.filter((b) => (b.totalValid ?? 0) > 0);
-    const byYear = new Map();
-    for (const b of reported) {
-      for (const yr of synthYears(b)) {
-        const arr = byYear.get(yr.year) ?? [];
-        arr.push({ booth: b, ...yr });
-        byYear.set(yr.year, arr);
+    // Group every booth's per-election records by the election (year + type),
+    // optionally narrowed to a single election type.
+    const byElection = new Map();
+    for (const b of items) {
+      for (const e of b.elections ?? []) {
+        if (!(e.votes > 0)) continue;
+        if (typeFilter !== 'all' && e.electionType !== typeFilter) continue;
+        const label = `${e.year ?? '—'} ${typeAbbr(e.electionType)}`.trim();
+        const g = byElection.get(label) ?? { label, sortKey: e.year ?? 0, rows: [] };
+        g.rows.push({
+          booth: b,
+          year: e.year,
+          votes: e.votes,
+          margin: e.margin ?? 0,
+          turnoutPct: e.turnoutPct ?? 0,
+          leader: e.leader,
+          party: e.leaderParty ?? null,
+          color: colorForCandidate(e.leader, e.leaderParty),
+        });
+        byElection.set(label, g);
       }
     }
-    const years = [...byYear.keys()].sort((a, b) => a - b); // oldest first
-    const yearItems = years.map((y) => ({ year: y, value: byYear.get(y).reduce((s, r) => s + r.votes, 0) }));
+    const groups = [...byElection.values()].sort((a, b) => a.sortKey - b.sortKey); // oldest first
+    const groupItems = groups.map((g) => ({ label: g.label, value: g.rows.reduce((s, r) => s + r.votes, 0) }));
     const yearCells = [];
-    layout(yearItems, 0, 0, W, H, yearCells);
+    layout(groupItems, 0, 0, W, H, yearCells);
 
     const tiles = [];
     for (const cell of yearCells) {
+      const g = byElection.get(cell.label);
       const inner = [];
-      const rows = byYear.get(cell.year).map((r) => ({ ...r, value: r.votes })).sort((a, b) => b.value - a.value);
+      const rows = g.rows.map((r) => ({ ...r, value: r.votes })).sort((a, b) => b.value - a.value);
       layout(rows, cell.x, cell.y, cell.w, cell.h, inner);
-      for (const t of inner) tiles.push({ ...t, year: cell.year });
+      for (const t of inner) tiles.push({ ...t, label: cell.label });
     }
     return { yearCells, tiles };
-  }, [items]);
+  }, [items, typeFilter]);
 
   // Party legend: distinct winners across the whole view, with their booth-win
   // total (summed over years), most wins first.
@@ -122,15 +119,11 @@ export default function BoothTreemapNested({ items, metric = 'margin', onSelect 
 
   return (
     <div>
-      <div className="mb-2 inline-flex items-center gap-1.5 rounded-sm border border-amber-300 bg-amber-50 px-2 py-1 text-[11px] font-medium text-amber-800">
-        Prototype · multi-year data is simulated (DB has 1 election)
-      </div>
-
-      <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ height: 'auto', display: 'block' }} role="img" aria-label="Booths by election year">
+      <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ height: 'auto', display: 'block' }} role="img" aria-label="Booths by election">
         {tiles.map((t) => (
-          <g key={`${t.year}-${t.booth.id}`} onClick={() => onSelect?.(t.booth.id)} style={{ cursor: onSelect ? 'pointer' : 'default' }}>
+          <g key={`${t.label}-${t.booth.id}`} onClick={() => onSelect?.(t.booth.id)} style={{ cursor: onSelect ? 'pointer' : 'default' }}>
             <rect x={t.x} y={t.y} width={t.w} height={t.h} fill={fillOf(t)} stroke="#ffffff" strokeWidth={0.7} />
-            <title>{`PS-${t.booth.serial} · ${t.year}\n${t.leader}${t.party ? ` (${t.party})` : ''}\n${num(t.votes)} votes · margin ${pct(t.margin)} · turnout ${pct(t.turnoutPct)}`}</title>
+            <title>{`PS-${t.booth.serial} · ${t.label}\n${t.leader ?? '—'}${t.party ? ` (${t.party})` : ''}\n${num(t.votes)} votes · margin ${pct(t.margin)} · turnout ${pct(t.turnoutPct)}`}</title>
             {t.w > 30 && t.h > 15 && (
               <text x={t.x + 3} y={t.y + 11} fontSize={7.5} fontWeight={600}
                 style={{ fill: '#0b1220', stroke: '#ffffff', strokeWidth: 1.4, paintOrder: 'stroke', pointerEvents: 'none' }}>
@@ -140,12 +133,12 @@ export default function BoothTreemapNested({ items, metric = 'margin', onSelect 
           </g>
         ))}
         {yearCells.map((c) => (
-          <rect key={`b-${c.year}`} x={c.x} y={c.y} width={c.w} height={c.h} fill="none" stroke="#ffffff" strokeWidth={4} pointerEvents="none" />
+          <rect key={`b-${c.label}`} x={c.x} y={c.y} width={c.w} height={c.h} fill="none" stroke="#ffffff" strokeWidth={4} pointerEvents="none" />
         ))}
         {yearCells.map((c) => (
-          <text key={`l-${c.year}`} x={c.x + 10} y={c.y + 30} fontSize={26} fontWeight={800}
+          <text key={`l-${c.label}`} x={c.x + 10} y={c.y + 30} fontSize={24} fontWeight={800}
             style={{ fill: '#0b1220', stroke: '#ffffff', strokeWidth: 4.5, paintOrder: 'stroke', pointerEvents: 'none' }}>
-            {c.year}
+            {c.label}
           </text>
         ))}
       </svg>
@@ -169,8 +162,9 @@ export default function BoothTreemapNested({ items, metric = 'margin', onSelect 
             ))}
       </div>
       <p className="mt-1.5 text-[11px] text-slate-400">
-        Each big block is an election year · inside, every booth is a tile sized by its votes and coloured by
-        {' '}{isParty ? 'the winning party' : colour.label.toLowerCase()}. Hover a tile for its numbers; click to open the booth.
+        Each big block is an election (year · type — AE = Assembly, LS = Lok Sabha) · inside, every booth is a tile
+        sized by its votes and coloured by {isParty ? 'the winning party' : colour.label.toLowerCase()}. Hover a
+        tile for its numbers; click to open the booth.
       </p>
     </div>
   );

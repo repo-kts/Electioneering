@@ -1,0 +1,110 @@
+// "Booth at a glance" — the overall story of a booth across every election it
+// has fought, shown as one scorecard: summary stats + a chronological winner
+// timeline (each election a card with its winner, party, competitiveness band,
+// and turnout). Sits atop the all-years view so the whole history reads at once.
+import { useMemo } from 'react';
+import { colorForCandidate, benchmarkFor, num, pct } from '../elections/helpers.js';
+
+const typeAbbr = (t) => (/lok\s*sabha/i.test(t) ? 'LS' : /assembly/i.test(t) ? 'AE' : (t || '').slice(0, 3).toUpperCase());
+
+// Turnout in the data can be corrupt (>100% or 0 from partial imports); only
+// show plausible values, otherwise a dash so the card never lies.
+const turnoutText = (v) => (v > 0 && v <= 1.05 ? pct(v) : '—');
+
+function Stat({ label, value, sub, accent }) {
+  return (
+    <div className="min-w-0 px-4 py-3">
+      <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">{label}</div>
+      <div className="mt-1 truncate text-[19px] font-semibold leading-tight tabular-nums" style={{ color: accent ?? '#0f172a' }} title={String(value)}>{value}</div>
+      {sub && <div className="mt-0.5 truncate text-xs text-slate-500">{sub}</div>}
+    </div>
+  );
+}
+
+export default function BoothScorecard({ timeline = [], registeredLatest }) {
+  const summary = useMemo(() => {
+    const byType = new Map();
+    for (const t of timeline) byType.set(t.type, (byType.get(t.type) ?? 0) + 1);
+    const typeBreakdown = [...byType.entries()].map(([t, n]) => `${n} ${typeAbbr(t)}`).join(' · ');
+
+    // Most frequent winner across all its elections.
+    const wins = new Map();
+    for (const t of timeline) {
+      if (!t.winnerName) continue;
+      const e = wins.get(t.winnerName) ?? { name: t.winnerName, party: t.winnerParty, times: 0 };
+      e.times += 1;
+      wins.set(t.winnerName, e);
+    }
+    const topWinner = [...wins.values()].sort((a, b) => b.times - a.times)[0] ?? null;
+    const latest = timeline[timeline.length - 1] ?? null;
+    return { typeBreakdown, topWinner, latest };
+  }, [timeline]);
+
+  if (timeline.length === 0) return null;
+
+  return (
+    <div className="mb-5 border border-slate-300 bg-white">
+      <div className="border-b border-slate-200 bg-[#fbfaf7] px-5 py-4">
+        <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">Booth at a glance</div>
+        <h2 className="text-[15px] font-semibold text-slate-950">
+          {timeline.length} election{timeline.length === 1 ? '' : 's'} on record
+          {summary.typeBreakdown && <span className="font-normal text-slate-500"> · {summary.typeBreakdown}</span>}
+        </h2>
+      </div>
+
+      {/* Summary stats */}
+      <div className="grid grid-cols-2 divide-x divide-slate-200 border-b border-slate-200 sm:grid-cols-4">
+        <Stat label="Elections" value={num(timeline.length)} sub={summary.typeBreakdown || undefined} />
+        <Stat
+          label="Most often won by"
+          value={summary.topWinner?.name ?? '—'}
+          sub={summary.topWinner ? `${summary.topWinner.times}× · ${summary.topWinner.party ?? 'Ind.'}` : undefined}
+          accent={summary.topWinner ? colorForCandidate(summary.topWinner.name, summary.topWinner.party) : undefined}
+        />
+        <Stat
+          label="Latest result"
+          value={summary.latest?.winnerName ?? '—'}
+          sub={summary.latest ? `${summary.latest.label} · ${pct(summary.latest.winShare)}` : undefined}
+          accent={summary.latest ? colorForCandidate(summary.latest.winnerName, summary.latest.winnerParty) : undefined}
+        />
+        <Stat label="Registered (latest)" value={num(registeredLatest)} />
+      </div>
+
+      {/* Chronological winner timeline (oldest → newest) */}
+      <div className="px-5 py-4">
+        <div className="mb-3 text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-500">Who won, election by election</div>
+        <div className="flex gap-3 overflow-x-auto pb-1">
+          {timeline.map((t) => {
+            const bench = benchmarkFor(t.winShare);
+            const color = colorForCandidate(t.winnerName, t.winnerParty);
+            return (
+              <div key={t.electionId} className="flex w-[190px] shrink-0 flex-col border border-slate-200 bg-white">
+                <div className="flex items-center justify-between gap-2 border-b border-slate-100 bg-slate-50 px-3 py-1.5">
+                  <span className="text-xs font-semibold tabular-nums text-slate-700">{t.label}</span>
+                  <span className={`inline-flex items-center gap-1 border px-1.5 py-0.5 text-[10px] font-semibold ${bench.cls}`}>
+                    <span className="h-1.5 w-1.5 rounded-full" style={{ background: bench.dot }} />
+                    {bench.label}
+                  </span>
+                </div>
+                <div className="flex flex-1 flex-col gap-1 px-3 py-2.5">
+                  <div className="flex items-center gap-1.5">
+                    <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: color }} />
+                    <span className="truncate text-sm font-semibold text-slate-900" title={t.winnerName ?? ''}>{t.winnerName ?? '—'}</span>
+                  </div>
+                  <div className="text-xs text-slate-500">
+                    {t.winnerParty && <span className="font-medium text-slate-600">{t.winnerParty}</span>}
+                    {t.winnerParty ? ' · ' : ''}{pct(t.winShare)} share
+                  </div>
+                  <div className="mt-auto flex items-center justify-between pt-1 text-[11px] tabular-nums text-slate-500">
+                    <span>margin {pct(t.margin)}</span>
+                    <span>turnout {turnoutText(t.turnoutPct)}</span>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}

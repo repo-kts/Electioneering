@@ -134,9 +134,10 @@ router.get(
   }),
 );
 
-// GET /api/analytics/constituency-booths?assemblyNo=&assemblyName=
-// Distinct physical polling stations across all of a constituency's elections,
-// each with its latest-election headline result + all-elections average turnout.
+// GET /api/analytics/constituency-booths?assemblyNo=&assemblyName=&electionYear=&electionType=
+// Distinct physical polling stations across a constituency's elections, each with
+// its headline result + average turnout. Optional electionYear/electionType narrow
+// the rollup to a single election; the response always lists all year/type options.
 router.get(
   '/constituency-booths',
   asyncHandler(async (req, res) => {
@@ -146,7 +147,9 @@ router.get(
       res.status(400).json({ error: 'assemblyNo or assemblyName required' });
       return;
     }
-    res.json(await computeConstituencyBooths({ assemblyNo, assemblyName }));
+    const electionYear = req.query.electionYear ? Number(req.query.electionYear) : undefined;
+    const electionType = (req.query.electionType as string) || undefined;
+    res.json(await computeConstituencyBooths({ assemblyNo, assemblyName, electionYear, electionType }));
   }),
 );
 

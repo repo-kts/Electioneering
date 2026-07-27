@@ -87,6 +87,21 @@ src/
 
 ## Current Status
 
+### Booth-wise analytics, part 2 — `new-dev` (2026-07-27)
+
+**Completed (this batch):**
+
+- **Constituency + booth pages: election Type / Year filters** — pick an election type and year to scope the whole view. Year options depend on the selected type (Assembly years ≠ Lok Sabha years); changing type resets year. Backend `computeConstituencyBooths` now takes `electionYear`/`electionType`, returns the available options, and each booth carries its **full per-election history**.
+- **All-years treemap uses real data** — the nested treemap now groups by real election (year + type, e.g. `2022 AE` / `2019 LS`), replacing the earlier simulation. Driven by the header Year filter (All years → nested, a specific year → single-election). Colour by margin / turnout / **winning party**.
+- **Booth "at a glance" scorecard** — a summary + chronological winner timeline (candidate, party, competitiveness band, guarded turnout) atop the all-years booth view.
+- **Charts split by election type** — "Vote results by election", "Turnout by election", and "Winning share by election" render Assembly and Lok Sabha in separate panels instead of one mixed axis. Victory-margin and winning-share bars are coloured + labelled by winning party, with the candidate named on hover. Removed the redundant "Vote share by candidate" chart.
+- **Turnout guard** — implausible imported turnout (>100% or 0) shows as a gap/dash in the scorecard and turnout charts rather than a wrong bar.
+
+**Known data issues (not code):**
+
+- The copied 2019/2022 elections have **inconsistent turnout** (votes copied without a matching registered-voter roll → e.g. 364%). Real fix belongs in the "copy election" backend feature.
+- **Community** is 0% across all voters, and caste/category/religion are sparse — surname rules only apply at **import time** (no retroactive apply), and cover ~15 surnames. A "apply surname rules to existing voters" job is still needed.
+
 ### Booth-wise analytics — `new-dev` (2026-07-25)
 
 **Completed (this branch):**

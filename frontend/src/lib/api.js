@@ -161,10 +161,12 @@ export const api = {
     // Booth-wise election: constituencies (deduped across types), a
     // constituency's physical booths, and one booth across every election.
     constituencies: () => request('/api/analytics/constituencies'),
-    constituencyBooths: ({ assemblyNo, assemblyName } = {}) => {
+    constituencyBooths: ({ assemblyNo, assemblyName, electionYear, electionType } = {}) => {
         const p = new URLSearchParams();
         if (assemblyNo) p.set('assemblyNo', assemblyNo);
         if (assemblyName) p.set('assemblyName', assemblyName);
+        if (electionYear) p.set('electionYear', electionYear);
+        if (electionType) p.set('electionType', electionType);
         return request(`/api/analytics/constituency-booths?${p.toString()}`);
     },
     pollingStation: (psId) => request(`/api/analytics/polling-station/${psId}`),
