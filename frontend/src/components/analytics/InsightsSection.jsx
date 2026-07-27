@@ -32,7 +32,7 @@ function Panel({ title, subtitle, children, tag }) {
   );
 }
 
-export default function InsightsSection({ electionId, religionData = [], turnoutHistory = [] }) {
+export default function InsightsSection({ electionId, religionData = [], turnoutHistory = [], showSwing = true }) {
   // Previous election in this seat OF THE SAME TYPE (e.g. Assembly vs Assembly) —
   // never cross a Lok Sabha with an Assembly election, since the candidate sets differ.
   const swingPair = useMemo(() => {
@@ -60,7 +60,7 @@ export default function InsightsSection({ electionId, religionData = [], turnout
   const swingQ = useQuery({
     queryKey: ['swing', electionId, prevElectionId],
     queryFn: () => api.swing(prevElectionId, electionId),
-    enabled: !!electionId && !!prevElectionId,
+    enabled: !!electionId && !!prevElectionId && showSwing,
   });
 
   const religionTotal = religionData.reduce((s, r) => s + r.count, 0);
@@ -115,6 +115,7 @@ export default function InsightsSection({ electionId, religionData = [], turnout
       </Panel>
 
       {/* Swing — spans both columns */}
+      {showSwing && (
       <div className="lg:col-span-2">
         <Panel
           title="Cross-election swing"
@@ -128,6 +129,7 @@ export default function InsightsSection({ electionId, religionData = [], turnout
           <SwingView q={swingQ} enabled={!!prevElectionId} />
         </Panel>
       </div>
+      )}
     </div>
   );
 }

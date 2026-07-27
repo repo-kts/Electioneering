@@ -1,13 +1,11 @@
 import { useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import {
-  BarChart, Bar, Cell, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer, Legend, LabelList,
-} from 'recharts';
 import Breadcrumbs from '../components/ui/Breadcrumbs.jsx';
 import { PageHeader, StatCard, Surface, Loading, ErrorBox } from '../components/ui/kit.jsx';
+import TrendChart from '../components/analytics/TrendChart.jsx';
 import { api } from '../lib/api.js';
-import { colorFor, colorForParty, colorForCandidate, num } from '../components/elections/helpers.js';
+import { colorFor, colorForParty, colorForCandidate, num, pct, benchmarkFor } from '../components/elections/helpers.js';
 
 const p1 = (n) => `${((n ?? 0) * 100).toFixed(1)}%`; // fraction → percent string
 
@@ -16,7 +14,7 @@ const p1 = (n) => `${((n ?? 0) * 100).toFixed(1)}%`; // fraction → percent str
  * (default export) and inside the constituency page's "Trends" tab (TimelineContent).
  */
 export function TimelineContent({ electionId }) {
-  const [range, setRange] = useState('all'); // 'all' | 'recent'
+  const [range, setRange] = useState('all'); // '3' | '5' | '10' | 'all'
 
   const electionQ = useQuery({
     queryKey: ['election', electionId],
@@ -26,13 +24,13 @@ export function TimelineContent({ electionId }) {
 
   const timelineQ = useQuery({
     enabled: !!el,
-    queryKey: ['assemblyTimeline', el?.assemblyNo, el?.assemblyName],
-    queryFn: () => api.assemblyTimeline({ assemblyNo: el.assemblyNo, assemblyName: el.assemblyName }),
+    queryKey: ['assemblyTimeline', el?.assemblyNo, el?.assemblyName, el?.electionType],
+    queryFn: () => api.assemblyTimeline({ assemblyNo: el.assemblyNo, assemblyName: el.assemblyName, electionType: el.electionType }),
   });
 
   const allElections = timelineQ.data?.elections ?? []; // year DESC
   const rows = useMemo(
-    () => (range === 'recent' ? allElections.slice(0, 5) : allElections),
+    () => (range === 'all' ? allElections : allElections.slice(0, Number(range))),
     [allElections, range],
   );
 
@@ -46,31 +44,62 @@ export function TimelineContent({ electionId }) {
           turnout: e.turnout?.pct != null ? +(e.turnout.pct * 100).toFixed(1) : null,
           winShare: e.winner?.share != null ? +(e.winner.share * 100).toFixed(1) : null,
           margin: e.margin ?? 0,
+          nota: e.notaShare != null ? +(e.notaShare * 100).toFixed(2) : 0,
           party: e.winnerParty || e.winner?.party || e.winner?.name || '',
         })),
     [rows],
   );
 
+  // Seat-control ribbon, chronological: who held the seat each year + how
+  // competitive it was, plus how many times the seat changed hands.
+  const control = useMemo(() => {
+    const cells = [...rows].reverse().map((e) => ({
+      year: e.electionYear ?? '—',
+      party: e.winnerParty || e.winner?.party || '',
+      winner: e.winner?.name ?? '',
+      share: e.winner?.share ?? null,
+    }));
+    let flips = 0;
+    let prev = null;
+    for (const c of cells) {
+      const key = c.party || c.winner;
+      if (key && prev && key !== prev) flips += 1;
+      if (key) prev = key;
+    }
+    return { cells, flips };
+  }, [rows]);
+
   const latest = rows[0];
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-end">
-        <div className="inline-flex overflow-hidden rounded-md border border-slate-300">
-          {[
-            ['recent', 'Last 5 years'],
-            ['all', 'All years'],
-          ].map(([v, label]) => (
-            <button
-              key={v}
-              type="button"
-              onClick={() => setRange(v)}
-              className={`px-3 py-1.5 text-xs font-medium transition ${range === v ? 'bg-slate-900 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}
-            >
-              {label}
-            </button>
-          ))}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Window</span>
+          <div className="inline-flex overflow-hidden rounded-md border border-slate-300">
+            {[
+              ['3', 'Last 3'],
+              ['5', 'Last 5'],
+              ['10', 'Last 10'],
+              ['all', 'All years'],
+            ].map(([v, label]) => (
+              <button
+                key={v}
+                type="button"
+                onClick={() => setRange(v)}
+                className={`px-3 py-1.5 text-xs font-medium transition ${range === v ? 'bg-slate-900 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
+        {allElections.length > 0 && (
+          <span className="text-xs text-slate-500">
+            Showing {rows.length} of {allElections.length} {allElections.length === 1 ? 'election' : 'elections'}
+            <span className="ml-1 text-slate-400">· each chart supports bar / line / area</span>
+          </span>
+        )}
       </div>
 
       {(electionQ.isError || timelineQ.isError) && (
@@ -99,49 +128,77 @@ export function TimelineContent({ electionId }) {
             </div>
           )}
 
-          {/* Turnout % & winning share % per year — both 0–100%, so one shared axis. */}
-          <Surface title="Turnout & winning share by year" subtitle="Percent of registered voters who voted, and the winner's vote share, compared year by year.">
-            {chartData.length === 0 ? (
-              <p className="py-8 text-center text-sm text-slate-500">No election results to compare.</p>
-            ) : (
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={chartData} margin={{ left: 8, right: 16, top: 20, bottom: 8 }} barGap={2} barCategoryGap="28%">
-                  <CartesianGrid stroke="#e7e5de" vertical={false} />
-                  <XAxis dataKey="year" tick={{ fontSize: 11 }} />
-                  <YAxis tick={{ fontSize: 11 }} domain={[0, 100]} unit="%" width={44} />
-                  <Tooltip formatter={(v, n) => [v == null ? '—' : `${v}%`, n === 'turnout' ? 'Turnout' : 'Winning share']} cursor={{ fill: '#f7f5f0' }} />
-                  <Legend formatter={(v) => (v === 'turnout' ? 'Turnout' : 'Winning share')} />
-                  <Bar dataKey="turnout" fill={colorFor('Turnout series')} radius={[4, 4, 0, 0]}>
-                    <LabelList dataKey="turnout" position="top" fontSize={10} fill="#64748b" formatter={(v) => (v == null ? '' : `${v}%`)} />
-                  </Bar>
-                  <Bar dataKey="winShare" fill={colorFor('Winning share series')} radius={[4, 4, 0, 0]}>
-                    <LabelList dataKey="winShare" position="top" fontSize={10} fill="#64748b" formatter={(v) => (v == null ? '' : `${v}%`)} />
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            )}
+          {/* Seat control ribbon — who held the seat each year + competitiveness band. */}
+          <Surface
+            title="Seat control"
+            subtitle="Who won each year, coloured by party, with a competitiveness band from the winner's share. Read left → right, oldest to newest."
+            right={
+              <span className="text-xs text-slate-500">
+                {control.cells.length} {control.cells.length === 1 ? 'election' : 'elections'} ·{' '}
+                {control.flips === 0 ? 'never changed hands' : `${control.flips} ${control.flips === 1 ? 'change' : 'changes'} of hands`}
+              </span>
+            }
+          >
+            <div className="overflow-x-auto">
+              <div className="flex min-w-min gap-2">
+                {control.cells.map((c, i) => {
+                  const band = benchmarkFor(c.share);
+                  return (
+                    <div key={i} className="min-w-[120px] flex-1 border border-slate-200 bg-white">
+                      <div className="h-1.5 w-full" style={{ background: colorForParty(c.party) }} />
+                      <div className="p-2.5">
+                        <div className="text-sm font-semibold tabular-nums text-slate-900">{c.year}</div>
+                        <div className="mt-0.5 flex items-center gap-1.5">
+                          <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: colorForParty(c.party) }} />
+                          <span className="truncate text-xs text-slate-600">{c.party || 'Ind.'}</span>
+                        </div>
+                        <div className="mt-1 text-xs tabular-nums text-slate-500">{c.share != null ? pct(c.share) : '—'}</div>
+                        <span className={`mt-1.5 inline-flex items-center gap-1 border px-1.5 py-0.5 text-[10px] font-semibold ${band.cls}`}>
+                          <span className="h-1.5 w-1.5 rounded-full" style={{ background: band.dot }} />
+                          {band.label}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           </Surface>
 
-          {/* Margin over time — votes, so a separate chart (never a dual axis). */}
-          <Surface title="Victory margin over time" subtitle="Winner's lead over the runner-up, in votes, colored by winning party.">
-            {chartData.length === 0 ? (
-              <p className="py-8 text-center text-sm text-slate-500">No margin data.</p>
-            ) : (
-              <ResponsiveContainer width="100%" height={260}>
-                <BarChart data={chartData} margin={{ left: 8, right: 8, top: 8, bottom: 8 }}>
-                  <CartesianGrid stroke="#e7e5de" vertical={false} />
-                  <XAxis dataKey="year" tick={{ fontSize: 11 }} />
-                  <YAxis tick={{ fontSize: 11 }} width={56} tickFormatter={(v) => num(v)} />
-                  <Tooltip formatter={(v) => [num(v), 'Margin']} cursor={{ fill: '#f7f5f0' }} />
-                  <Bar dataKey="margin" radius={[4, 4, 0, 0]}>
-                    {chartData.map((d) => (
-                      <Cell key={d.year} fill={colorForParty(d.party)} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            )}
-            {/* Party legend for the margin bars */}
+          {/* Turnout — its own chart (was combined with winning share). */}
+          <TrendChart
+            title="Turnout by year"
+            subtitle="Percent of registered voters who voted, year by year."
+            data={chartData}
+            dataKey="turnout"
+            name="Turnout"
+            unit="%"
+            domain={[0, 100]}
+            color={colorFor('Turnout series')}
+          />
+
+          {/* Winning share — its own chart. */}
+          <TrendChart
+            title="Winning share by year"
+            subtitle="The winner's share of the valid vote, year by year."
+            data={chartData}
+            dataKey="winShare"
+            name="Winning share"
+            unit="%"
+            domain={[0, 100]}
+            color={colorFor('Winning share series')}
+          />
+
+          {/* Margin over time — votes, coloured by winning party (bar view only). */}
+          <TrendChart
+            title="Victory margin over time"
+            subtitle="Winner's lead over the runner-up, in votes, coloured by winning party."
+            data={chartData}
+            dataKey="margin"
+            name="Margin"
+            color="#64748b"
+            cells={chartData.map((d) => colorForParty(d.party))}
+          >
             <div className="mt-4 flex flex-wrap gap-3 border-t border-slate-200 pt-4">
               {[...new Set(chartData.map((d) => d.party).filter(Boolean))].map((party) => (
                 <span key={party} className="flex items-center gap-1.5 text-xs text-slate-600">
@@ -150,7 +207,18 @@ export function TimelineContent({ electionId }) {
                 </span>
               ))}
             </div>
-          </Surface>
+          </TrendChart>
+
+          {/* NOTA over time — share of votes polled that went to None-of-the-above. */}
+          <TrendChart
+            title="NOTA over time"
+            subtitle="None-of-the-above as a share of votes polled, year by year."
+            data={chartData}
+            dataKey="nota"
+            name="NOTA"
+            unit="%"
+            color={colorFor('NOTA')}
+          />
 
           {/* Full table */}
           <Surface title="Election-by-election" subtitle="Every recorded election year for this constituency. Select a year to open its full results." bodyClass="p-0">

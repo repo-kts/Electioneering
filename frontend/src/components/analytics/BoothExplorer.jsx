@@ -1,13 +1,18 @@
 import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../lib/api.js';
 import { useToast } from '../../context/ToastContext.jsx';
 import { Surface, Loading, ErrorBox } from '../ui/kit.jsx';
 import { partyColor, colorFor, num, pct, boothName, boothTag } from '../elections/helpers.js';
 import BoothMap from './BoothMap.jsx';
+import BoothTreemap from './BoothTreemap.jsx';
 import FilterableTable from './FilterableTable.jsx';
 import BoothFilterBar, { applyBoothFilters, emptyBoothFilters } from './BoothFilterBar.jsx';
+
+// Treemap self-serve controls — colour tiles by, and size tiles by.
+const TREE_COLOR = { party: 'Winning party', margin: 'Win margin', turnout: 'Turnout' };
+const TREE_SIZE = { valid: 'Valid votes', share: 'Winner share', margin: 'Win margin' };
 
 // Higher = more worth acting on. Surfaces swing/recoverable booths first.
 const OPP_BASE = { Swing: 100, 'Marginal-loss': 90, 'Marginal-win': 60, 'Safe-loss': 40, 'Safe-win': 20, 'No-data': 0 };
@@ -20,11 +25,14 @@ const SORTS = {
 };
 
 export default function BoothExplorer({ electionId }) {
-  const [view, setView] = useState('grid'); // grid | table | map
+  const [view, setView] = useState('grid'); // grid | table | treemap | map
   const [sortKey, setSortKey] = useState('opportunity');
   const [filters, setFilters] = useState(emptyBoothFilters);
+  const [treeColor, setTreeColor] = useState('party'); // colour tiles by leader/party
+  const [treeSize, setTreeSize] = useState('valid'); // size tiles by valid votes
   const { show } = useToast();
   const qc = useQueryClient();
+  const navigate = useNavigate();
 
   const leaningQ = useQuery({
     queryKey: ['analytics', 'boothLeaning', electionId],
@@ -102,7 +110,7 @@ export default function BoothExplorer({ electionId }) {
       subtitle="Every polling station, ranked by where you can gain the most. Open one for its full profile and voter list."
       right={
         <div className="flex flex-wrap items-center gap-2">
-          {view !== 'map' && (
+          {view !== 'map' && view !== 'treemap' && (
             <label className="flex items-center gap-1.5 text-xs text-slate-500">
               Sort
               <select
@@ -114,8 +122,32 @@ export default function BoothExplorer({ electionId }) {
               </select>
             </label>
           )}
+          {view === 'treemap' && (
+            <>
+              <label className="flex items-center gap-1.5 text-xs text-slate-500">
+                Colour
+                <select
+                  value={treeColor}
+                  onChange={(e) => setTreeColor(e.target.value)}
+                  className="border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-700"
+                >
+                  {Object.entries(TREE_COLOR).map(([k, label]) => <option key={k} value={k}>{label}</option>)}
+                </select>
+              </label>
+              <label className="flex items-center gap-1.5 text-xs text-slate-500">
+                Size
+                <select
+                  value={treeSize}
+                  onChange={(e) => setTreeSize(e.target.value)}
+                  className="border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-700"
+                >
+                  {Object.entries(TREE_SIZE).map(([k, label]) => <option key={k} value={k}>{label}</option>)}
+                </select>
+              </label>
+            </>
+          )}
           <div className="inline-flex overflow-hidden rounded-md border border-slate-300">
-            {['grid', 'table', 'map'].map((v) => (
+            {['grid', 'table', 'treemap', 'map'].map((v) => (
               <button
                 key={v}
                 onClick={() => setView(v)}
@@ -153,6 +185,15 @@ export default function BoothExplorer({ electionId }) {
           No booths match these filters.{' '}
           <button onClick={() => setFilters(emptyBoothFilters())} className="font-medium text-accent-700 hover:underline">Clear filters</button>
         </p>
+      )}
+
+      {!isPending && sorted.length > 0 && view === 'treemap' && (
+        <BoothTreemap
+          items={sorted.map((b) => ({ ...b, leaderParty: partyByName[b.leader] ?? null }))}
+          metric={treeColor}
+          sizeMetric={treeSize}
+          onSelect={(id) => navigate(`/elections/${electionId}/booth/${id}`)}
+        />
       )}
 
       {!isPending && sorted.length > 0 && view === 'map' && (

@@ -7,12 +7,11 @@ import {
 } from 'recharts';
 import Breadcrumbs from '../components/ui/Breadcrumbs.jsx';
 import InsightsSection from '../components/analytics/InsightsSection.jsx';
-import ActionPlan from '../components/analytics/ActionPlan.jsx';
 import BoothExplorer from '../components/analytics/BoothExplorer.jsx';
 import { TimelineContent } from './AssemblyTimelinePage.jsx';
 import { PartyContent } from './PartyAnalyticsPage.jsx';
 import { StrategyContent } from './StrategyPage.jsx';
-import { PageHeader, StatCard, Surface, Button, Loading, ErrorBox } from '../components/ui/kit.jsx';
+import { PageHeader, StatCard, Surface, Loading, ErrorBox } from '../components/ui/kit.jsx';
 import { api } from '../lib/api.js';
 import { partyColor, colorFor, pct, num } from '../components/elections/helpers.js';
 import { constituencyStory } from '../components/analytics/narrative.js';
@@ -50,8 +49,8 @@ export default function ElectionOverviewPage() {
   // Narrative across every recorded year of this constituency+type.
   const timelineQ = useQuery({
     enabled: !!election,
-    queryKey: ['assemblyTimeline', election?.assemblyNo, election?.assemblyName],
-    queryFn: () => api.assemblyTimeline({ assemblyNo: election.assemblyNo, assemblyName: election.assemblyName }),
+    queryKey: ['assemblyTimeline', election?.assemblyNo, election?.assemblyName, election?.electionType],
+    queryFn: () => api.assemblyTimeline({ assemblyNo: election.assemblyNo, assemblyName: election.assemblyName, electionType: election.electionType }),
   });
   const story = useMemo(
     () => constituencyStory(timelineQ.data?.elections ?? [], { electionType: election?.electionType }),
@@ -65,6 +64,30 @@ export default function ElectionOverviewPage() {
     return m;
   }, [election]);
   const colorForName = (nm) => partyColor(partyByName[nm]) ?? colorFor(nm);
+  const shareByName = useMemo(() => {
+    const m = {};
+    for (const c of election?.candidates ?? []) m[c.name] = c.share;
+    return m;
+  }, [election]);
+
+  // Tooltip for the candidate bar/donut — names the candidate + party on hover.
+  const CandidateTip = ({ active, payload }) => {
+    if (!active || !payload?.length) return null;
+    const d = payload[0].payload;
+    const value = d.votes ?? d.value ?? 0;
+    return (
+      <div className="border border-slate-300 bg-white px-3 py-2 text-xs shadow-md">
+        <div className="mb-1 flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: colorForName(d.name) }} />
+          <span className="text-sm font-semibold text-slate-900">{d.name}</span>
+        </div>
+        <div className="text-slate-500">{partyByName[d.name]?.trim() || 'Independent'}</div>
+        <div className="tabular-nums text-slate-700">
+          {num(value)} votes{shareByName[d.name] != null ? ` · ${pct(shareByName[d.name])}` : ''}
+        </div>
+      </div>
+    );
+  };
 
   const candBars = useMemo(
     () => (election?.candidates ?? []).map((c) => ({ name: c.name, votes: c.votes })),
@@ -113,39 +136,23 @@ export default function ElectionOverviewPage() {
             ? `${election.assemblyNo}-${election.assemblyName}${election.state ? ' · ' + election.state : ''}${showAll ? ` · all ${yearOptions.length || 1} ${yearOptions.length === 1 ? 'year' : 'years'}` : ''}`
             : 'Loading…'}
           actions={
-            <Link to="/segment">
-              <Button variant="secondary"><span className="text-slate-700">Voter search</span></Button>
-            </Link>
+            election && (
+              <label className="inline-flex items-center gap-2 border border-slate-300 bg-white px-3 py-1.5 text-sm">
+                <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Year</span>
+                <select
+                  value={selectedYear}
+                  onChange={(e) => setSelectedYear(e.target.value)}
+                  className="border-0 bg-transparent p-0 pr-1 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-0"
+                >
+                  <option value="">All years</option>
+                  {yearOptions.map((e) => (
+                    <option key={e.id} value={e.id}>{e.electionYear ?? '—'}</option>
+                  ))}
+                </select>
+              </label>
+            )
           }
         />
-
-        {/* Year switcher — defaults to "All years"; pick a year to drill in. */}
-        {election && (
-          <div className="mt-4 flex flex-wrap items-center gap-2">
-            <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Showing</span>
-            <label className="inline-flex items-center gap-1.5 border border-slate-300 bg-white px-3 py-1.5 text-sm">
-              <select
-                value={selectedYear}
-                onChange={(e) => setSelectedYear(e.target.value)}
-                className="border-0 bg-transparent p-0 pr-1 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-0"
-              >
-                <option value="">All years</option>
-                {yearOptions.map((e) => (
-                  <option key={e.id} value={e.id}>{e.electionYear ?? '—'}</option>
-                ))}
-              </select>
-            </label>
-            {!showAll && (
-              <button
-                type="button"
-                onClick={() => setSelectedYear('')}
-                className="text-xs font-medium text-accent-600 hover:text-accent-700"
-              >
-                ← Back to all years
-              </button>
-            )}
-          </div>
-        )}
 
         {/* Tab nav */}
         {election && (
@@ -173,7 +180,7 @@ export default function ElectionOverviewPage() {
 
       {/* When drilling a single-year analysis while "All years" is selected, we
           fall back to the latest year — say so plainly. */}
-      {election && showAll && tab !== 'overview' && tab !== 'trends' && (
+      {election && showAll && tab !== 'overview' && tab !== 'trends' && tab !== 'parties' && (
         <div className="border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-800">
           Showing the latest election ({viewYear ?? '—'}) — pick a year above to analyse a different one.
         </div>
@@ -199,6 +206,7 @@ export default function ElectionOverviewPage() {
             currentElectionId={viewId}
             assemblyNo={election.assemblyNo}
             assemblyName={election.assemblyName}
+            electionType={election.electionType}
           />
         </>
       )}
@@ -215,9 +223,6 @@ export default function ElectionOverviewPage() {
             <StatCard label="Margin" value={election.leader && election.runnerUp ? num(election.leader.votes - election.runnerUp.votes) : '—'} sub={election.runnerUp ? `over ${election.runnerUp.name}` : ''} />
           </div>
 
-          {/* Prescriptive action plan — the "so what / do this" */}
-          <ActionPlan electionId={viewId} />
-
           {/* Candidate results */}
           <Surface title="Candidate results" subtitle="Form 20 totals across all polling stations.">
             <div className="grid grid-cols-1 gap-8 lg:grid-cols-5">
@@ -227,7 +232,7 @@ export default function ElectionOverviewPage() {
                     <CartesianGrid stroke="#e7e5de" vertical={false} />
                     <XAxis dataKey="name" tick={{ fontSize: 11 }} interval={0} angle={-22} textAnchor="end" height={80} />
                     <YAxis tick={{ fontSize: 11 }} />
-                    <Tooltip formatter={(v) => num(v)} cursor={{ fill: '#f7f5f0' }} />
+                    <Tooltip content={<CandidateTip />} cursor={{ fill: '#f7f5f0' }} />
                     <Bar dataKey="votes">
                       {candBars.map((c) => <Cell key={c.name} fill={colorForName(c.name)} />)}
                     </Bar>
@@ -240,7 +245,7 @@ export default function ElectionOverviewPage() {
                     <Pie data={donut} dataKey="value" nameKey="name" innerRadius={48} outerRadius={80} paddingAngle={2}>
                       {donut.map((d) => <Cell key={d.name} fill={colorForName(d.name)} />)}
                     </Pie>
-                    <Tooltip formatter={(v, n) => [num(v), n]} />
+                    <Tooltip content={<CandidateTip />} />
                   </PieChart>
                 </ResponsiveContainer>
                 <ul className="mt-3 divide-y divide-slate-100">
@@ -251,7 +256,10 @@ export default function ElectionOverviewPage() {
                         className="group flex items-center gap-2.5 border-b border-slate-100 py-2.5 transition last:border-b-0 hover:bg-[#fbfaf7]"
                       >
                         <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: colorForName(c.name) }} />
-                        <span className="flex-1 truncate text-sm text-slate-700">{c.name}</span>
+                        <span className="flex min-w-0 flex-1 flex-col">
+                          <span className="truncate text-sm text-slate-700">{c.name}</span>
+                          <span className="truncate text-xs text-slate-400">{c.party?.trim() || 'Independent'}</span>
+                        </span>
                         {i === 0 && <span className="border border-accent-200 bg-accent-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-accent-700">Won</span>}
                         <span className="w-12 text-right text-sm font-semibold tabular-nums text-slate-900">{pct(c.share)}</span>
                         <span className="text-xs font-medium text-accent-600 opacity-0 transition group-hover:opacity-100">report →</span>
@@ -264,11 +272,12 @@ export default function ElectionOverviewPage() {
           </Surface>
 
           {/* Insights */}
-          <Surface title="Insights" subtitle="Religion mix, community leaning estimates, and swing vs the last election.">
+          <Surface title="Insights" subtitle="Religion mix and community leaning estimates.">
             <InsightsSection
               electionId={viewId}
               religionData={voters?.byReligion ?? []}
               turnoutHistory={data?.turnoutHistory ?? []}
+              showSwing={false}
             />
           </Surface>
         </div>
@@ -281,7 +290,15 @@ export default function ElectionOverviewPage() {
       {election && tab === 'trends' && <TimelineContent electionId={viewId} />}
 
       {/* ── Parties tab ── */}
-      {election && tab === 'parties' && <PartyContent electionId={viewId} />}
+      {election && tab === 'parties' && (
+        <PartyContent
+          electionId={viewId}
+          showAll={showAll}
+          assemblyNo={election.assemblyNo}
+          assemblyName={election.assemblyName}
+          electionType={election.electionType}
+        />
+      )}
 
       {/* ── Win plan tab ── */}
       {election && tab === 'winplan' && <StrategyContent electionId={viewId} />}

@@ -6,15 +6,19 @@ import {
 } from 'recharts';
 import Breadcrumbs from '../components/ui/Breadcrumbs.jsx';
 import { PageHeader, StatCard, Surface, Loading, ErrorBox } from '../components/ui/kit.jsx';
+import PartyShareTimeline from '../components/analytics/PartyShareTimeline.jsx';
 import { api } from '../lib/api.js';
 import { colorForParty, num, pct } from '../components/elections/helpers.js';
 
 /**
- * Party & alliance breakdown for one election. Rendered as a standalone page
- * (default) and inside the constituency page's "Parties" tab (PartyContent).
+ * Party & alliance breakdown for a constituency. Rendered as a standalone page
+ * (default, single election) and inside the constituency page's "Parties" tab
+ * (PartyContent). When `showAll` is set the tab shows the party vote-share
+ * across every year; otherwise it shows the single election's breakdown.
  */
-export function PartyContent({ electionId }) {
+export function PartyContent({ electionId, showAll = false, assemblyNo, assemblyName, electionType }) {
   const q = useQuery({
+    enabled: !showAll,
     queryKey: ['partyAnalytics', electionId],
     queryFn: () => api.partyAnalytics(electionId),
   });
@@ -29,6 +33,18 @@ export function PartyContent({ electionId }) {
     [parties],
   );
   const leader = parties[0];
+
+  // All-years view: party support over time (single stacked chart, Top-N + toggle).
+  // Placed after all hooks so hook order stays stable when `showAll` toggles.
+  if (showAll) {
+    return (
+      <PartyShareTimeline
+        assemblyNo={assemblyNo}
+        assemblyName={assemblyName}
+        electionType={electionType}
+      />
+    );
+  }
 
   return (
     <div className="space-y-6">

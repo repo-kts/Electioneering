@@ -347,9 +347,10 @@ export default function BoothElectionDetail({ d, electionId }) {
         )}
       </Panel>
 
-      <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <DemographicCard title="Religion" data={dem?.byReligion ?? []} scheme="religion" />
-        <DemographicCard title="Community" data={dem?.byCommunity ?? []} scheme="community" orderKeys={['Gen', 'OBC', 'SC', 'ST']} />
+        {/* Community card removed temporarily — uncomment to restore.
+        <DemographicCard title="Community" data={dem?.byCommunity ?? []} scheme="community" orderKeys={['Gen', 'OBC', 'SC', 'ST']} /> */}
         <DemographicCard title="Category" data={dem?.byCategory ?? []} />
         <DemographicCard title="Caste" data={dem?.byCaste ?? []} />
       </div>

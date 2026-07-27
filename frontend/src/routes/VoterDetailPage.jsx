@@ -185,7 +185,8 @@ export default function VoterDetailPage() {
       </div>
 
       {/* Copy an existing election's roll into another election — no re-import. */}
-      {hasRole('admin') && elections.length >= 2 && (
+      {/* TEMPORARILY DISABLED: remove the `false &&` below to restore the Copy voters feature. */}
+      {false && hasRole('admin') && elections.length >= 2 && (
         <Card className="mb-5">
           <Card.Body>
             <div className="flex flex-wrap items-center gap-3">
@@ -216,7 +217,8 @@ export default function VoterDetailPage() {
         </Card>
       )}
 
-      {copyOpen && copySource && (
+      {/* TEMPORARILY DISABLED: remove the `false &&` below to restore the Copy voters modal. */}
+      {false && copyOpen && copySource && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
           onClick={() => !copyM.isPending && setCopyOpen(false)}

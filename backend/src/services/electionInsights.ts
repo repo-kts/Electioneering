@@ -175,17 +175,21 @@ export interface AssemblyTimelineResult {
     margin: number;
     winnerParty: string | null;
     winnerAlliance: string | null;
+    nota: number;
+    notaShare: number; // nota / total polled
   }>;
 }
 
 export async function computeAssemblyTimeline(opts: {
   assemblyNo?: string;
   assemblyName?: string;
+  electionType?: string;
   limit?: number;
 }): Promise<AssemblyTimelineResult> {
-  const where: { assemblyNo?: string; assemblyName?: string } = {};
+  const where: { assemblyNo?: string; assemblyName?: string; electionType?: string } = {};
   if (opts.assemblyNo) where.assemblyNo = opts.assemblyNo;
   if (opts.assemblyName) where.assemblyName = opts.assemblyName;
+  if (opts.electionType) where.electionType = opts.electionType;
 
   const rows = await prisma.election.findMany({
     where,
@@ -233,6 +237,8 @@ export async function computeAssemblyTimeline(opts: {
         margin: (winner?.votes ?? 0) - (runnerUp?.votes ?? 0),
         winnerParty: winner?.party ?? null,
         winnerAlliance: winner?.alliance ?? null,
+        nota,
+        notaShare: voted > 0 ? nota / voted : 0,
       };
     }),
   );
@@ -244,6 +250,77 @@ export async function computeAssemblyTimeline(opts: {
       state: first?.state ?? null,
     },
     elections,
+  };
+}
+
+// ─── 2b. Party vote-share timeline (party × year) ──────────────────────────
+// Powers the constituency "Party vote-share over time" stacked chart: one row
+// per election year, each carrying that year's per-party vote totals. `parties`
+// is the union of parties across all years, ranked by total votes (stable
+// series order + Top-N folding on the client).
+export interface PartyShareTimelineResult {
+  assembly: { assemblyNo: string | null; assemblyName: string | null; state: string | null };
+  parties: string[];
+  years: Array<{
+    electionId: number;
+    electionYear: number | null;
+    electionType: string;
+    totalValid: number;
+    byParty: Record<string, number>;
+  }>;
+}
+
+export async function computePartyShareTimeline(opts: {
+  assemblyNo?: string;
+  assemblyName?: string;
+  electionType?: string;
+}): Promise<PartyShareTimelineResult> {
+  // The election page is anchored to a single electionType; scope to it so
+  // Assembly and Lok Sabha elections (which can share an assemblyNo/Name) are
+  // not compared on one axis.
+  const where: { assemblyNo?: string; assemblyName?: string; electionType?: string } = {};
+  if (opts.assemblyNo) where.assemblyNo = opts.assemblyNo;
+  if (opts.assemblyName) where.assemblyName = opts.assemblyName;
+  if (opts.electionType) where.electionType = opts.electionType;
+
+  const rows = await prisma.election.findMany({
+    where,
+    orderBy: { electionYear: 'desc' },
+  });
+  const first = rows[0] ?? null;
+
+  const totals = new Map<string, number>(); // party -> votes across all years
+  const years = await Promise.all(
+    rows.map(async (e) => {
+      const { candidates, totalValid } = await loadCandidateTotals(e.id);
+      const byParty: Record<string, number> = {};
+      for (const c of candidates) {
+        const key = partyKey(c.party);
+        byParty[key] = (byParty[key] ?? 0) + c.votes;
+        totals.set(key, (totals.get(key) ?? 0) + c.votes);
+      }
+      return {
+        electionId: e.id,
+        electionYear: e.electionYear,
+        electionType: e.electionType,
+        totalValid,
+        byParty,
+      };
+    }),
+  );
+
+  const parties = Array.from(totals.entries())
+    .sort((a, b) => b[1] - a[1])
+    .map(([party]) => party);
+
+  return {
+    assembly: {
+      assemblyNo: first?.assemblyNo ?? opts.assemblyNo ?? null,
+      assemblyName: first?.assemblyName ?? opts.assemblyName ?? null,
+      state: first?.state ?? null,
+    },
+    parties,
+    years,
   };
 }
 
