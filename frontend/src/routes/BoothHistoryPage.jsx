@@ -254,7 +254,8 @@ export default function BoothHistoryPage() {
               {/* Votes per election, by party or candidate */}
               <Surface
                 title="Vote results by election"
-                subtitle="Votes polled at this booth, split by election type so Assembly and Lok Sabha aren't compared on one axis. Use the Type and Year filters to narrow."
+                subtitle="Votes polled at this booth, split by election type so Assembly and General Election aren't compared on one axis. Use the Type and Year filters to narrow."
+                info="Votes this booth polled in each recorded election, stacked by party (or candidate). X axis = election; Y axis = votes. Split by election type so Assembly and General Election aren't compared on one axis. Use Show/By-party to focus."
                 className="mb-5"
                 right={
                   <div className="flex shrink-0 flex-wrap items-center gap-2">
@@ -305,10 +306,10 @@ export default function BoothHistoryPage() {
                       <div key={g.type} className="border border-slate-200 bg-white p-3">
                         <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-500">{g.type}</div>
                         <ResponsiveContainer width="100%" height={280}>
-                          <BarChart data={g.rows} margin={{ left: 8, right: 16, top: 20, bottom: 8 }} barCategoryGap="28%">
+                          <BarChart data={g.rows} margin={{ left: 16, right: 16, top: 20, bottom: 24 }} barCategoryGap="28%">
                             <CartesianGrid stroke={GRID} vertical={false} />
-                            <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-                            <YAxis tick={{ fontSize: 11 }} width={56} allowDecimals={false} />
+                            <XAxis dataKey="label" tick={{ fontSize: 11 }} label={{ value: 'Election', position: 'insideBottom', offset: -4, style: { fontSize: 11, fill: '#64748b' } }} />
+                            <YAxis tick={{ fontSize: 11 }} width={60} allowDecimals={false} label={{ value: 'Votes', angle: -90, position: 'insideLeft', style: { fontSize: 11, fill: '#64748b', textAnchor: 'middle' } }} />
                             <Tooltip content={<StackTooltip />} cursor={{ fill: '#eef0ec' }} />
                             <Legend />
                             {g.series.map((s, i) => (
@@ -335,6 +336,7 @@ export default function BoothHistoryPage() {
                 className="mb-5"
                 title="Turnout by election"
                 subtitle="Share of registered voters who polled, split by election type. Implausible imported values (>100% or 0) are shown as a gap."
+                info="How turnout at this booth changed across elections. X axis = election; Y axis = turnout as a % of registered voters. Split by election type."
               >
                 {trendByType.length === 0 ? (
                   <p className="border border-dashed border-slate-200 bg-white py-6 text-center text-sm text-slate-500">No election results in this filter.</p>
@@ -344,10 +346,10 @@ export default function BoothHistoryPage() {
                       <div key={g.type} className="border border-slate-200 bg-white p-3">
                         <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-500">{g.type}</div>
                         <ResponsiveContainer width="100%" height={260}>
-                          <BarChart data={g.rows} margin={{ left: 8, right: 16, top: 20, bottom: 8 }} barCategoryGap="30%">
+                          <BarChart data={g.rows} margin={{ left: 16, right: 16, top: 20, bottom: 24 }} barCategoryGap="30%">
                             <CartesianGrid stroke={GRID} vertical={false} />
-                            <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-                            <YAxis tick={{ fontSize: 11 }} domain={[0, 100]} unit="%" width={44} />
+                            <XAxis dataKey="label" tick={{ fontSize: 11 }} label={{ value: 'Election', position: 'insideBottom', offset: -4, style: { fontSize: 11, fill: '#64748b' } }} />
+                            <YAxis tick={{ fontSize: 11 }} domain={[0, 100]} unit="%" width={48} label={{ value: 'Turnout (%)', angle: -90, position: 'insideLeft', style: { fontSize: 11, fill: '#64748b', textAnchor: 'middle' } }} />
                             <Tooltip formatter={(v) => [v == null ? '—' : `${v}%`, 'Turnout']} cursor={{ fill: '#f7f5f0' }} />
                             <Bar name="Turnout" dataKey="turnout" fill={colorFor('Turnout series')} maxBarSize={64} radius={[4, 4, 0, 0]}>
                               <LabelList dataKey="turnout" position="top" fontSize={10} fill="#64748b" formatter={(v) => (v == null ? '' : `${v}%`)} />
@@ -364,7 +366,8 @@ export default function BoothHistoryPage() {
               <Surface
                 className="mb-5"
                 title="Winning share by election"
-                subtitle="The winner's vote share, coloured & labelled by their party and split by election type (Assembly vs Lok Sabha)."
+                subtitle="The winner's vote share, coloured & labelled by their party and split by election type (Assembly vs General Election)."
+                info="The winner's share of the vote at this booth each election. X axis = election; Y axis = winning share (%). Bars coloured & labelled by the winning party. Split by election type."
               >
                 {trendByType.length === 0 ? (
                   <p className="border border-dashed border-slate-200 bg-white py-6 text-center text-sm text-slate-500">No election results in this filter.</p>
@@ -374,10 +377,10 @@ export default function BoothHistoryPage() {
                       <div key={g.type} className="border border-slate-200 bg-white p-3">
                         <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-500">{g.type}</div>
                         <ResponsiveContainer width="100%" height={260}>
-                          <BarChart data={g.rows} margin={{ left: 8, right: 16, top: 22, bottom: 8 }} barCategoryGap="30%">
+                          <BarChart data={g.rows} margin={{ left: 16, right: 16, top: 22, bottom: 24 }} barCategoryGap="30%">
                             <CartesianGrid stroke={GRID} vertical={false} />
-                            <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-                            <YAxis tick={{ fontSize: 11 }} domain={[0, 100]} unit="%" width={44} />
+                            <XAxis dataKey="label" tick={{ fontSize: 11 }} label={{ value: 'Election', position: 'insideBottom', offset: -4, style: { fontSize: 11, fill: '#64748b' } }} />
+                            <YAxis tick={{ fontSize: 11 }} domain={[0, 100]} unit="%" width={48} label={{ value: 'Winning share (%)', angle: -90, position: 'insideLeft', style: { fontSize: 11, fill: '#64748b', textAnchor: 'middle' } }} />
                             <Tooltip content={<WinnerTooltip valueLabel="Winning share" />} cursor={{ fill: '#f7f5f0' }} />
                             <Bar name="Winning share" dataKey="winShare" maxBarSize={64} radius={[4, 4, 0, 0]}>
                               {g.rows.map((r, i) => (
@@ -409,12 +412,12 @@ export default function BoothHistoryPage() {
 
               {/* Victory margin + NOTA */}
               <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
-                <Surface title="Victory margin" subtitle="Leader − runner-up share, per election. Bars coloured & labelled by the winning candidate's party.">
+                <Surface title="Victory margin" subtitle="Leader − runner-up share, per election. Bars coloured & labelled by the winning candidate's party." info="How decisively this booth was won each election. X axis = election; Y axis = the winner's lead over the runner-up in vote-share (%). Bars coloured & labelled by the winning party.">
                   <ResponsiveContainer width="100%" height={260}>
-                    <BarChart data={trendData} margin={{ left: 8, right: 16, top: 8, bottom: 24 }}>
+                    <BarChart data={trendData} margin={{ left: 16, right: 16, top: 8, bottom: 24 }}>
                       <CartesianGrid stroke={GRID} vertical={false} />
-                      <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-                      <YAxis tick={{ fontSize: 11 }} unit="%" width={44} />
+                      <XAxis dataKey="label" tick={{ fontSize: 11 }} label={{ value: 'Election', position: 'insideBottom', offset: -4, style: { fontSize: 11, fill: '#64748b' } }} />
+                      <YAxis tick={{ fontSize: 11 }} unit="%" width={48} label={{ value: 'Margin (%)', angle: -90, position: 'insideLeft', style: { fontSize: 11, fill: '#64748b', textAnchor: 'middle' } }} />
                       <Tooltip content={<WinnerTooltip valueLabel="Margin" />} cursor={{ fill: '#f7f5f0' }} />
                       <Bar dataKey="margin" radius={[4, 4, 0, 0]}>
                         {trendData.map((r, i) => <Cell key={i} fill={r.winnerParty ? colorForCandidate(r.winnerName, r.winnerParty) : colorFor(r.winnerName)} />)}
@@ -423,12 +426,12 @@ export default function BoothHistoryPage() {
                     </BarChart>
                   </ResponsiveContainer>
                 </Surface>
-                <Surface title="NOTA share" subtitle="None-of-the-above as a share of votes polled, per election.">
+                <Surface title="NOTA share" subtitle="None-of-the-above as a share of votes polled, per election." info="How many voters at this booth chose None-Of-The-Above. X axis = election; Y axis = NOTA as a % of votes polled.">
                   <ResponsiveContainer width="100%" height={240}>
-                    <BarChart data={trendData} margin={{ left: 8, right: 16, top: 8, bottom: 8 }}>
+                    <BarChart data={trendData} margin={{ left: 16, right: 16, top: 8, bottom: 24 }}>
                       <CartesianGrid stroke={GRID} vertical={false} />
-                      <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-                      <YAxis tick={{ fontSize: 11 }} unit="%" width={44} />
+                      <XAxis dataKey="label" tick={{ fontSize: 11 }} label={{ value: 'Election', position: 'insideBottom', offset: -4, style: { fontSize: 11, fill: '#64748b' } }} />
+                      <YAxis tick={{ fontSize: 11 }} unit="%" width={48} label={{ value: 'NOTA (%)', angle: -90, position: 'insideLeft', style: { fontSize: 11, fill: '#64748b', textAnchor: 'middle' } }} />
                       <Tooltip formatter={(v) => [`${v}%`, 'NOTA']} />
                       <Bar dataKey="nota" fill={colorFor('NOTA')} radius={[4, 4, 0, 0]} />
                     </BarChart>

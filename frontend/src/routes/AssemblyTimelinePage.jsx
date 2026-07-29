@@ -169,10 +169,12 @@ export function TimelineContent({ electionId }) {
           <TrendChart
             title="Turnout by year"
             subtitle="Percent of registered voters who voted, year by year."
+            info="How voter turnout has changed election to election. X axis = election year; Y axis = turnout as a % of registered voters."
             data={chartData}
             dataKey="turnout"
             name="Turnout"
             unit="%"
+            yLabel="Turnout (%)"
             domain={[0, 100]}
             color={colorFor('Turnout series')}
           />
@@ -181,10 +183,12 @@ export function TimelineContent({ electionId }) {
           <TrendChart
             title="Winning share by year"
             subtitle="The winner's share of the valid vote, year by year."
+            info="The winning candidate's share of the valid vote each election. X axis = election year; Y axis = winner's vote share (%)."
             data={chartData}
             dataKey="winShare"
             name="Winning share"
             unit="%"
+            yLabel="Winning share (%)"
             domain={[0, 100]}
             color={colorFor('Winning share series')}
           />
@@ -193,9 +197,11 @@ export function TimelineContent({ electionId }) {
           <TrendChart
             title="Victory margin over time"
             subtitle="Winner's lead over the runner-up, in votes, coloured by winning party."
+            info="How decisively the seat was won each election. X axis = election year; Y axis = the winner's lead over the runner-up in votes. Bars are coloured by winning party."
             data={chartData}
             dataKey="margin"
             name="Margin"
+            yLabel="Margin (votes)"
             color="#64748b"
             cells={chartData.map((d) => colorForParty(d.party))}
           >
@@ -213,10 +219,12 @@ export function TimelineContent({ electionId }) {
           <TrendChart
             title="NOTA over time"
             subtitle="None-of-the-above as a share of votes polled, year by year."
+            info="How many voters chose None-Of-The-Above. X axis = election year; Y axis = NOTA as a % of votes polled."
             data={chartData}
             dataKey="nota"
             name="NOTA"
             unit="%"
+            yLabel="NOTA (%)"
             color={colorFor('NOTA')}
           />
 

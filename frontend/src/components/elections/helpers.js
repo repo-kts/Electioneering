@@ -23,11 +23,30 @@ export const PARTY_COLORS = {
   INC: '#2563eb', // blue (Indian National Congress)
 };
 
+/** Party colors chosen by an admin in All-Master (party list → meta.color),
+ *  keyed by upper-cased label AND code. Populated once on app load via
+ *  registerPartyColors() and read first by partyColor(), so a colour set in
+ *  master data themes that party everywhere (charts, badges, treemap). */
+const partyColorRegistry = new Map();
+
+/** Load party colours from master-data options (`[{ label, code, meta:{color} }]`).
+ *  Safe to call repeatedly; only entries with a colour are registered. */
+export function registerPartyColors(options) {
+  for (const o of options ?? []) {
+    const color = o?.meta?.color;
+    if (!color) continue;
+    if (o.label) partyColorRegistry.set(String(o.label).trim().toUpperCase(), color);
+    if (o.code) partyColorRegistry.set(String(o.code).trim().toUpperCase(), color);
+  }
+}
+
 /** Themed color for a party string, or null if it isn't a themed party.
- *  Accepts common spellings/synonyms (BJP, INC, "Congress", full names). */
+ *  Master-data colours win; then the built-in BJP/INC themes (common
+ *  spellings/synonyms: BJP, INC, "Congress", full names). */
 export function partyColor(party) {
   if (!party) return null;
   const p = String(party).trim().toUpperCase();
+  if (partyColorRegistry.has(p)) return partyColorRegistry.get(p);
   if (p === 'BJP' || p.includes('BHARATIYA JANATA')) return PARTY_COLORS.BJP;
   if (p === 'INC' || p === 'CONGRESS' || p.includes('CONGRESS')) return PARTY_COLORS.INC;
   return null;

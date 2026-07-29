@@ -211,7 +211,15 @@ function OptionRow({ optionId, categoryKey, option }) {
   const [editing, setEditing] = useState(false);
   const [label, setLabel] = useState(option.label);
   const [code, setCode] = useState(option.code ?? '');
-  const invalidate = () => qc.invalidateQueries({ queryKey: ['master-category', categoryKey] });
+  // Parties carry a colour (stored in the option's meta.color) that themes that
+  // party everywhere in the app. Only the party list exposes the colour picker.
+  const isParty = categoryKey === 'party';
+  const [color, setColor] = useState(option.meta?.color ?? '#64748b');
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: ['master-category', categoryKey] });
+    // Colour is read app-wide from the party list; refresh that cache too.
+    if (isParty) qc.invalidateQueries({ queryKey: ['master-options', 'party'] });
+  };
 
   const save = useMutation({
     mutationFn: (data) => api.masterUpdateOption(optionId, data),
@@ -234,13 +242,30 @@ function OptionRow({ optionId, categoryKey, option }) {
       <div className="flex items-center gap-1.5 border-b border-slate-100 px-3 py-2">
         <input className={`${input} flex-1`} value={label} onChange={(e) => setLabel(e.target.value)} />
         <input className={`${input} w-28`} placeholder="code" value={code} onChange={(e) => setCode(e.target.value)} />
-        <button className={btnPrimary} onClick={() => save.mutate({ label, code: code || null })} disabled={save.isPending}>Save</button>
+        {isParty && (
+          <label className="flex items-center gap-1.5 rounded-sm border border-slate-300 bg-white px-2 py-1" title="Party colour — themes this party across the app">
+            <input type="color" value={color} onChange={(e) => setColor(e.target.value)} className="h-6 w-8 cursor-pointer border-0 bg-transparent p-0" />
+            <span className="font-mono text-[11px] text-slate-500">{color}</span>
+          </label>
+        )}
+        <button
+          className={btnPrimary}
+          onClick={() => save.mutate({ label, code: code || null, ...(isParty ? { meta: { ...(option.meta ?? {}), color } } : {}) })}
+          disabled={save.isPending}
+        >Save</button>
         <button className={btnGhost} onClick={() => setEditing(false)}>Cancel</button>
       </div>
     );
   }
   return (
     <div className={`group flex items-center gap-2 border-b border-slate-100 px-3 py-2 text-sm ${option.active ? 'text-slate-800' : 'text-slate-400'}`}>
+      {isParty && (
+        <span
+          className="h-3.5 w-3.5 shrink-0 rounded-full border border-slate-300"
+          style={{ background: option.meta?.color ?? 'transparent' }}
+          title={option.meta?.color ? `Party colour ${option.meta.color}` : 'No colour set'}
+        />
+      )}
       <span className="min-w-0 flex-1 truncate">{option.label}{option.code ? <span className="ml-2 text-xs text-slate-400">{option.code}</span> : null}</span>
       <button
         type="button"
@@ -263,11 +288,13 @@ function ListsTab() {
   const qc = useQueryClient();
   const [activeKey, setActiveKey] = useState(null);
   const [newOpt, setNewOpt] = useState('');
+  const [newColor, setNewColor] = useState('#64748b'); // party colour when adding to the party list
   const [newCat, setNewCat] = useState(null); // { key, label } while adding
 
   const catsQ = useQuery({ queryKey: ['master-categories'], queryFn: () => api.masterCategories() });
   const cats = catsQ.data?.items ?? [];
   const key = activeKey ?? cats[0]?.key ?? null;
+  const isPartyList = key === 'party';
 
   const catQ = useQuery({
     queryKey: ['master-category', key],
@@ -276,8 +303,13 @@ function ListsTab() {
   });
 
   const addOpt = useMutation({
-    mutationFn: (label) => api.masterCreateOption(key, { label }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['master-category', key] }); qc.invalidateQueries({ queryKey: ['master-categories'] }); setNewOpt(''); show('Option added', 'success'); },
+    mutationFn: (label) => api.masterCreateOption(key, { label, ...(isPartyList ? { meta: { color: newColor } } : {}) }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['master-category', key] });
+      qc.invalidateQueries({ queryKey: ['master-categories'] });
+      if (isPartyList) qc.invalidateQueries({ queryKey: ['master-options', 'party'] });
+      setNewOpt(''); show('Option added', 'success');
+    },
     onError: (e) => show(e.message, 'error'),
   });
   const addCat = useMutation({
@@ -351,6 +383,12 @@ function ListsTab() {
               onSubmit={(e) => { e.preventDefault(); if (newOpt.trim()) addOpt.mutate(newOpt.trim()); }}
             >
               <input className={`${input} flex-1`} placeholder={`Add to ${catQ.data?.label ?? 'list'}…`} value={newOpt} onChange={(e) => setNewOpt(e.target.value)} />
+              {isPartyList && (
+                <label className="flex items-center gap-1.5 rounded-sm border border-slate-300 bg-white px-2 py-1" title="Party colour — themes this party across the app">
+                  <input type="color" value={newColor} onChange={(e) => setNewColor(e.target.value)} className="h-6 w-8 cursor-pointer border-0 bg-transparent p-0" />
+                  <span className="font-mono text-[11px] text-slate-500">{newColor}</span>
+                </label>
+              )}
               <button type="submit" className={btnPrimary} disabled={!newOpt.trim() || addOpt.isPending}>Add</button>
             </form>
           </>

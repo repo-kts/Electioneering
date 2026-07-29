@@ -15,6 +15,7 @@ import FilterableTable from './FilterableTable.jsx';
 import DraggablePanel from './DraggablePanel.jsx';
 import { partyColor, colorForParty, benchmarkFor, boothName, boothTag } from '../elections/helpers.js';
 import { boothStory } from './narrative.js';
+import InfoButton from '../ui/InfoButton.jsx';
 
 function colorFor(s) {
   if (!s) return '#94a3b8';
@@ -36,7 +37,7 @@ function Kpi({ label, value, sub, accent }) {
   );
 }
 
-function Panel({ title, eyebrow, right, children, className = '' }) {
+function Panel({ title, eyebrow, right, info, children, className = '' }) {
   return (
     <div className={`border border-slate-300 bg-white ${className}`}>
       <div className="flex items-start justify-between gap-2 border-b border-slate-200 bg-[#fbfaf7] px-5 py-4">
@@ -44,7 +45,12 @@ function Panel({ title, eyebrow, right, children, className = '' }) {
           {eyebrow && <div className="mb-0.5 text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-500">{eyebrow}</div>}
           <h3 className="text-sm font-semibold text-slate-950">{title}</h3>
         </div>
-        {right}
+        {(right || info) && (
+          <div className="flex shrink-0 items-center gap-2">
+            {right}
+            {info && <InfoButton text={info} />}
+          </div>
+        )}
       </div>
       <div className="p-5">{children}</div>
     </div>
@@ -58,7 +64,7 @@ const PRIORITY = {
   low: { badge: 'border-slate-300 bg-white text-slate-600', accent: '#94a3b8' },
 };
 
-function Recommendations({ benchmark, priority, recommendations }) {
+function Recommendations({ benchmark, leaderLabel, leaderDot, priority, recommendations }) {
   const items = recommendations ?? [];
   if (items.length === 0) return null;
   return (
@@ -70,6 +76,12 @@ function Recommendations({ benchmark, priority, recommendations }) {
           <span className={`inline-flex items-center gap-1.5 border px-2 py-0.5 text-xs font-semibold ${benchmark.cls}`}>
             <span className="h-2 w-2 rounded-full" style={{ background: benchmark.dot }} />
             {benchmark.label} · {benchmark.range}
+            {leaderLabel && (
+              <span className="ml-0.5 inline-flex items-center gap-1 border-l border-current/20 pl-1.5 font-medium opacity-90">
+                <span className="h-1.5 w-1.5 rounded-full" style={{ background: leaderDot }} />
+                {leaderLabel}
+              </span>
+            )}
           </span>
           {priority && (
             <span className={`border px-2 py-0.5 text-[11px] font-medium capitalize ${(PRIORITY[priority] ?? PRIORITY.low).badge}`}>
@@ -138,6 +150,10 @@ export function StationOverview({ d, electionId }) {
   const { show } = useToast();
   const qc = useQueryClient();
   const benchmark = benchmarkFor(d?.leader?.share);
+  // The competitiveness band is the winner's-share bucket, so name whose share
+  // it is (party, falling back to the leading candidate) right on the badge.
+  const leaderLabel = d?.leader?.party || d?.leader?.name || null;
+  const leaderDot = partyColor(d?.leader?.party) ?? colorFor(d?.leader?.name);
 
   // Geocoding runs for the whole election (one Nominatim lookup per polling
   // station, rate-limited server-side), so a run here places every sibling
@@ -184,6 +200,12 @@ export function StationOverview({ d, electionId }) {
             <span className={`inline-flex items-center gap-1.5 border px-2.5 py-1 text-sm font-semibold ${benchmark.cls}`}>
               <span className="h-2.5 w-2.5 rounded-full" style={{ background: benchmark.dot }} />
               {benchmark.label} <span className="font-normal opacity-70">· {benchmark.range}</span>
+              {leaderLabel && (
+                <span className="ml-1 inline-flex items-center gap-1 border-l border-current/20 pl-1.5 font-medium opacity-90">
+                  <span className="h-2 w-2 rounded-full" style={{ background: leaderDot }} />
+                  {leaderLabel}
+                </span>
+              )}
             </span>
           </div>
         </div>
@@ -201,9 +223,9 @@ export function StationOverview({ d, electionId }) {
               ['Legislative Assembly Name', d.election.assemblyName],
               ['Legislative Assembly Number', d.election.assemblyNo],
               ['Legislative Assembly Seat Type', d.election.assemblySeatType],
-              ['Loksabha Name', d.election.parlName],
-              ['Loksabha Number', d.election.parlNo],
-              ['Loksabha Seat Type', d.election.parlSeatType],
+              ['General Election Name', d.election.parlName],
+              ['General Election Number', d.election.parlNo],
+              ['General Election Seat Type', d.election.parlSeatType],
               ['Police Station', d.ps.policeStation],
             ].map(([label, value]) => (
               <div key={label} className="flex items-baseline justify-between gap-3 border-b border-slate-100 py-2 last:border-b-0">
@@ -244,6 +266,8 @@ export function StationOverview({ d, electionId }) {
 export default function BoothElectionDetail({ d, electionId }) {
   const dem = d?.demographics;
   const benchmark = benchmarkFor(d?.leader?.share);
+  const leaderLabel = d?.leader?.party || d?.leader?.name || null;
+  const leaderDot = partyColor(d?.leader?.party) ?? colorFor(d?.leader?.name);
   const [voteView, setVoteView] = useState('party');
 
   const partyBars = useMemo(() => {
@@ -307,6 +331,7 @@ export default function BoothElectionDetail({ d, electionId }) {
       <Panel
         title="Vote results (this election)"
         className="mt-6"
+        info="Votes polled in this booth for the selected election. X axis = party (or candidate, via the toggle); Y axis = votes. Bars are coloured by party."
         right={
           <div className="inline-flex overflow-hidden rounded-md border border-slate-300">
             {[['party', 'By party'], ['candidate', 'By candidate']].map(([v, label]) => (
@@ -326,7 +351,7 @@ export default function BoothElectionDetail({ d, electionId }) {
           <p className="py-8 text-center text-sm text-slate-400">No Form 20 data recorded for this booth.</p>
         ) : (
           <ResponsiveContainer width="100%" height={320}>
-            <BarChart data={voteBars} margin={{ left: 8, right: 16, top: 8, bottom: voteView === 'candidate' ? 72 : 24 }}>
+            <BarChart data={voteBars} margin={{ left: 16, right: 16, top: 8, bottom: voteView === 'candidate' ? 80 : 30 }}>
               <CartesianGrid stroke="#e7e5de" vertical={false} />
               <XAxis
                 type="category"
@@ -335,9 +360,10 @@ export default function BoothElectionDetail({ d, electionId }) {
                 interval={0}
                 angle={voteView === 'candidate' ? -22 : 0}
                 textAnchor={voteView === 'candidate' ? 'end' : 'middle'}
-                height={voteView === 'candidate' ? 90 : 30}
+                height={voteView === 'candidate' ? 96 : 36}
+                label={{ value: voteView === 'party' ? 'Party' : 'Candidate', position: 'insideBottom', offset: voteView === 'candidate' ? 4 : -2, style: { fontSize: 11, fill: '#64748b' } }}
               />
-              <YAxis type="number" tick={{ fontSize: 11 }} tickFormatter={num} />
+              <YAxis type="number" tick={{ fontSize: 11 }} tickFormatter={num} label={{ value: 'Votes', angle: -90, position: 'insideLeft', style: { fontSize: 11, fill: '#64748b', textAnchor: 'middle' } }} />
               <Tooltip content={<VoteTooltip subLabel={voteView === 'party' ? 'Top candidate' : 'Party'} />} cursor={{ fill: '#f7f5f0' }} />
               <Bar dataKey="votes" radius={[4, 4, 0, 0]}>
                 {voteBars.map((b) => <Cell key={b.key} fill={b.color} />)}
@@ -413,7 +439,7 @@ export default function BoothElectionDetail({ d, electionId }) {
         />
       </DraggablePanel>
 
-      <Recommendations benchmark={benchmark} priority={d.priority} recommendations={d.recommendations} />
+      <Recommendations benchmark={benchmark} leaderLabel={leaderLabel} leaderDot={leaderDot} priority={d.priority} recommendations={d.recommendations} />
 
       <BoothBanner d={d} />
     </>

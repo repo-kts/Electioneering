@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -27,7 +27,12 @@ export function PartyContent({ electionId, showAll = false, assemblyNo, assembly
   const parties = q.data?.parties ?? [];
   const alliances = q.data?.alliances ?? [];
 
-  const bars = useMemo(() => parties.map((p) => ({ name: p.party, votes: p.votes })), [parties]);
+  // "Filter by party" for the votes-by-party chart: focus on the top N parties.
+  const [topN, setTopN] = useState('all'); // 'all' | '3' | '5' | '10'
+  const bars = useMemo(() => {
+    const all = parties.map((p) => ({ name: p.party, votes: p.votes }));
+    return topN === 'all' ? all : all.slice(0, Number(topN));
+  }, [parties, topN]);
   const donut = useMemo(
     () => parties.slice(0, 8).map((p) => ({ name: p.party, value: p.votes })),
     [parties],
@@ -87,12 +92,32 @@ export function PartyContent({ electionId, showAll = false, assemblyNo, assembly
 
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
             {/* Votes by party */}
-            <Surface title="Votes by party" subtitle="Total valid votes each party received." className="lg:col-span-3">
+            <Surface
+              title="Votes by party"
+              subtitle="Total valid votes each party received."
+              info="Total valid votes each party received in this election. X axis = party; Y axis = votes. Use 'Show' to focus on the top parties. Bars coloured by party."
+              className="lg:col-span-3"
+              right={
+                <label className="flex items-center gap-1.5 text-xs text-slate-500">
+                  Show
+                  <select
+                    value={topN}
+                    onChange={(e) => setTopN(e.target.value)}
+                    className="border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-700"
+                  >
+                    <option value="all">All{parties.length ? ` (${parties.length})` : ''}</option>
+                    <option value="3">Top 3</option>
+                    <option value="5">Top 5</option>
+                    <option value="10">Top 10</option>
+                  </select>
+                </label>
+              }
+            >
               <ResponsiveContainer width="100%" height={320}>
-                <BarChart data={bars} margin={{ left: 8, right: 8, top: 8, bottom: 56 }}>
+                <BarChart data={bars} margin={{ left: 16, right: 8, top: 8, bottom: 64 }}>
                   <CartesianGrid stroke="#e7e5de" vertical={false} />
-                  <XAxis dataKey="name" tick={{ fontSize: 11 }} interval={0} angle={-22} textAnchor="end" height={80} />
-                  <YAxis tick={{ fontSize: 11 }} width={56} tickFormatter={(v) => num(v)} />
+                  <XAxis dataKey="name" tick={{ fontSize: 11 }} interval={0} angle={-22} textAnchor="end" height={80} label={{ value: 'Party', position: 'insideBottom', offset: 6, style: { fontSize: 11, fill: '#64748b' } }} />
+                  <YAxis tick={{ fontSize: 11 }} width={60} tickFormatter={(v) => num(v)} label={{ value: 'Votes', angle: -90, position: 'insideLeft', style: { fontSize: 11, fill: '#64748b', textAnchor: 'middle' } }} />
                   <Tooltip formatter={(v) => [num(v), 'Votes']} cursor={{ fill: '#f7f5f0' }} />
                   <Bar dataKey="votes" radius={[4, 4, 0, 0]}>
                     {bars.map((b) => <Cell key={b.name} fill={colorForParty(b.name)} />)}
@@ -102,7 +127,7 @@ export function PartyContent({ electionId, showAll = false, assemblyNo, assembly
             </Surface>
 
             {/* Vote-share donut */}
-            <Surface title="Vote share" subtitle="Share of valid votes." className="lg:col-span-2">
+            <Surface title="Vote share" subtitle="Share of valid votes." info="Each party's share of the total valid vote (top 8 parties). Hover a slice for its votes and party." className="lg:col-span-2">
               <ResponsiveContainer width="100%" height={190}>
                 <PieChart>
                   <Pie data={donut} dataKey="value" nameKey="name" innerRadius={52} outerRadius={84} paddingAngle={2}>

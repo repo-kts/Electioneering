@@ -1,6 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { NavLink, Navigate, Outlet, useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../../context/AuthContext.jsx';
+import { api } from '../../lib/api.js';
+import { registerPartyColors } from '../elections/helpers.js';
 import { FullLoader } from '../ui/Loader.jsx';
 
 const SECTIONS = [
@@ -15,7 +18,7 @@ const SECTIONS = [
     title: 'Insights',
     items: [
       { to: '/elections/assembly', label: 'Assembly Election', roles: ['admin'] },
-      { to: '/elections/lok-sabha', label: 'Lok Sabha Election', roles: ['admin'] },
+      { to: '/elections/lok-sabha', label: 'General Election', roles: ['admin'] },
       { to: '/elections/booths', label: 'Booth wise election', roles: ['admin'] },
       { to: '/households', label: 'Households', roles: ['admin'] },
       { to: '/segment', label: 'Voter search', roles: ['admin'] },
@@ -109,6 +112,19 @@ export default function ShellLayout() {
   const { user, loading, logout } = useAuth();
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
+
+  // Load admin-chosen party colours once per session so partyColor() themes
+  // every chart/badge/treemap from master data. /api/master is auth-only, so
+  // this is safe for both roles; BJP/INC keep their built-in fallback colours.
+  const partyColorsQ = useQuery({
+    queryKey: ['master-options', 'party'],
+    queryFn: () => api.masterOptions('party'),
+    enabled: !!user,
+    staleTime: 5 * 60 * 1000,
+  });
+  useEffect(() => {
+    if (partyColorsQ.data?.options) registerPartyColors(partyColorsQ.data.options);
+  }, [partyColorsQ.data]);
 
   if (loading) return <FullLoader label="Loading…" />;
   if (!user) return <Navigate to="/login" replace />;

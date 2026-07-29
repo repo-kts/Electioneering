@@ -176,20 +176,22 @@ export default function BoothExplorer({ electionId }) {
         <p className="py-8 text-center text-sm text-slate-400">No booths recorded for this election yet.</p>
       )}
 
-      {!isPending && booths.length > 0 && (
+      {/* The filter bar drives grid/table; the treemap is a whole-picture view,
+          so it hides the bar and always renders every booth (below). */}
+      {!isPending && booths.length > 0 && view !== 'treemap' && (
         <BoothFilterBar items={booths} value={filters} onChange={setFilters} resultCount={filtered.length} />
       )}
 
-      {!isPending && booths.length > 0 && sorted.length === 0 && (
+      {!isPending && booths.length > 0 && sorted.length === 0 && view !== 'treemap' && (
         <p className="py-8 text-center text-sm text-slate-400">
           No booths match these filters.{' '}
           <button onClick={() => setFilters(emptyBoothFilters())} className="font-medium text-accent-700 hover:underline">Clear filters</button>
         </p>
       )}
 
-      {!isPending && sorted.length > 0 && view === 'treemap' && (
+      {!isPending && booths.length > 0 && view === 'treemap' && (
         <BoothTreemap
-          items={sorted.map((b) => ({ ...b, leaderParty: partyByName[b.leader] ?? null }))}
+          items={booths.map((b) => ({ ...b, leaderParty: partyByName[b.leader] ?? null }))}
           metric={treeColor}
           sizeMetric={treeSize}
           onSelect={(id) => navigate(`/elections/${electionId}/booth/${id}`)}

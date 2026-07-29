@@ -1,14 +1,12 @@
-// "Booth at a glance" — the overall story of a booth across every election it
-// has fought, shown as one scorecard: summary stats + a chronological winner
-// timeline (each election a card with its winner, party, competitiveness band,
-// and turnout). Sits atop the all-years view so the whole history reads at once.
+// "Constituency at a glance" — the whole record of a seat across every recorded
+// election, as one scorecard: summary stats + a chronological winner timeline.
+// Mirrors BoothScorecard (the booth-level version) but for a constituency, where
+// margin is a vote count (not a share fraction). Sits atop the all-years Overview
+// so the story reads at a glance before the narrative + charts below it.
 import { useMemo } from 'react';
 import { colorForCandidate, benchmarkFor, num, pct } from '../elections/helpers.js';
 
 const typeAbbr = (t) => (/lok\s*sabha/i.test(t) ? 'GE' : /assembly/i.test(t) ? 'AE' : (t || '').slice(0, 3).toUpperCase());
-
-// Turnout in the data can be corrupt (>100% or 0 from partial imports); only
-// show plausible values, otherwise a dash so the card never lies.
 const turnoutText = (v) => (v > 0 && v <= 1.05 ? pct(v) : '—');
 
 function Stat({ label, value, sub, accent }) {
@@ -21,13 +19,32 @@ function Stat({ label, value, sub, accent }) {
   );
 }
 
-export default function BoothScorecard({ timeline = [], registeredLatest }) {
+/**
+ * `elections` is the assembly-timeline list (year DESC) — each entry has
+ * `{ electionId, electionYear, electionType, winner:{name,party,share}, winnerParty, margin(votes), turnout:{pct} }`.
+ * `registeredLatest` is the latest year's registered-voter count.
+ */
+export default function ConstituencyScorecard({ elections = [], registeredLatest }) {
+  // Chronological (oldest → newest) so the "who won" strip reads left to right.
+  const timeline = useMemo(
+    () => [...elections].reverse().map((e) => ({
+      electionId: e.electionId,
+      type: e.electionType,
+      label: `${e.electionYear ?? '—'} · ${typeAbbr(e.electionType)}`,
+      winnerName: e.winner?.name ?? null,
+      winnerParty: e.winnerParty || e.winner?.party || null,
+      winShare: e.winner?.share ?? 0,
+      margin: e.margin ?? 0, // votes
+      turnoutPct: e.turnout?.pct ?? 0,
+    })),
+    [elections],
+  );
+
   const summary = useMemo(() => {
     const byType = new Map();
     for (const t of timeline) byType.set(t.type, (byType.get(t.type) ?? 0) + 1);
     const typeBreakdown = [...byType.entries()].map(([t, n]) => `${n} ${typeAbbr(t)}`).join(' · ');
 
-    // Most frequent winner across all its elections.
     const wins = new Map();
     for (const t of timeline) {
       if (!t.winnerName) continue;
@@ -43,16 +60,15 @@ export default function BoothScorecard({ timeline = [], registeredLatest }) {
   if (timeline.length === 0) return null;
 
   return (
-    <div className="mb-5 border border-slate-300 bg-white">
+    <div className="border border-slate-300 bg-white">
       <div className="border-b border-slate-200 bg-[#fbfaf7] px-5 py-4">
-        <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">Booth at a glance</div>
+        <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">Constituency at a glance</div>
         <h2 className="text-[15px] font-semibold text-slate-950">
           {timeline.length} election{timeline.length === 1 ? '' : 's'} on record
           {summary.typeBreakdown && <span className="font-normal text-slate-500"> · {summary.typeBreakdown}</span>}
         </h2>
       </div>
 
-      {/* Summary stats */}
       <div className="grid grid-cols-2 divide-x divide-slate-200 border-b border-slate-200 sm:grid-cols-4">
         <Stat label="Elections" value={num(timeline.length)} sub={summary.typeBreakdown || undefined} />
         <Stat
@@ -70,7 +86,6 @@ export default function BoothScorecard({ timeline = [], registeredLatest }) {
         <Stat label="Registered (latest)" value={num(registeredLatest)} />
       </div>
 
-      {/* Chronological winner timeline (oldest → newest) */}
       <div className="px-5 py-4">
         <div className="mb-3 text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-500">Who won, election by election</div>
         <div className="flex gap-3 overflow-x-auto pb-1">
@@ -78,7 +93,7 @@ export default function BoothScorecard({ timeline = [], registeredLatest }) {
             const bench = benchmarkFor(t.winShare);
             const color = colorForCandidate(t.winnerName, t.winnerParty);
             return (
-              <div key={t.electionId} className="flex w-[190px] shrink-0 flex-col border border-slate-200 bg-white">
+              <div key={t.electionId ?? t.label} className="flex w-[190px] shrink-0 flex-col border border-slate-200 bg-white">
                 <div className="flex items-center justify-between gap-2 border-b border-slate-100 bg-slate-50 px-3 py-1.5">
                   <span className="text-xs font-semibold tabular-nums text-slate-700">{t.label}</span>
                   <span className={`inline-flex items-center gap-1 border px-1.5 py-0.5 text-[10px] font-semibold ${bench.cls}`}>
@@ -96,7 +111,7 @@ export default function BoothScorecard({ timeline = [], registeredLatest }) {
                     {t.winnerParty ? ' · ' : ''}{pct(t.winShare)} share
                   </div>
                   <div className="mt-auto flex items-center justify-between pt-1 text-[11px] tabular-nums text-slate-500">
-                    <span>margin {pct(t.margin)}</span>
+                    <span>margin {num(t.margin)}</span>
                     <span>turnout {turnoutText(t.turnoutPct)}</span>
                   </div>
                 </div>

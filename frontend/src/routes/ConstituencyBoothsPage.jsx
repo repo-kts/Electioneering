@@ -211,11 +211,13 @@ export default function ConstituencyBoothsPage() {
               <p className="py-8 text-center text-sm text-slate-400">No booths recorded for this constituency yet.</p>
             )}
 
-            {items.length > 0 && (
+            {/* The filter bar drives grid/table/graph; the treemap is a whole-picture
+                view, so it hides the bar and always renders every booth (below). */}
+            {items.length > 0 && view !== 'treemap' && (
               <BoothFilterBar items={items} value={filters} onChange={setFilters} resultCount={filtered.length} />
             )}
 
-            {items.length > 0 && sorted.length === 0 && (
+            {items.length > 0 && sorted.length === 0 && view !== 'treemap' && (
               <p className="py-8 text-center text-sm text-slate-400">
                 No booths match these filters.{' '}
                 <button onClick={() => setFilters(emptyBoothFilters())} className="font-medium text-accent-700 hover:underline">Clear filters</button>
@@ -226,12 +228,12 @@ export default function ConstituencyBoothsPage() {
               <BoothGraphs items={sorted} onSelect={(id) => { if (id != null) navigate(stationLink({ id })); }} />
             )}
 
-            {sorted.length > 0 && view === 'treemap' && electionYear === 'all' && (
-              <BoothTreemapNested items={sorted} metric={treeMetric} typeFilter={electionType} onSelect={(id) => { if (id != null) navigate(stationLink({ id })); }} />
+            {items.length > 0 && view === 'treemap' && electionYear === 'all' && (
+              <BoothTreemapNested items={items} metric={treeMetric} typeFilter={electionType} onSelect={(id) => { if (id != null) navigate(stationLink({ id })); }} />
             )}
 
-            {sorted.length > 0 && view === 'treemap' && electionYear !== 'all' && (
-              <BoothTreemap items={sorted} metric={treeMetric} sizeMetric={treeSize} onSelect={(id) => { if (id != null) navigate(stationLink({ id })); }} />
+            {items.length > 0 && view === 'treemap' && electionYear !== 'all' && (
+              <BoothTreemap items={items} metric={treeMetric} sizeMetric={treeSize} onSelect={(id) => { if (id != null) navigate(stationLink({ id })); }} />
             )}
 
             {sorted.length > 0 && view === 'table' && (

@@ -1,4 +1,5 @@
 import { Spinner } from './Loader.jsx';
+import InfoButton from './InfoButton.jsx';
 
 const TONE = {
   default: 'text-slate-900',
@@ -41,10 +42,12 @@ export function StatCard({ label, value, sub, tone = 'default', accent }) {
   );
 }
 
-export function Surface({ eyebrow, title, subtitle, right, children, className = '', bodyClass = 'p-5' }) {
+// `info` renders an (i) button in the header that explains the panel/chart on
+// hover. `right` is any header-right content (view toggles, selects, …).
+export function Surface({ eyebrow, title, subtitle, right, info, children, className = '', bodyClass = 'p-5' }) {
   return (
     <section className={`overflow-hidden border border-slate-300 bg-white ${className}`}>
-      {(title || right) && (
+      {(title || right || info) && (
         <div className="flex items-start justify-between gap-3 border-b border-slate-200 bg-[#fbfaf7] px-5 py-4">
           <div>
             {eyebrow && (
@@ -53,7 +56,12 @@ export function Surface({ eyebrow, title, subtitle, right, children, className =
             {title && <h2 className="text-[15px] font-semibold text-slate-950">{title}</h2>}
             {subtitle && <p className="mt-0.5 text-sm text-slate-600">{subtitle}</p>}
           </div>
-          {right}
+          {(right || info) && (
+            <div className="flex shrink-0 items-center gap-2">
+              {right}
+              {info && <InfoButton text={info} />}
+            </div>
+          )}
         </div>
       )}
       <div className={bodyClass}>{children}</div>

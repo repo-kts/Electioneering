@@ -91,20 +91,24 @@ export default function AllYearsAnalytics({ assemblyNo, assemblyName, currentEle
           <TrendChart
             title="Turnout by year"
             subtitle="Percent of registered voters who voted, year by year."
+            info="How voter turnout in this constituency has changed election to election. The X axis is the election year; the Y axis is turnout as a % of registered voters (higher = more people voted)."
             data={chartData}
             dataKey="turnout"
             name="Turnout"
             unit="%"
+            yLabel="Turnout (%)"
             domain={[0, 100]}
             color={colorFor('Turnout series')}
           />
           <TrendChart
             title="Winning share by year"
             subtitle="The winner's share of the valid vote, year by year."
+            info="The winning candidate's share of the valid vote in each election. The X axis is the election year; the Y axis is the winner's vote share (%). A rising line means more dominant wins."
             data={chartData}
             dataKey="winShare"
             name="Winning share"
             unit="%"
+            yLabel="Winning share (%)"
             domain={[0, 100]}
             color={colorFor('Winning share series')}
           />
