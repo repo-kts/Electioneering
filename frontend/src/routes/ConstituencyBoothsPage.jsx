@@ -88,7 +88,7 @@ export default function ConstituencyBoothsPage() {
     <div>
       <Breadcrumbs
         items={[
-          { label: 'Booth wise election', to: '/elections/booths' },
+          { label: 'Booth wise votes', to: '/elections/booths' },
           { label: assemblyName || 'Constituency' },
         ]}
       />

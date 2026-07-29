@@ -43,7 +43,7 @@ export default function App() {
         {/* Results & insights — three entry points, then per-constituency drill-down */}
         <Route path="/elections/assembly" element={<ProtectedRoute roles={ADMIN}><GeographyExplorer title="Assembly Election" subtitle="Drill from state to seat to constituency. Open one to see its results across every year — switch years from the dropdown inside." matchType="Assembly Election" /></ProtectedRoute>} />
         <Route path="/elections/lok-sabha" element={<ProtectedRoute roles={ADMIN}><GeographyExplorer title="General Election" subtitle="Drill from state to parliamentary seat. Open one to see its results across every year — switch years from the dropdown inside." matchType="Lok Sabha Election" /></ProtectedRoute>} />
-        <Route path="/elections/booths" element={<ProtectedRoute roles={ADMIN}><GeographyExplorer title="Booth wise election" subtitle="Drill to a constituency to see every physical booth aggregated across all its elections. Open a booth for its full history." boothMode /></ProtectedRoute>} />
+        <Route path="/elections/booths" element={<ProtectedRoute roles={ADMIN}><GeographyExplorer title="Booth wise votes" subtitle="Drill to a constituency to see every physical booth aggregated across all its elections. Open a booth for its full history." boothMode /></ProtectedRoute>} />
         <Route path="/elections/booths/station/:psId" element={<ProtectedRoute roles={ADMIN}><BoothHistoryPage /></ProtectedRoute>} />
         <Route path="/elections/booths/:assemblyNo/:assemblyName" element={<ProtectedRoute roles={ADMIN}><ConstituencyBoothsPage /></ProtectedRoute>} />
         <Route path="/elections/:id" element={<ProtectedRoute roles={ADMIN}><ElectionOverviewPage /></ProtectedRoute>} />

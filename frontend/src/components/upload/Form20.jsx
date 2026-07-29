@@ -326,10 +326,10 @@ export default function Form20({ electionId, onSubmit, onChangeElection }) {
         <div className="form20-header">
           {[
             ['state', 'State'],
-            ['parlNo', 'Parl. No'],
-            ['parlName', 'Parl. Name'],
-            ['assemblyNo', 'Assembly No'],
-            ['assemblyName', 'Assembly Name'],
+            ['parlNo', 'PC No'],
+            ['parlName', 'PC Name'],
+            ['assemblyNo', 'AC No'],
+            ['assemblyName', 'AC Name'],
             ['totalElectors', 'Total Electors'],
             ['electionType', 'Election Type'],
           ].map(([k, label]) => (

@@ -19,7 +19,7 @@ const SECTIONS = [
     items: [
       { to: '/elections/assembly', label: 'Assembly Election', roles: ['admin'] },
       { to: '/elections/lok-sabha', label: 'General Election', roles: ['admin'] },
-      { to: '/elections/booths', label: 'Booth wise election', roles: ['admin'] },
+      { to: '/elections/booths', label: 'Booth wise votes', roles: ['admin'] },
       { to: '/households', label: 'Households', roles: ['admin'] },
       { to: '/segment', label: 'Voter search', roles: ['admin'] },
     ],

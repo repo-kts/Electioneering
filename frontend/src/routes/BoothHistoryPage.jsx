@@ -169,7 +169,7 @@ export default function BoothHistoryPage() {
     <div>
       <Breadcrumbs
         items={[
-          { label: 'Booth wise election', to: '/elections/booths' },
+          { label: 'Booth wise votes', to: '/elections/booths' },
           d?.constituency
             ? { label: d.constituency.assemblyName ?? 'Constituency', to: `/elections/booths/${encodeURIComponent(d.constituency.assemblyNo ?? '')}/${encodeURIComponent(d.constituency.assemblyName ?? '')}` }
             : { label: 'Constituency' },
