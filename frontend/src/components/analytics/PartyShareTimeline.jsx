@@ -68,6 +68,7 @@ export default function PartyShareTimeline({
     <Surface
       title={title}
       subtitle={subtitle}
+      info="How each party's support shifted across elections. X axis = election year; Y axis = votes (or each party's share of the valid vote when 'Share %' is selected). Bars are stacked by party; 'Others' folds the parties beyond your Top-N."
       right={
         <div className="flex shrink-0 flex-wrap items-center gap-2">
           <label className="flex items-center gap-1.5 text-xs text-slate-500">
@@ -118,14 +119,15 @@ export default function PartyShareTimeline({
       )}
       {q.data && rows.length > 0 && (
         <ResponsiveContainer width="100%" height={300}>
-          <BarChart data={rows} margin={{ left: 8, right: 16, top: 20, bottom: 8 }} barCategoryGap="28%">
+          <BarChart data={rows} margin={{ left: 16, right: 16, top: 20, bottom: 24 }} barCategoryGap="28%">
             <CartesianGrid stroke={GRID} vertical={false} />
-            <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+            <XAxis dataKey="label" tick={{ fontSize: 11 }} label={{ value: 'Election year', position: 'insideBottom', offset: -4, style: { fontSize: 11, fill: '#64748b' } }} />
             <YAxis
               tick={{ fontSize: 11 }}
-              width={isShare ? 44 : 56}
+              width={isShare ? 48 : 60}
               allowDecimals={false}
               {...(isShare ? { domain: [0, 100], unit: '%' } : {})}
+              label={{ value: isShare ? 'Share of valid vote (%)' : 'Votes', angle: -90, position: 'insideLeft', style: { fontSize: 11, fill: '#64748b', textAnchor: 'middle' } }}
             />
             <Tooltip content={<StackTooltip formatValue={fmt} />} cursor={{ fill: '#eef0ec' }} />
             <Legend />

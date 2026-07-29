@@ -6,7 +6,7 @@ import BoothElectionDetail from '../components/analytics/BoothElectionDetail.jsx
 import { api } from '../lib/api.js';
 import { boothName } from '../components/elections/helpers.js';
 
-const typeAbbr = (t) => (t === 'Lok Sabha Election' ? 'LS' : 'AE');
+const typeAbbr = (t) => (t === 'Lok Sabha Election' ? 'GE' : 'AE');
 
 export default function BoothDetailPage() {
   const { id, psId } = useParams();

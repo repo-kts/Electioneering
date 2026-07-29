@@ -16,6 +16,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Cell, ReferenceLine, LabelList, Legend,
 } from 'recharts';
 import { colorForParty, num } from '../elections/helpers.js';
+import InfoButton from '../ui/InfoButton.jsx';
 
 // Margin → competitiveness band (party-agnostic). Kept local so the graph view
 // is self-contained. Hexes match the app's status ramp (emerald→rose).
@@ -40,12 +41,15 @@ const SHARE_BANDS = [
   { label: '75%+', lo: 75, hi: 100.01 },
 ];
 
-function ChartCard({ title, subtitle, children, empty }) {
+function ChartCard({ title, subtitle, info, children, empty }) {
   return (
     <div className="border border-slate-200 bg-white p-3">
-      <div className="mb-2">
-        <div className="text-sm font-semibold text-slate-800">{title}</div>
-        {subtitle && <div className="text-[11px] text-slate-400">{subtitle}</div>}
+      <div className="mb-2 flex items-start justify-between gap-2">
+        <div>
+          <div className="text-sm font-semibold text-slate-800">{title}</div>
+          {subtitle && <div className="text-[11px] text-slate-400">{subtitle}</div>}
+        </div>
+        {info && <InfoButton text={info} />}
       </div>
       {empty ? <div className="flex h-[240px] items-center justify-center text-xs text-slate-400">{empty}</div> : children}
     </div>
@@ -207,14 +211,15 @@ export default function BoothGraphs({ items, onSelect }) {
         <ChartCard
           title="Turnout vs winner's vote-share"
           subtitle="Each bubble is a booth · size = registered electors · colour = leading party. Top-left = low-turnout strongholds; bottom = split booths."
+          info="Booth-level correlation between how many people voted and how dominant the winner was. X axis = turnout (% of electors who voted); Y axis = winner's vote share (%). Bubble size = registered electors, colour = leading party. Click a bubble to open that booth."
           empty={noResults ? 'No booths with Form 20 results in the current filter.' : null}
         >
           {!noResults && (
             <ResponsiveContainer width="100%" height={340}>
-              <ScatterChart margin={{ top: 8, right: 16, bottom: 28, left: 4 }}>
+              <ScatterChart margin={{ top: 8, right: 16, bottom: 32, left: 8 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#eef2f7" />
-                <XAxis type="number" dataKey="x" name="Turnout" unit="%" domain={[0, 100]} tick={{ fontSize: 11 }} tickCount={6} />
-                <YAxis type="number" dataKey="y" name="Winner share" unit="%" domain={[0, 100]} tick={{ fontSize: 11 }} width={40} tickCount={6} />
+                <XAxis type="number" dataKey="x" name="Turnout" unit="%" domain={[0, 100]} tick={{ fontSize: 11 }} tickCount={6} label={{ value: 'Turnout (%)', position: 'insideBottom', offset: -4, style: { fontSize: 11, fill: '#64748b' } }} />
+                <YAxis type="number" dataKey="y" name="Winner share" unit="%" domain={[0, 100]} tick={{ fontSize: 11 }} width={48} tickCount={6} label={{ value: "Winner's share (%)", angle: -90, position: 'insideLeft', style: { fontSize: 11, fill: '#64748b', textAnchor: 'middle' } }} />
                 <ZAxis type="number" dataKey="z" range={[45, 420]} name="Electors" />
                 <ReferenceLine y={50} stroke="#cbd5e1" strokeDasharray="4 4" />
                 <Tooltip content={<ScatterTip />} cursor={{ strokeDasharray: '3 3' }} />
@@ -235,7 +240,6 @@ export default function BoothGraphs({ items, onSelect }) {
               </ScatterChart>
             </ResponsiveContainer>
           )}
-          <div className="mt-1 text-center text-[10px] text-slate-400">Turnout % →</div>
         </ChartCard>
       </div>
 
@@ -244,13 +248,14 @@ export default function BoothGraphs({ items, onSelect }) {
         <ChartCard
           title="Vote-share distribution by party"
           subtitle={`How many booths each of the top ${topParties.length} part${topParties.length === 1 ? 'y' : 'ies'} landed in, by the vote-share they took.`}
+          info="For each of the top parties, how many booths they landed in at each vote-share level. X axis = vote-share band the party took in a booth; Y axis = number of booths. Bars grouped and coloured by party."
           empty={noResults ? 'No booths with Form 20 results in the current filter.' : null}
         >
           {!noResults && (
             <ResponsiveContainer width="100%" height={320}>
-              <BarChart data={shareDist} margin={{ top: 16, right: 8, bottom: 24, left: 4 }} barGap={2} barCategoryGap="18%">
+              <BarChart data={shareDist} margin={{ top: 16, right: 8, bottom: 28, left: 4 }} barGap={2} barCategoryGap="18%">
                 <CartesianGrid vertical={false} stroke="#eef2f7" />
-                <XAxis dataKey="label" tick={{ fontSize: 11 }} interval={0} />
+                <XAxis dataKey="label" tick={{ fontSize: 11 }} interval={0} label={{ value: 'Vote-share band', position: 'insideBottom', offset: -4, style: { fontSize: 11, fill: '#64748b' } }} />
                 <YAxis tick={{ fontSize: 11 }} width={32} allowDecimals={false} label={{ value: 'Booths', angle: -90, position: 'insideLeft', style: { fontSize: 11, fill: '#94a3b8' } }} />
                 <Tooltip content={<GroupedTip total={reported.length} />} cursor={{ fill: '#f7f5f0' }} />
                 <Legend wrapperStyle={{ fontSize: 12 }} />
@@ -262,16 +267,20 @@ export default function BoothGraphs({ items, onSelect }) {
               </BarChart>
             </ResponsiveContainer>
           )}
-          <div className="mt-1 text-center text-[10px] text-slate-400">Vote-share band →</div>
         </ChartCard>
       </div>
 
-      <ChartCard title="Booths led by party" subtitle={`${reported.length} booths with results`} empty={noResults ? 'No results yet.' : null}>
+      <ChartCard
+        title="Booths led by party"
+        subtitle={`${reported.length} booths with results`}
+        info="How many booths each party is currently leading. X axis = number of booths led; Y axis = party. Bars coloured by party."
+        empty={noResults ? 'No results yet.' : null}
+      >
         {!noResults && (
           <ResponsiveContainer width="100%" height={Math.max(160, ledByParty.length * 46)}>
-            <BarChart layout="vertical" data={ledByParty} margin={{ top: 4, right: 32, bottom: 4, left: 8 }}>
+            <BarChart layout="vertical" data={ledByParty} margin={{ top: 4, right: 32, bottom: 24, left: 8 }}>
               <CartesianGrid horizontal={false} stroke="#eef2f7" />
-              <XAxis type="number" tick={{ fontSize: 11 }} allowDecimals={false} />
+              <XAxis type="number" tick={{ fontSize: 11 }} allowDecimals={false} label={{ value: 'Booths led', position: 'insideBottom', offset: -4, style: { fontSize: 11, fill: '#64748b' } }} />
               <YAxis type="category" dataKey="label" tick={{ fontSize: 11 }} width={64} />
               <Tooltip content={<BarTip valueLabel="booths" />} cursor={{ fill: '#f7f5f0' }} />
               <Bar dataKey="count" radius={[0, 4, 4, 0]} barSize={22}>
@@ -283,13 +292,18 @@ export default function BoothGraphs({ items, onSelect }) {
         )}
       </ChartCard>
 
-      <ChartCard title="Competitiveness spread" subtitle="By winner→runner-up margin" empty={noResults ? 'No results yet.' : null}>
+      <ChartCard
+        title="Competitiveness spread"
+        subtitle="By winner→runner-up margin"
+        info="How contested the booths are. X axis = competitiveness band (Tight → Safe, by the winner's margin over the runner-up); Y axis = number of booths in that band."
+        empty={noResults ? 'No results yet.' : null}
+      >
         {!noResults && (
           <ResponsiveContainer width="100%" height={240}>
-            <BarChart data={compSpread} margin={{ top: 12, right: 8, bottom: 4, left: 4 }}>
+            <BarChart data={compSpread} margin={{ top: 12, right: 8, bottom: 24, left: 4 }}>
               <CartesianGrid vertical={false} stroke="#eef2f7" />
-              <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-              <YAxis tick={{ fontSize: 11 }} width={32} allowDecimals={false} />
+              <XAxis dataKey="label" tick={{ fontSize: 11 }} label={{ value: 'Competitiveness (margin)', position: 'insideBottom', offset: -4, style: { fontSize: 11, fill: '#64748b' } }} />
+              <YAxis tick={{ fontSize: 11 }} width={32} allowDecimals={false} label={{ value: 'Booths', angle: -90, position: 'insideLeft', style: { fontSize: 11, fill: '#64748b', textAnchor: 'middle' } }} />
               <Tooltip content={<BarTip valueLabel="booths" />} cursor={{ fill: '#f7f5f0' }} />
               <Bar dataKey="count" radius={[4, 4, 0, 0]} barSize={44}>
                 {compSpread.map((d) => <Cell key={d.label} fill={d.color} />)}
@@ -301,19 +315,22 @@ export default function BoothGraphs({ items, onSelect }) {
       </ChartCard>
 
       <div className="lg:col-span-2">
-        <ChartCard title="Turnout distribution" subtitle="Booths grouped into 10-point turnout bands">
+        <ChartCard
+          title="Turnout distribution"
+          subtitle="Booths grouped into 10-point turnout bands"
+          info="How turnout is spread across booths. X axis = turnout band (% of electors who voted, in 10-point bins); Y axis = number of booths in that band."
+        >
           <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={turnoutBins} margin={{ top: 12, right: 8, bottom: 4, left: 4 }}>
+            <BarChart data={turnoutBins} margin={{ top: 12, right: 8, bottom: 24, left: 4 }}>
               <CartesianGrid vertical={false} stroke="#eef2f7" />
-              <XAxis dataKey="label" tick={{ fontSize: 10 }} interval={0} />
-              <YAxis tick={{ fontSize: 11 }} width={32} allowDecimals={false} />
+              <XAxis dataKey="label" tick={{ fontSize: 10 }} interval={0} label={{ value: 'Turnout band (%)', position: 'insideBottom', offset: -4, style: { fontSize: 11, fill: '#64748b' } }} />
+              <YAxis tick={{ fontSize: 11 }} width={32} allowDecimals={false} label={{ value: 'Booths', angle: -90, position: 'insideLeft', style: { fontSize: 11, fill: '#64748b', textAnchor: 'middle' } }} />
               <Tooltip content={<BarTip valueLabel="booths" />} cursor={{ fill: '#f7f5f0' }} />
               <Bar dataKey="count" fill={ACCENT} radius={[3, 3, 0, 0]}>
                 <LabelList dataKey="count" position="top" style={{ fontSize: 10, fill: '#94a3b8' }} formatter={(v) => (v > 0 ? v : '')} />
               </Bar>
             </BarChart>
           </ResponsiveContainer>
-          <div className="mt-1 text-center text-[10px] text-slate-400">Turnout band (%)</div>
         </ChartCard>
       </div>
     </div>

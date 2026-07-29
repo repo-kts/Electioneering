@@ -172,16 +172,19 @@ export default function BoothFilterBar({ items, value, onChange, resultCount }) 
   }, [items]);
 
   // Quick presets — the app's vote-share competitiveness bands (see benchmarkFor
-  // in helpers.js). Each sets the winner's-share range, so clicking toggles it.
+  // in helpers.js). Each preset only sets the winner's-share band; clicking it
+  // MERGES that band into the current filters (party / margin / turnout / size
+  // are preserved), and clicking the active one clears just the share band.
   const presets = useMemo(() => [
-    { key: 'safe', label: 'Safe 75+', dot: '#16a34a', title: "Winner took 75%+ of the vote", state: { ...emptyBoothFilters(), share: { min: 75, max: 100 } } },
-    { key: 'favorable', label: 'Favorable 50–75', dot: '#65a30d', title: "Winner took 50–75% of the vote", state: { ...emptyBoothFilters(), share: { min: 50, max: 75 } } },
-    { key: 'battleground', label: 'Battleground 30–50', dot: '#d97706', title: "Winner took 30–50% of the vote", state: { ...emptyBoothFilters(), share: { min: 30, max: 50 } } },
-    { key: 'difficult', label: 'Difficult 0–30', dot: '#e11d48', title: "Winner took under 30% of the vote", state: { ...emptyBoothFilters(), share: { min: 0, max: 30 } } },
+    { key: 'safe', label: 'Safe 75+', dot: '#16a34a', title: "Winner took 75%+ of the vote", share: { min: 75, max: 100 } },
+    { key: 'favorable', label: 'Favorable 50–75', dot: '#65a30d', title: "Winner took 50–75% of the vote", share: { min: 50, max: 75 } },
+    { key: 'battleground', label: 'Battleground 30–50', dot: '#d97706', title: "Winner took 30–50% of the vote", share: { min: 30, max: 50 } },
+    { key: 'difficult', label: 'Difficult 0–30', dot: '#e11d48', title: "Winner took under 30% of the vote", share: { min: 0, max: 30 } },
   ], []);
 
-  const sameFilters = (a, b) => JSON.stringify(a) === JSON.stringify(b);
-  const activePreset = presets.find((p) => sameFilters(p.state, f))?.key;
+  // A preset is "active" when the current share band matches it, regardless of
+  // whatever other filters are also set.
+  const activePreset = presets.find((p) => f.share && f.share.min === p.share.min && f.share.max === p.share.max)?.key;
   const active = countActiveFilters(f);
 
   const pctFmt = (n) => `${n}%`;
@@ -197,7 +200,7 @@ export default function BoothFilterBar({ items, value, onChange, resultCount }) 
             key={p.key}
             type="button"
             title={p.title}
-            onClick={() => onChange(activePreset === p.key ? emptyBoothFilters() : p.state)}
+            onClick={() => set({ share: activePreset === p.key ? null : p.share })}
             className={`flex items-center gap-1.5 border px-2.5 py-1 text-xs font-medium transition ${
               activePreset === p.key ? 'border-accent-500 bg-accent-600 text-white' : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'
             }`}

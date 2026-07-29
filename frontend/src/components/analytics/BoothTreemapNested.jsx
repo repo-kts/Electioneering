@@ -12,8 +12,9 @@
 import { useMemo } from 'react';
 import { colorForCandidate, num, pct } from '../elections/helpers.js';
 
-// Short label for an election type, e.g. "Assembly Election" → "AE".
-const typeAbbr = (t) => (/lok\s*sabha/i.test(t) ? 'LS' : /assembly/i.test(t) ? 'AE' : (t || '').slice(0, 3).toUpperCase());
+// Short label for an election type, e.g. "Assembly Election" → "AE",
+// "Lok Sabha Election" (the stored value) → "GE" (General Election).
+const typeAbbr = (t) => (/lok\s*sabha/i.test(t) ? 'GE' : /assembly/i.test(t) ? 'AE' : (t || '').slice(0, 3).toUpperCase());
 
 const MARGIN_BANDS = [
   { key: 'Tight (<3%)', color: '#e11d48', test: (v) => v < 0.03 },
@@ -162,7 +163,7 @@ export default function BoothTreemapNested({ items, metric = 'margin', typeFilte
             ))}
       </div>
       <p className="mt-1.5 text-[11px] text-slate-400">
-        Each big block is an election (year · type — AE = Assembly, LS = Lok Sabha) · inside, every booth is a tile
+        Each big block is an election (year · type — AE = Assembly, GE = General Election) · inside, every booth is a tile
         sized by its votes and coloured by {isParty ? 'the winning party' : colour.label.toLowerCase()}. Hover a
         tile for its numbers; click to open the booth.
       </p>
