@@ -20,50 +20,50 @@ import AllMasterPage from './routes/AllMasterPage.jsx';
 
 // Landing — send admins to the results explorer, operators to data entry.
 function RoleRedirect() {
-  const { user } = useAuth();
-  if (!user) return <Navigate to="/login" replace />;
-  return <Navigate to={user.role === 'admin' ? '/elections/assembly' : '/voters'} replace />;
+    const { user } = useAuth();
+    if (!user) return <Navigate to="/login" replace />;
+    return <Navigate to={user.role === 'admin' ? '/elections/assembly' : '/voters'} replace />;
 }
 
 const DATA_ROLES = ['admin', 'data_operator'];
 const ADMIN = ['admin'];
 
 export default function App() {
-  return (
-    <Routes>
-      <Route path="/login" element={<LoginPage />} />
+    return (
+        <Routes>
+            <Route path="/login" element={<LoginPage />} />
 
-      <Route element={<ShellLayout />}>
-        <Route path="/" element={<RoleRedirect />} />
+            <Route element={<ShellLayout />}>
+                <Route path="/" element={<RoleRedirect />} />
 
-        {/* Data entry */}
-        <Route path="/voters" element={<ProtectedRoute roles={DATA_ROLES}><VoterDetailPage /></ProtectedRoute>} />
-        <Route path="/form-20" element={<ProtectedRoute roles={DATA_ROLES}><Form20Page /></ProtectedRoute>} />
+                {/* Data entry */}
+                <Route path="/voters" element={<ProtectedRoute roles={DATA_ROLES}><VoterDetailPage /></ProtectedRoute>} />
+                <Route path="/form-20" element={<ProtectedRoute roles={DATA_ROLES}><Form20Page /></ProtectedRoute>} />
 
-        {/* Results & insights — three entry points, then per-constituency drill-down */}
-        <Route path="/elections/assembly" element={<ProtectedRoute roles={ADMIN}><GeographyExplorer title="Assembly Election" subtitle="Drill from state to seat to constituency. Open one to see its results across every year — switch years from the dropdown inside." matchType="Assembly Election" /></ProtectedRoute>} />
-        <Route path="/elections/lok-sabha" element={<ProtectedRoute roles={ADMIN}><GeographyExplorer title="General Election" subtitle="Drill from state to parliamentary seat. Open one to see its results across every year — switch years from the dropdown inside." matchType="Lok Sabha Election" /></ProtectedRoute>} />
-        <Route path="/elections/booths" element={<ProtectedRoute roles={ADMIN}><GeographyExplorer title="Booth wise election" subtitle="Drill to a constituency to see every physical booth aggregated across all its elections. Open a booth for its full history." boothMode /></ProtectedRoute>} />
-        <Route path="/elections/booths/station/:psId" element={<ProtectedRoute roles={ADMIN}><BoothHistoryPage /></ProtectedRoute>} />
-        <Route path="/elections/booths/:assemblyNo/:assemblyName" element={<ProtectedRoute roles={ADMIN}><ConstituencyBoothsPage /></ProtectedRoute>} />
-        <Route path="/elections/:id" element={<ProtectedRoute roles={ADMIN}><ElectionOverviewPage /></ProtectedRoute>} />
-        <Route path="/elections/:id/booth/:psId" element={<ProtectedRoute roles={ADMIN}><BoothDetailPage /></ProtectedRoute>} />
-        <Route path="/elections/:id/candidate/:name" element={<ProtectedRoute roles={ADMIN}><CandidateReportPage /></ProtectedRoute>} />
-        <Route path="/elections/:id/strategy" element={<ProtectedRoute roles={ADMIN}><StrategyPage /></ProtectedRoute>} />
-        <Route path="/elections/:id/parties" element={<ProtectedRoute roles={ADMIN}><PartyAnalyticsPage /></ProtectedRoute>} />
-        <Route path="/elections/:id/timeline" element={<ProtectedRoute roles={ADMIN}><AssemblyTimelinePage /></ProtectedRoute>} />
-        <Route path="/households" element={<ProtectedRoute roles={ADMIN}><HouseholdsPage /></ProtectedRoute>} />
-        <Route path="/segment" element={<ProtectedRoute roles={ADMIN}><SegmentPage /></ProtectedRoute>} />
-        <Route path="/all-master" element={<ProtectedRoute roles={ADMIN}><AllMasterPage /></ProtectedRoute>} />
+                {/* Results & insights — three entry points, then per-constituency drill-down */}
+                <Route path="/elections/assembly" element={<ProtectedRoute roles={ADMIN}><GeographyExplorer title="Assembly Election" subtitle="Drill from state to seat to constituency. Open one to see its results across every year — switch years from the dropdown inside." matchType="Assembly Election" /></ProtectedRoute>} />
+                <Route path="/elections/lok-sabha" element={<ProtectedRoute roles={ADMIN}><GeographyExplorer title="General Election" subtitle="Drill from state to parliamentary seat. Open one to see its results across every year — switch years from the dropdown inside." matchType="Lok Sabha Election" /></ProtectedRoute>} />
+                <Route path="/elections/booths" element={<ProtectedRoute roles={ADMIN}><GeographyExplorer title="Booth wise votes" subtitle="Drill to a constituency to see every physical booth aggregated across all its elections. Open a booth for its full history." boothMode /></ProtectedRoute>} />
+                <Route path="/elections/booths/station/:psId" element={<ProtectedRoute roles={ADMIN}><BoothHistoryPage /></ProtectedRoute>} />
+                <Route path="/elections/booths/:assemblyNo/:assemblyName" element={<ProtectedRoute roles={ADMIN}><ConstituencyBoothsPage /></ProtectedRoute>} />
+                <Route path="/elections/:id" element={<ProtectedRoute roles={ADMIN}><ElectionOverviewPage /></ProtectedRoute>} />
+                <Route path="/elections/:id/booth/:psId" element={<ProtectedRoute roles={ADMIN}><BoothDetailPage /></ProtectedRoute>} />
+                <Route path="/elections/:id/candidate/:name" element={<ProtectedRoute roles={ADMIN}><CandidateReportPage /></ProtectedRoute>} />
+                <Route path="/elections/:id/strategy" element={<ProtectedRoute roles={ADMIN}><StrategyPage /></ProtectedRoute>} />
+                <Route path="/elections/:id/parties" element={<ProtectedRoute roles={ADMIN}><PartyAnalyticsPage /></ProtectedRoute>} />
+                <Route path="/elections/:id/timeline" element={<ProtectedRoute roles={ADMIN}><AssemblyTimelinePage /></ProtectedRoute>} />
+                <Route path="/households" element={<ProtectedRoute roles={ADMIN}><HouseholdsPage /></ProtectedRoute>} />
+                <Route path="/segment" element={<ProtectedRoute roles={ADMIN}><SegmentPage /></ProtectedRoute>} />
+                <Route path="/all-master" element={<ProtectedRoute roles={ADMIN}><AllMasterPage /></ProtectedRoute>} />
 
-        {/* Back-compat redirects for old paths */}
-        <Route path="/voter-detail" element={<Navigate to="/voters" replace />} />
-        <Route path="/elections" element={<Navigate to="/elections/assembly" replace />} />
-        <Route path="/analytics" element={<Navigate to="/elections/assembly" replace />} />
-        <Route path="/targeting" element={<Navigate to="/elections/assembly" replace />} />
+                {/* Back-compat redirects for old paths */}
+                <Route path="/voter-detail" element={<Navigate to="/voters" replace />} />
+                <Route path="/elections" element={<Navigate to="/elections/assembly" replace />} />
+                <Route path="/analytics" element={<Navigate to="/elections/assembly" replace />} />
+                <Route path="/targeting" element={<Navigate to="/elections/assembly" replace />} />
 
-        <Route path="*" element={<RoleRedirect />} />
-      </Route>
-    </Routes>
-  );
+                <Route path="*" element={<RoleRedirect />} />
+            </Route>
+        </Routes>
+    );
 }
