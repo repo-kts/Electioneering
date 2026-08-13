@@ -90,8 +90,9 @@ function BarView({ rows, total }) {
  * - `orderKeys`: optional fixed key order (e.g. age bands, Gen/OBC/SC/ST)
  * - `unitLabel`: what one row counts (voters / households)
  * - `footer`: extra node under the card body
+ * - `emptyLabel`: what to say when every bucket is zero (booth vs constituency)
  */
-export function DemographicCard({ title, data = [], scheme, orderKeys, unitLabel = 'voters', footer }) {
+export function DemographicCard({ title, data = [], scheme, orderKeys, unitLabel = 'voters', footer, emptyLabel = 'No data for this booth' }) {
   const [view, setView] = useState('pie');
 
   const { rows, total } = useMemo(() => {
@@ -126,7 +127,7 @@ export function DemographicCard({ title, data = [], scheme, orderKeys, unitLabel
       </div>
       <div className="p-4">
         {total === 0 ? (
-          <p className="py-8 text-center text-sm text-slate-400">No data for this booth</p>
+          <p className="py-8 text-center text-sm text-slate-400">{emptyLabel}</p>
         ) : (
           <>
             {view === 'pie' ? <PieView rows={rows} total={total} /> : <BarView rows={rows} total={total} />}
@@ -136,5 +137,41 @@ export function DemographicCard({ title, data = [], scheme, orderKeys, unitLabel
         {footer}
       </div>
     </div>
+  );
+}
+
+/**
+ * The six-card demographic block used on the booth page, reused verbatim by the
+ * constituency page. `dem` is any aggregate bundle with the `by*` arrays —
+ * a booth's `demographics`, or `/analytics/overview`'s `voters`.
+ */
+export function DemographicGrid({ dem, emptyLabel = 'No data for this booth' }) {
+  return (
+    <>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <DemographicCard title="Religion" data={dem?.byReligion ?? []} scheme="religion" emptyLabel={emptyLabel} />
+        {/* Community card removed temporarily — uncomment to restore.
+        <DemographicCard title="Community" data={dem?.byCommunity ?? []} scheme="community" orderKeys={['Gen', 'OBC', 'SC', 'ST']} emptyLabel={emptyLabel} /> */}
+        <DemographicCard title="Category" data={dem?.byCategory ?? []} emptyLabel={emptyLabel} />
+        <DemographicCard title="Caste" data={dem?.byCaste ?? []} emptyLabel={emptyLabel} />
+      </div>
+
+      <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <DemographicCard title="Age groups" data={dem?.byAgeBucket ?? []} orderKeys={['18-25', '26-40', '41-60', '61-80', '80+']} emptyLabel={emptyLabel} />
+        <DemographicCard title="Gender" data={dem?.byGender ?? []} scheme="gender" emptyLabel={emptyLabel} />
+        <DemographicCard
+          title="Households"
+          data={dem?.byHouseholdSize ?? []}
+          unitLabel="households"
+          emptyLabel={emptyLabel}
+          footer={
+            <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-2.5 text-xs text-slate-500">
+              <span>First-time voters (≤19)</span>
+              <strong className="tabular-nums text-slate-800">{num(dem?.firstTimeVoters)}</strong>
+            </div>
+          }
+        />
+      </div>
+    </>
   );
 }

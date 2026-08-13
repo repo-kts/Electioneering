@@ -332,11 +332,17 @@ router.get(
 
             electionPayload = {
                 id: election.id,
+                state: election.state,
                 assemblyNo: election.assemblyNo,
                 assemblyName: election.assemblyName,
+                assemblySeatType: election.assemblySeatType,
+                parlNo: election.parlNo,
+                parlName: election.parlName,
+                parlSeatType: election.parlSeatType,
                 electionYear: election.electionYear,
                 electionType: election.electionType,
                 totalElectors: election.totalElectors,
+                boothCount: ps.length,
                 candidates,
                 totalValid,
                 totalRejected,
