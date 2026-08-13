@@ -11,7 +11,7 @@ const SECTIONS = [
         title: 'Data Entry',
         items: [
             { to: '/voters', label: 'Voters', roles: ['admin', 'data_operator'] },
-            { to: '/form-20', label: 'Vote Sement', roles: ['admin', 'data_operator'] },
+            { to: '/form-20', label: 'Vote Segment', roles: ['admin', 'data_operator'] },
         ],
     },
     {

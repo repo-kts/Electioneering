@@ -3,6 +3,8 @@ import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import AllYearsAnalytics from '../components/analytics/AllYearsAnalytics.jsx';
 import ConstituencyScorecard from '../components/analytics/ConstituencyScorecard.jsx';
+import ConstituencyOverview from '../components/analytics/ConstituencyOverview.jsx';
+import { DemographicGrid } from '../components/analytics/BoothDemographics.jsx';
 import {
     BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer,
 } from 'recharts';
@@ -197,6 +199,13 @@ export default function ElectionOverviewPage() {
                 </div>
             )}
 
+            {/* Constituency identity + booth map — the booth page's template one
+          level up, so a seat reads the same way a polling station does. Booths
+          are mapped for `viewId` (latest year while "All years" is selected). */}
+            {election && tab === 'overview' && (
+                <ConstituencyOverview election={election} electionId={viewId} votersTotal={voters?.total} />
+            )}
+
             {/* ── Overview tab ──
           Summary-stat scorecard on top, then the narrative + all-year charts. */}
             {election && tab === 'overview' && showAll && (
@@ -316,6 +325,17 @@ export default function ElectionOverviewPage() {
                             showSwing={false}
                         />
                     </Surface>
+                </div>
+            )}
+
+            {/* Demographics — the booth page's six cards, aggregated over the
+          whole constituency roll (year-independent: the roll is one snapshot). */}
+            {election && tab === 'overview' && (
+                <div>
+                    <div className="mb-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">
+                        Demographics · {num(voters?.total)} voters on roll
+                    </div>
+                    <DemographicGrid dem={voters} emptyLabel="No voter-roll data for this constituency" />
                 </div>
             )}
 

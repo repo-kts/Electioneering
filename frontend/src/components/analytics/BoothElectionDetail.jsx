@@ -10,7 +10,7 @@ import {
 import { api } from '../../lib/api.js';
 import { useToast } from '../../context/ToastContext.jsx';
 import BoothMap from './BoothMap.jsx';
-import { DemographicCard } from './BoothDemographics.jsx';
+import { DemographicGrid } from './BoothDemographics.jsx';
 import FilterableTable from './FilterableTable.jsx';
 import DraggablePanel from './DraggablePanel.jsx';
 import { partyColor, colorForParty, benchmarkFor, boothName, boothTag } from '../elections/helpers.js';
@@ -373,28 +373,8 @@ export default function BoothElectionDetail({ d, electionId }) {
         )}
       </Panel>
 
-      <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <DemographicCard title="Religion" data={dem?.byReligion ?? []} scheme="religion" />
-        {/* Community card removed temporarily — uncomment to restore.
-        <DemographicCard title="Community" data={dem?.byCommunity ?? []} scheme="community" orderKeys={['Gen', 'OBC', 'SC', 'ST']} /> */}
-        <DemographicCard title="Category" data={dem?.byCategory ?? []} />
-        <DemographicCard title="Caste" data={dem?.byCaste ?? []} />
-      </div>
-
-      <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <DemographicCard title="Age groups" data={dem?.byAgeBucket ?? []} orderKeys={['18-25', '26-40', '41-60', '61-80', '80+']} />
-        <DemographicCard title="Gender" data={dem?.byGender ?? []} scheme="gender" />
-        <DemographicCard
-          title="Households"
-          data={dem?.byHouseholdSize ?? []}
-          unitLabel="households"
-          footer={
-            <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-2.5 text-xs text-slate-500">
-              <span>First-time voters (≤19)</span>
-              <strong className="tabular-nums text-slate-800">{num(dem?.firstTimeVoters)}</strong>
-            </div>
-          }
-        />
+      <div className="mt-4">
+        <DemographicGrid dem={dem} />
       </div>
 
       <DraggablePanel
